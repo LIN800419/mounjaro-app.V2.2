@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus,
@@ -102,8 +101,9 @@ type MealPlan = {
 
 type PenInventory = {
   penStrength: string;
-  totalPens: string;
-  usedGrids: string;
+  totalGrids: string;
+  penStartDate: string;
+  manualAdjustGrids: string;
 };
 
 type PhotoRecord = {
@@ -537,8 +537,9 @@ export default function SimpleTracker() {
   const [targetDose, setTargetDose] = useState("2.5");
   const [penInventory, setPenInventory] = useState<PenInventory>({
     penStrength: "10",
-    totalPens: "1",
-    usedGrids: "0",
+    totalGrids: "240",
+    penStartDate: "",
+    manualAdjustGrids: "0",
   });
   const [photoRecords, setPhotoRecords] = useState<PhotoRecord[]>([]);
   const [photoDate, setPhotoDate] = useState("");
@@ -639,10 +640,24 @@ export default function SimpleTracker() {
 
     if (penInventoryData) {
       try {
-        setPenInventory((prev) => ({ ...prev, ...JSON.parse(penInventoryData) }));
+        const parsed = JSON.parse(penInventoryData);
+        setPenInventory((prev) => ({
+          ...prev,
+          ...parsed,
+          totalGrids:
+            parsed?.totalGrids ||
+            (parsed?.totalPens ? String(Math.max(0, num(parsed.totalPens)) * 60) : prev.totalGrids),
+          penStartDate: parsed?.penStartDate || today,
+          manualAdjustGrids: parsed?.manualAdjustGrids || "0",
+        }));
       } catch {
         // ignore
       }
+    } else {
+      setPenInventory((prev) => ({
+        ...prev,
+        penStartDate: prev.penStartDate || today,
+      }));
     }
 
     if (photoRecordsData) {
@@ -800,11 +815,16 @@ export default function SimpleTracker() {
 
   const progress = useMemo(() => {
     const goal = num(settings.goal);
-    if (!latestWeight || !goal || !sortedEntries.length) return 0;
-    const start = num(sortedEntries[0].weight);
+    const start = sortedEntries.length ? num(sortedEntries[0].weight) : 0;
+
+    if (!goal || !start || !latestWeight) return 0;
+
+    if (latestWeight <= goal) return 100;
+    if (start <= goal) return 0;
+
     const totalNeed = start - goal;
     const done = start - latestWeight;
-    if (totalNeed <= 0) return 0;
+
     return Math.max(0, Math.min(100, Math.round((done / totalNeed) * 100)));
   }, [settings.goal, latestWeight, sortedEntries]);
 
@@ -1235,15 +1255,61 @@ export default function SimpleTracker() {
 
   const penInventorySummary = useMemo(() => {
     const strength = Math.max(0, num(penInventory.penStrength));
-    const totalPens = Math.max(0, num(penInventory.totalPens));
-    const totalGrids = totalPens * 60;
-    const usedGrids = Math.max(0, num(penInventory.usedGrids));
+    const totalGrids = Math.max(0, num(penInventory.totalGrids || 240));
+    const penStartDate = penInventory.penStartDate || today;
+    const manualAdjustGrids = Math.max(0, num(penInventory.manualAdjustGrids));
+
+    const shotEntriesSinceStart = sortedEntries.filter(
+      (entry) => entry.isShotDay && (!penStartDate || daysBetween(penStartDate, entry.date) >= 0),
+    );
+
+    const autoUsedGrids = shotEntriesSinceStart.reduce((sum, entry) => {
+      const dose = Math.max(0, num(entry.dose));
+      if (!strength || !dose || dose > strength) return sum;
+      return sum + Math.round((dose / strength) * 60);
+    }, 0);
+
+    const usedGrids = autoUsedGrids + manualAdjustGrids;
     const remainGrids = Math.max(0, totalGrids - usedGrids);
-    const remainMg = strength ? +((remainGrids / 60) * strength).toFixed(2) : 0;
-    const latestDose = Math.max(0, num(latest?.dose));
-    const shotsLeft = latestDose ? Math.floor(remainMg / latestDose) : 0;
-    return { strength, totalPens, totalGrids, usedGrids, remainGrids, remainMg, shotsLeft };
-  }, [penInventory, latest]);
+    const mgPerGrid = strength ? +(strength / 60).toFixed(4) : 0;
+    const remainMg = strength ? +(remainGrids * (strength / 60)).toFixed(2) : 0;
+
+    const calcDosePlan = (dose: number) => {
+      if (!strength || !dose || dose > strength) {
+        return { dose, gridsNeeded: 0, exactShots: 0, fullShots: 0, months: 0 };
+      }
+
+      const gridsNeeded = Math.round((dose / strength) * 60);
+      const exactShots = gridsNeeded ? +(remainGrids / gridsNeeded).toFixed(1) : 0;
+      const fullShots = gridsNeeded ? Math.floor(remainGrids / gridsNeeded) : 0;
+      const months = fullShots ? +(fullShots / 4).toFixed(1) : 0;
+
+      return { dose, gridsNeeded, exactShots, fullShots, months };
+    };
+
+    const supportedDoses = [2.5, 3.5, 5, 7.5, 10, 12.5, 15]
+      .filter((dose) => dose <= strength)
+      .map(calcDosePlan);
+
+    const latestDosePlan = latest?.dose ? calcDosePlan(num(latest.dose)) : null;
+    const targetDosePlan = targetDose ? calcDosePlan(num(targetDose)) : null;
+
+    return {
+      strength,
+      totalGrids,
+      penStartDate,
+      shotEntriesSinceStartCount: shotEntriesSinceStart.length,
+      autoUsedGrids,
+      manualAdjustGrids,
+      usedGrids,
+      remainGrids,
+      mgPerGrid,
+      remainMg,
+      supportedDoses,
+      latestDosePlan,
+      targetDosePlan,
+    };
+  }, [penInventory, latest?.dose, targetDose, sortedEntries, today]);
 
   const chartData = sortedEntries.map((e, i) => ({
     i: i + 1,
@@ -1459,15 +1525,11 @@ export default function SimpleTracker() {
     ]);
   };
 
-  const addLatestDoseToInventoryUsage = () => {
-    if (!latest?.dose) return;
-    const strength = Math.max(0, num(penInventory.penStrength));
-    const dose = Math.max(0, num(latest.dose));
-    if (!strength || !dose || dose > strength) return;
-    const clicks = Math.round((dose / strength) * 60);
+  const startNewPenToday = () => {
     setPenInventory((prev) => ({
       ...prev,
-      usedGrids: String(num(prev.usedGrids) + clicks),
+      penStartDate: today,
+      manualAdjustGrids: "0",
     }));
   };
 
@@ -1786,15 +1848,44 @@ export default function SimpleTracker() {
       </div>
 
       <Card>
-        <CardContent className="p-4 space-y-2">
+        <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <Target className="w-4 h-4" />
               目標進度
             </span>
-            <span>{progress}%</span>
+            <span className="font-semibold">{progress}%</span>
           </div>
-          <Progress value={progress} />
+
+          <div className="relative h-5 w-full overflow-hidden rounded-full border border-slate-300 bg-slate-200 shadow-inner">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-600 transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-slate-700">
+              {progress}%
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-sm">
+            <div className="rounded-lg border bg-white p-2">
+              <div className="text-slate-500 text-xs">起始</div>
+              <div className="font-semibold">
+                {sortedEntries.length ? sortedEntries[0].weight : "-"} kg
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-white p-2">
+              <div className="text-slate-500 text-xs">目前</div>
+              <div className="font-semibold">{latestWeight || "-"} kg</div>
+            </div>
+
+            <div className="rounded-lg border bg-white p-2">
+              <div className="text-slate-500 text-xs">目標</div>
+              <div className="font-semibold">{settings.goal || "-"} kg</div>
+            </div>
+          </div>
+
           <div className="text-sm text-slate-500">
             理想體重區間：約 {idealRange.low || "-"} ~ {idealRange.high || "-"} kg
           </div>
@@ -2410,7 +2501,7 @@ export default function SimpleTracker() {
               </CardHeader>
               <CardContent className="space-y-4 text-sm">
                 <div className="rounded-xl border bg-slate-50 p-3 text-slate-600">
-                  本計算機以 <span className="font-medium text-slate-900">一枝筆共 60 格</span> 為基準。
+                  本計算機以 <span className="font-medium text-slate-900">轉一圈共 60 格</span> 為基準。
                 </div>
 
                 <div className="space-y-2">
@@ -2513,9 +2604,9 @@ export default function SimpleTracker() {
                 <CardTitle>藥筆庫存管理</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 text-sm">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>目前庫存筆規格</Label>
+                    <Label>目前正在施打的筆規格</Label>
                     <Select
                       value={penInventory.penStrength}
                       onValueChange={(v) => setPenInventory({ ...penInventory, penStrength: v })}
@@ -2535,53 +2626,127 @@ export default function SimpleTracker() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>現有幾支筆</Label>
+                    <Label>總可用格數</Label>
                     <Input
-                      value={penInventory.totalPens}
+                      value={penInventory.totalGrids}
                       onChange={(e) =>
-                        setPenInventory({ ...penInventory, totalPens: e.target.value })
+                        setPenInventory({ ...penInventory, totalGrids: e.target.value })
                       }
                     />
+                    <div className="text-xs text-slate-500">預設 240；若把殘劑算進去可改 300。</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>目前這支筆開始日</Label>
+                    <Input
+                      type="date"
+                      value={penInventory.penStartDate}
+                      onChange={(e) =>
+                        setPenInventory({ ...penInventory, penStartDate: e.target.value })
+                      }
+                    />
+                    <div className="text-xs text-slate-500">只會統計這個日期之後的施打日紀錄。</div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label>已使用格數</Label>
+                    <Label>手動校正格數</Label>
                     <Input
-                      value={penInventory.usedGrids}
+                      value={penInventory.manualAdjustGrids}
                       onChange={(e) =>
-                        setPenInventory({ ...penInventory, usedGrids: e.target.value })
+                        setPenInventory({ ...penInventory, manualAdjustGrids: e.target.value })
                       }
                     />
+                    <div className="text-xs text-slate-500">可用來補殘劑、修正誤差或對齊實際剩餘量。</div>
                   </div>
+                </div>
+
+                <Button type="button" variant="outline" className="w-full" onClick={startNewPenToday}>
+                  開始新筆（從今天重新計算）
+                </Button>
+
+                <div className="rounded-xl border bg-slate-50 p-3 space-y-1">
+                  <div>每支藥筆都是轉滿 60 格 = 該支筆的標示劑量。</div>
+                  <div>目前規格：{penInventorySummary.strength || "-"} mg / 支</div>
+                  <div>每 1 格約 {penInventorySummary.mgPerGrid || 0} mg</div>
+                  <div>目前統計到 {penInventorySummary.shotEntriesSinceStartCount} 次施打日紀錄。</div>
+                  <div>4 次 ≈ 1 個月，可用來估算可打月數。</div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <div className="rounded-xl border p-3">
-                    <div className="text-slate-500">總格數</div>
+                    <div className="text-slate-500">總可用格數</div>
                     <div className="text-lg font-semibold">{penInventorySummary.totalGrids}</div>
+                  </div>
+                  <div className="rounded-xl border p-3">
+                    <div className="text-slate-500">紀錄自動抓取</div>
+                    <div className="text-lg font-semibold">{penInventorySummary.autoUsedGrids}</div>
+                  </div>
+                  <div className="rounded-xl border p-3">
+                    <div className="text-slate-500">校正後已使用</div>
+                    <div className="text-lg font-semibold">{penInventorySummary.usedGrids}</div>
                   </div>
                   <div className="rounded-xl border p-3">
                     <div className="text-slate-500">剩餘格數</div>
                     <div className="text-lg font-semibold">{penInventorySummary.remainGrids}</div>
                   </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-slate-500">剩餘 mg</div>
-                    <div className="text-lg font-semibold">{penInventorySummary.remainMg}</div>
-                  </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-slate-500">依目前劑量約可再打</div>
-                    <div className="text-lg font-semibold">{penInventorySummary.shotsLeft} 次</div>
-                  </div>
                 </div>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={addLatestDoseToInventoryUsage}
-                >
-                  依最近一次施打自動扣庫存
-                </Button>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border p-3 space-y-1">
+                    <div className="text-slate-500">剩餘藥量</div>
+                    <div className="text-lg font-semibold">{penInventorySummary.remainMg} mg</div>
+                    <div className="text-xs text-slate-500">依目前筆規格換算。</div>
+                  </div>
+
+                  {penInventorySummary.targetDosePlan && penInventorySummary.targetDosePlan.dose > 0 ? (
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-1">
+                      <div className="font-medium">依藥量計算機目標劑量試算</div>
+                      <div>目標劑量：{penInventorySummary.targetDosePlan.dose} mg</div>
+                      <div>每次需：{penInventorySummary.targetDosePlan.gridsNeeded} 格</div>
+                      <div>
+                        還可完整打 {penInventorySummary.targetDosePlan.fullShots} 次
+                        （精算約 {penInventorySummary.targetDosePlan.exactShots} 次）
+                      </div>
+                      <div>約可打 {penInventorySummary.targetDosePlan.months} 個月</div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border p-3 space-y-1">
+                      <div className="font-medium">依藥量計算機目標劑量試算</div>
+                      <div className="text-slate-500">先在上方藥量計算機輸入目標劑量。</div>
+                    </div>
+                  )}
+                </div>
+
+                {penInventorySummary.latestDosePlan ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-1">
+                    <div className="font-medium">依最近一次施打劑量試算</div>
+                    <div>最近一次劑量：{penInventorySummary.latestDosePlan.dose} mg</div>
+                    <div>每次需：{penInventorySummary.latestDosePlan.gridsNeeded} 格</div>
+                    <div>
+                      還可完整打 {penInventorySummary.latestDosePlan.fullShots} 次
+                      （精算約 {penInventorySummary.latestDosePlan.exactShots} 次）
+                    </div>
+                    <div>約可打 {penInventorySummary.latestDosePlan.months} 個月</div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <div className="font-medium">常用劑量剩餘可打次數</div>
+                  <div className="space-y-2">
+                    {penInventorySummary.supportedDoses.map((item) => (
+                      <div key={item.dose} className="rounded-xl border p-3 space-y-1">
+                        <div className="font-medium">{item.dose} mg</div>
+                        <div className="text-slate-500">每次需 {item.gridsNeeded} 格</div>
+                        <div>
+                          還可完整打 {item.fullShots} 次（精算約 {item.exactShots} 次）
+                        </div>
+                        <div className="text-slate-500">約 {item.months} 個月（4 次 = 1 個月）</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
