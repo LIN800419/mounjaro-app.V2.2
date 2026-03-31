@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import AuthGate from "@/components/AuthGate";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,6 +120,13 @@ type PhotoRecord = {
   date: string;
   note: string;
   imageData: string;
+};
+
+type CloudPayload = {
+  entries: Entry[];
+  settings: Settings;
+  penInventory: PenInventory;
+  photoRecords: PhotoRecord[];
 };
 
 const STORAGE_KEY = "simple-mounjaro-tracker-v3";
@@ -467,13 +476,9 @@ function getSevenDayAverage(entries: Entry[], index: number) {
   return +(values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(1);
 }
 
-function downloadFile(
-  filename: string,
-  content: string,
-  mimeType = "text/plain;charset=utf-8",
-) {
+function downloadTextFile(filename: string, content: string) {
   if (typeof window === "undefined") return;
-  const blob = new Blob([content], { type: mimeType });
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -804,6 +809,8 @@ export default function SimpleTracker() {
   const [photoRecords, setPhotoRecords] = useState<PhotoRecord[]>([]);
   const [photoDate, setPhotoDate] = useState("");
   const [photoNote, setPhotoNote] = useState("");
+  const [cloudReady, setCloudReady] = useState(false);
+  const [cloudUserId, setCloudUserId] = useState("");
 
   const penQuickPresets = [
     { label: "10 → 2.5", strength: "10", dose: "2.5" },
@@ -831,119 +838,230 @@ export default function SimpleTracker() {
   useEffect(() => {
     if (!today) return;
 
-    const data = localStorage.getItem(STORAGE_KEY);
-    const settingsData = localStorage.getItem(SETTINGS_KEY);
-    const penInventoryData = localStorage.getItem(PEN_INVENTORY_KEY);
-    const photoRecordsData = localStorage.getItem(PHOTO_RECORDS_KEY);
+    const loadData = async () => {
+      const data = localStorage.getItem(STORAGE_KEY);
+      const settingsData = localStorage.getItem(SETTINGS_KEY);
+      const penInventoryData = localStorage.getItem(PEN_INVENTORY_KEY);
+      const photoRecordsData = localStorage.getItem(PHOTO_RECORDS_KEY);
 
-    if (data) {
-      try {
-        const parsed = JSON.parse(data);
-        const normalized: Entry[] = Array.isArray(parsed)
-          ? parsed.map((item, index) => {
-              const legacySideEffect = (item?.sideEffect || "無") as SideEffect;
-              const legacySeverity =
-                item?.sideEffectSeverity ||
-                (item?.sideEffect && item?.sideEffect !== "無" ? "2" : "0");
+      let localEntries: Entry[] = [];
+      let localSettings: Settings = { ...defaultSettings, firstShotDate: today };
+      let localPenInventory: PenInventory = {
+        penStrength: "10",
+        totalGrids: "240",
+        penStartDate: today,
+        manualAdjustGrids: "0",
+      };
+      let localPhotos: PhotoRecord[] = [];
 
-              const normalizedSideEffects: SideEffectItem[] =
-                Array.isArray(item?.sideEffects) && item.sideEffects.length
-                  ? item.sideEffects.map((se: any) => ({
-                      effect: (se?.effect || "無") as SideEffect,
-                      severity: String(se?.severity || "0"),
-                    }))
-                  : [{ effect: legacySideEffect, severity: String(legacySeverity) }];
+      if (data) {
+        try {
+          const parsed = JSON.parse(data);
+          localEntries = Array.isArray(parsed)
+            ? parsed.map((item, index) => {
+                const legacySideEffect = (item?.sideEffect || "無") as SideEffect;
+                const legacySeverity =
+                  item?.sideEffectSeverity ||
+                  (item?.sideEffect && item?.sideEffect !== "無" ? "2" : "0");
 
-              const firstActive =
-                normalizedSideEffects.find((se) => se.effect !== "無") || normalizedSideEffects[0];
+                const normalizedSideEffects: SideEffectItem[] =
+                  Array.isArray(item?.sideEffects) && item.sideEffects.length
+                    ? item.sideEffects.map((se: any) => ({
+                        effect: (se?.effect || "無") as SideEffect,
+                        severity: String(se?.severity || "0"),
+                      }))
+                    : [{ effect: legacySideEffect, severity: String(legacySeverity) }];
 
-              return {
+                const firstActive =
+                  normalizedSideEffects.find((se) => se.effect !== "無") || normalizedSideEffects[0];
+
+                return {
+                  id:
+                    item?.id ||
+                    `legacy-${item?.date || "item"}-${index}-${Math.random()
+                      .toString(36)
+                      .slice(2, 8)}`,
+                  date: item?.date || today,
+                  weight: item?.weight || "",
+                  bodyFatPct: String(item?.bodyFatPct || item?.bodyFat || ""),
+                  fatMass: String(item?.fatMass || item?.bodyFatMass || item?.fatKg || ""),
+                  muscleMass: String(item?.muscleMass || ""),
+                  visceralFat: String(item?.visceralFat || ""),
+                  bodyWater: String(item?.bodyWater || item?.water || ""),
+                  dose: item?.dose || "2.5",
+                  appetite: item?.appetite || "正常",
+                  cravingLevel: item?.cravingLevel || "中",
+                  sideEffect: (firstActive?.effect || "無") as SideEffect,
+                  sideEffectSeverity: String(firstActive?.severity || "0"),
+                  sideEffects: normalizedSideEffects,
+                  exerciseMin: item?.exerciseMin || "0",
+                  isShotDay: Boolean(item?.isShotDay),
+                };
+              })
+            : [];
+        } catch {
+          localEntries = [];
+        }
+      }
+
+      const freshDefaults: Settings = { ...defaultSettings, firstShotDate: today };
+
+      if (settingsData) {
+        try {
+          localSettings = { ...freshDefaults, ...JSON.parse(settingsData) };
+        } catch {
+          localSettings = freshDefaults;
+        }
+      } else {
+        localSettings = freshDefaults;
+      }
+
+      if (penInventoryData) {
+        try {
+          const parsed = JSON.parse(penInventoryData);
+          localPenInventory = {
+            penStrength: String(parsed?.penStrength || "10"),
+            totalGrids: String(
+              parsed?.totalGrids ||
+                (parsed?.totalPens ? Math.max(0, num(parsed.totalPens)) * 60 : 240)
+            ),
+            penStartDate: String(parsed?.penStartDate || today),
+            manualAdjustGrids: String(parsed?.manualAdjustGrids || "0"),
+          };
+        } catch {
+          localPenInventory = {
+            penStrength: "10",
+            totalGrids: "240",
+            penStartDate: today,
+            manualAdjustGrids: "0",
+          };
+        }
+      }
+
+      if (photoRecordsData) {
+        try {
+          const parsed = JSON.parse(photoRecordsData);
+          localPhotos = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          localPhotos = [];
+        }
+      }
+
+      let finalEntries = localEntries;
+      let finalSettings = localSettings;
+      let finalPenInventory = localPenInventory;
+      let finalPhotos = localPhotos;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        setCloudUserId(user.id);
+
+        const { data: cloudRow, error } = await supabase
+          .from("tracker_data")
+          .select("payload")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!error && cloudRow?.payload) {
+          const payload = cloudRow.payload as Partial<CloudPayload>;
+
+          finalEntries = Array.isArray(payload.entries)
+            ? payload.entries.map((item, index) => {
+                const fallbackSideEffects =
+                  Array.isArray(item?.sideEffects) && item.sideEffects.length
+                    ? item.sideEffects.map((se) => ({
+                        effect: (se?.effect || "無") as SideEffect,
+                        severity: String(se?.severity || "0"),
+                      }))
+                    : [
+                        {
+                          effect: (item?.sideEffect || "無") as SideEffect,
+                          severity: String(item?.sideEffectSeverity || "0"),
+                        },
+                      ];
+
+                const firstActive =
+                  fallbackSideEffects.find((se) => se.effect !== "無") || fallbackSideEffects[0];
+
+                return {
+                  id:
+                    item?.id ||
+                    `cloud-${item?.date || "item"}-${index}-${Math.random()
+                      .toString(36)
+                      .slice(2, 8)}`,
+                  date: item?.date || today,
+                  weight: String(item?.weight || ""),
+                  bodyFatPct: String(item?.bodyFatPct || ""),
+                  fatMass: String(item?.fatMass || ""),
+                  muscleMass: String(item?.muscleMass || ""),
+                  visceralFat: String(item?.visceralFat || ""),
+                  bodyWater: String(item?.bodyWater || ""),
+                  dose: String(item?.dose || "2.5"),
+                  appetite: (item?.appetite || "正常") as Appetite,
+                  cravingLevel: (item?.cravingLevel || "中") as CravingLevel,
+                  sideEffect: (firstActive?.effect || "無") as SideEffect,
+                  sideEffectSeverity: String(firstActive?.severity || "0"),
+                  sideEffects: fallbackSideEffects,
+                  exerciseMin: String(item?.exerciseMin || "0"),
+                  isShotDay: Boolean(item?.isShotDay),
+                };
+              })
+            : localEntries;
+
+          finalSettings = {
+            ...freshDefaults,
+            ...(payload.settings || {}),
+          };
+
+          finalPenInventory = {
+            penStrength: String(payload.penInventory?.penStrength || localPenInventory.penStrength || "10"),
+            totalGrids: String(payload.penInventory?.totalGrids || localPenInventory.totalGrids || "240"),
+            penStartDate: String(payload.penInventory?.penStartDate || localPenInventory.penStartDate || today),
+            manualAdjustGrids: String(
+              payload.penInventory?.manualAdjustGrids || localPenInventory.manualAdjustGrids || "0"
+            ),
+          };
+
+          finalPhotos = Array.isArray(payload.photoRecords)
+            ? payload.photoRecords.map((item, index) => ({
                 id:
                   item?.id ||
-                  `legacy-${item?.date || "item"}-${index}-${Math.random()
+                  `photo-${item?.date || "item"}-${index}-${Math.random()
                     .toString(36)
                     .slice(2, 8)}`,
-                date: item?.date || today,
-                weight: item?.weight || "",
-                bodyFatPct: String(item?.bodyFatPct || item?.bodyFat || ""),
-                fatMass: String(item?.fatMass || item?.bodyFatMass || item?.fatKg || ""),
-                muscleMass: String(item?.muscleMass || ""),
-                visceralFat: String(item?.visceralFat || ""),
-                bodyWater: String(item?.bodyWater || item?.water || ""),
-                dose: item?.dose || "2.5",
-                appetite: item?.appetite || "正常",
-                cravingLevel: item?.cravingLevel || "中",
-                sideEffect: (firstActive?.effect || "無") as SideEffect,
-                sideEffectSeverity: String(firstActive?.severity || "0"),
-                sideEffects: normalizedSideEffects,
-                exerciseMin: item?.exerciseMin || "0",
-                isShotDay: Boolean(item?.isShotDay),
-              };
-            })
-          : [];
-        setEntries(normalized);
-      } catch {
-        setEntries([]);
+                date: String(item?.date || today),
+                note: String(item?.note || ""),
+                imageData: String(item?.imageData || ""),
+              }))
+            : localPhotos;
+        } else if (error) {
+          console.error("Cloud load failed:", error);
+        }
       }
-    }
 
-    const freshDefaults: Settings = { ...defaultSettings, firstShotDate: today };
+      setEntries(finalEntries);
+      setSettings(finalSettings);
+      setTempSettings(finalSettings);
+      setPenInventory(finalPenInventory);
+      setPhotoRecords(finalPhotos);
 
-    if (settingsData) {
-      try {
-        const parsed = { ...freshDefaults, ...JSON.parse(settingsData) };
-        setSettings(parsed);
-        setTempSettings(parsed);
-      } catch {
-        setSettings(freshDefaults);
-        setTempSettings(freshDefaults);
-      }
-    } else {
-      setSettings(freshDefaults);
-      setTempSettings(freshDefaults);
-    }
-
-    if (penInventoryData) {
-      try {
-        const parsed = JSON.parse(penInventoryData);
-        setPenInventory((prev) => ({
-          ...prev,
-          ...parsed,
-          totalGrids:
-            parsed?.totalGrids ||
-            (parsed?.totalPens ? String(Math.max(0, num(parsed.totalPens)) * 60) : prev.totalGrids),
-          penStartDate: parsed?.penStartDate || today,
-          manualAdjustGrids: parsed?.manualAdjustGrids || "0",
-        }));
-      } catch {
-        // ignore
-      }
-    } else {
-      setPenInventory((prev) => ({
+      setForm((prev) => ({
         ...prev,
-        penStartDate: prev.penStartDate || today,
+        date: today,
+        bodyFatPct: prev.bodyFatPct || "",
+        fatMass: prev.fatMass || "",
+        muscleMass: prev.muscleMass || "",
+        visceralFat: prev.visceralFat || "",
+        bodyWater: prev.bodyWater || "",
       }));
-    }
+      setPhotoDate(today);
+      setCloudReady(true);
+    };
 
-    if (photoRecordsData) {
-      try {
-        const parsed = JSON.parse(photoRecordsData);
-        setPhotoRecords(Array.isArray(parsed) ? parsed : []);
-      } catch {
-        // ignore
-      }
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      date: today,
-      bodyFatPct: prev.bodyFatPct || "",
-      fatMass: prev.fatMass || "",
-      muscleMass: prev.muscleMass || "",
-      visceralFat: prev.visceralFat || "",
-      bodyWater: prev.bodyWater || "",
-    }));
-    setPhotoDate(today);
+    loadData();
   }, [today]);
 
   useEffect(() => {
@@ -955,17 +1073,40 @@ export default function SimpleTracker() {
   useEffect(() => {
     if (!mounted) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-  }, [entries, mounted]);
-
-  useEffect(() => {
-    if (!mounted) return;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     localStorage.setItem(PEN_INVENTORY_KEY, JSON.stringify(penInventory));
-  }, [penInventory, mounted]);
+    localStorage.setItem(PHOTO_RECORDS_KEY, JSON.stringify(photoRecords));
+  }, [entries, settings, penInventory, photoRecords, mounted]);
 
   useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem(PHOTO_RECORDS_KEY, JSON.stringify(photoRecords));
-  }, [photoRecords, mounted]);
+    if (!mounted || !cloudReady || !cloudUserId) return;
+
+    const timer = window.setTimeout(async () => {
+      const payload: CloudPayload = {
+        entries,
+        settings,
+        penInventory,
+        photoRecords,
+      };
+
+      const { error } = await supabase
+        .from("tracker_data")
+        .upsert(
+          {
+            user_id: cloudUserId,
+            payload,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
+        );
+
+      if (error) {
+        console.error("Supabase sync failed:", error);
+      }
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [entries, settings, penInventory, photoRecords, mounted, cloudReady, cloudUserId]);
 
   const sortedEntries = useMemo(() => {
     return [...entries].sort(
@@ -2166,144 +2307,17 @@ export default function SimpleTracker() {
       e.exerciseMin,
       e.isShotDay ? "Y" : "N",
     ]);
-    downloadFile(
+    downloadTextFile(
       `mounjaro-records-${today}.csv`,
       [header, ...rows].map((r) => r.join(",")).join("\n"),
-      "text/csv;charset=utf-8",
     );
   };
 
   const exportJSON = () => {
-    downloadFile(
+    downloadTextFile(
       `mounjaro-records-${today}.json`,
       JSON.stringify({ settings, entries: sortedEntries, penInventory, photoRecords }, null, 2),
-      "application/json;charset=utf-8",
     );
-  };
-
-
-  type ImportPayload = {
-    settings?: Partial<Settings>;
-    entries?: Entry[];
-    penInventory?: Partial<PenInventory>;
-    photoRecords?: PhotoRecord[];
-  };
-
-  const importJSON = async (file?: File | null) => {
-    if (!file) return;
-
-    const backupPayload = {
-      settings,
-      entries: sortedEntries,
-      penInventory,
-      photoRecords,
-    };
-
-    const ok = window.confirm(
-      "匯入前會先自動備份目前資料，接著用備份檔覆蓋現有紀錄、設定、筆庫存與照片資料，確定要繼續嗎？",
-    );
-    if (!ok) return;
-
-    try {
-      downloadFile(
-        `mounjaro-backup-before-import-${today}.json`,
-        JSON.stringify(backupPayload, null, 2),
-        "application/json;charset=utf-8",
-      );
-
-      const rawText = await file.text();
-      const text = rawText.replace(/^\uFEFF/, "").trim();
-      const parsed: ImportPayload = JSON.parse(text);
-
-      const importedEntries: Entry[] = Array.isArray(parsed.entries)
-        ? parsed.entries.map((item, index) => {
-            const fallbackSideEffects =
-              Array.isArray(item?.sideEffects) && item.sideEffects.length
-                ? item.sideEffects.map((se) => ({
-                    effect: (se?.effect || "無") as SideEffect,
-                    severity: String(se?.severity || "0"),
-                  }))
-                : [
-                    {
-                      effect: (item?.sideEffect || "無") as SideEffect,
-                      severity: String(item?.sideEffectSeverity || "0"),
-                    },
-                  ];
-
-            const firstActive =
-              fallbackSideEffects.find((se) => se.effect !== "無") || fallbackSideEffects[0];
-
-            return {
-              id:
-                item?.id ||
-                `import-${item?.date || "item"}-${index}-${Math.random()
-                  .toString(36)
-                  .slice(2, 8)}`,
-              date: item?.date || today,
-              weight: String(item?.weight || ""),
-              bodyFatPct: String(item?.bodyFatPct || ""),
-              fatMass: String(item?.fatMass || ""),
-              muscleMass: String(item?.muscleMass || ""),
-              visceralFat: String(item?.visceralFat || ""),
-              bodyWater: String(item?.bodyWater || ""),
-              dose: String(item?.dose || "2.5"),
-              appetite: (item?.appetite || "正常") as Appetite,
-              cravingLevel: (item?.cravingLevel || "中") as CravingLevel,
-              sideEffect: (firstActive?.effect || "無") as SideEffect,
-              sideEffectSeverity: String(firstActive?.severity || "0"),
-              sideEffects: fallbackSideEffects,
-              exerciseMin: String(item?.exerciseMin || "0"),
-              isShotDay: Boolean(item?.isShotDay),
-            };
-          })
-        : [];
-
-      const importedSettings: Settings = {
-        ...defaultSettings,
-        firstShotDate: today || defaultSettings.firstShotDate,
-        ...(parsed.settings || {}),
-      };
-
-      const importedPenInventory: PenInventory = {
-        penStrength: String(parsed.penInventory?.penStrength || "10"),
-        totalGrids: String(parsed.penInventory?.totalGrids || "240"),
-        penStartDate: String(parsed.penInventory?.penStartDate || today),
-        manualAdjustGrids: String(parsed.penInventory?.manualAdjustGrids || "0"),
-      };
-
-      const importedPhotos: PhotoRecord[] = Array.isArray(parsed.photoRecords)
-        ? parsed.photoRecords.map((item, index) => ({
-            id:
-              item?.id ||
-              `photo-${item?.date || "item"}-${index}-${Math.random()
-                .toString(36)
-                .slice(2, 8)}`,
-            date: String(item?.date || today),
-            note: String(item?.note || ""),
-            imageData: String(item?.imageData || ""),
-          }))
-        : [];
-
-      setEntries(importedEntries);
-      setSettings(importedSettings);
-      setTempSettings(importedSettings);
-      setPenInventory(importedPenInventory);
-      setPhotoRecords(importedPhotos);
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(importedEntries));
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(importedSettings));
-      localStorage.setItem(PEN_INVENTORY_KEY, JSON.stringify(importedPenInventory));
-      localStorage.setItem(PHOTO_RECORDS_KEY, JSON.stringify(importedPhotos));
-
-      alert("資料匯入成功，且已先自動備份匯入前資料");
-    } catch (error) {
-      console.error(error);
-      alert(
-        `匯入失敗：${
-          error instanceof Error ? error.message : "請確認是不是正確的 JSON 備份檔"
-        }`
-      );
-    }
   };
 
   const requestNotificationPermission = async () => {
@@ -2378,7 +2392,8 @@ export default function SimpleTracker() {
   if (!mounted || !today) return null;
 
   return (
-    <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 space-y-4 pb-24">
+    <AuthGate>
+      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 space-y-4 pb-24">
       <div className="rounded-2xl bg-white/90 backdrop-blur border p-4 shadow-sm space-y-3">
         <div>
           <h1 className="text-xl font-bold">猛健樂個人版 Pro</h1>
@@ -3632,21 +3647,6 @@ export default function SimpleTracker() {
                   <Download className="w-4 h-4 mr-1" />
                   匯出 JSON
                 </Button>
-                <label className="block">
-                  <input
-                    type="file"
-                    accept=".json,.txt,application/json,text/plain"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      importJSON(file);
-                      e.currentTarget.value = "";
-                    }}
-                  />
-                  <span className="flex w-full cursor-pointer items-center justify-center rounded-md border px-4 py-2 text-sm font-medium bg-white hover:bg-slate-50">
-                    匯入 JSON（會先自動備份）
-                  </span>
-                </label>
               </CardContent>
             </Card>
           </div>
@@ -3735,6 +3735,7 @@ export default function SimpleTracker() {
           </div>
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </AuthGate>
   );
 }
