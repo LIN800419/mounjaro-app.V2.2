@@ -570,6 +570,16 @@ const COMPOSITE_METRICS = [
   { key: "bodyWater", title: "水分", unit: "%" },
 ] as const;
 
+const METRIC_COLORS: Record<string, string> = {
+  weight: "#0f172a",
+  bodyFatPct: "#7c3aed",
+  fatMass: "#dc2626",
+  muscleRate: "#059669",
+  muscleMass: "#ea580c",
+  visceralFat: "#334155",
+  bodyWater: "#0284c7",
+};
+
 type MetricLineCardProps = {
   title: string;
   data: Array<Record<string, any>>;
@@ -578,6 +588,7 @@ type MetricLineCardProps = {
   goalValue?: number | null;
   onExpand?: () => void;
   height?: number;
+  strokeColor?: string;
 };
 
 function MetricLineCard({
@@ -588,6 +599,7 @@ function MetricLineCard({
   goalValue = null,
   onExpand,
   height = 220,
+  strokeColor = "#0f172a",
 }: MetricLineCardProps) {
   const filteredData = useMemo(
     () =>
@@ -636,7 +648,7 @@ function MetricLineCard({
                   type="monotone"
                   dataKey={dataKey}
                   name={title}
-                  stroke="#0f172a"
+                  stroke={strokeColor}
                   strokeWidth={2}
                   dot={false}
                   isAnimationActive={false}
@@ -3522,6 +3534,7 @@ export default function SimpleTracker() {
               data={chartData}
               dataKey="weight"
               unit="kg"
+              strokeColor={METRIC_COLORS.weight}
               goalValue={num(settings.goal) || null}
               onExpand={() =>
                 setExpandedChart({
@@ -3542,12 +3555,12 @@ export default function SimpleTracker() {
             />
 
             {[
-              { key: "bodyFatPct", title: "體脂率趨勢", unit: "%" },
-              { key: "fatMass", title: "脂肪重趨勢", unit: "kg" },
-              { key: "muscleRate", title: "肌肉率趨勢", unit: "%" },
-              { key: "muscleMass", title: "肌肉量趨勢", unit: "kg" },
-              { key: "visceralFat", title: "內臟脂肪趨勢", unit: "" },
-              { key: "bodyWater", title: "水分趨勢", unit: "%" },
+              { key: "bodyFatPct", title: "體脂率趨勢", unit: "%", color: METRIC_COLORS.bodyFatPct },
+              { key: "fatMass", title: "脂肪重趨勢", unit: "kg", color: METRIC_COLORS.fatMass },
+              { key: "muscleRate", title: "肌肉率趨勢", unit: "%", color: METRIC_COLORS.muscleRate },
+              { key: "muscleMass", title: "肌肉量趨勢", unit: "kg", color: METRIC_COLORS.muscleMass },
+              { key: "visceralFat", title: "內臟脂肪趨勢", unit: "", color: METRIC_COLORS.visceralFat },
+              { key: "bodyWater", title: "水分趨勢", unit: "%", color: METRIC_COLORS.bodyWater },
             ].map((metric) => (
               <MetricLineCard
                 key={metric.key}
@@ -3555,6 +3568,7 @@ export default function SimpleTracker() {
                 data={chartData}
                 dataKey={metric.key}
                 unit={metric.unit}
+                strokeColor={metric.color}
                 onExpand={() =>
                   setExpandedChart({
                     type: "metric",
@@ -4375,6 +4389,7 @@ export default function SimpleTracker() {
                       data={chartData}
                       dataKey={expandedChart.key}
                       unit={expandedChart.unit || ""}
+                      strokeColor={METRIC_COLORS[expandedChart.key] || "#0f172a"}
                       goalValue={expandedChart.goalValue || null}
                       height={420}
                     />
