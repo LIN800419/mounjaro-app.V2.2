@@ -1,27 +1,24 @@
-const CACHE_NAME = "mounjaro-pwa-v1";
-const urlsToCache = ["/", "/manifest.json"];
+const SW_VERSION = '2026-03-31-1'
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
-  );
-});
+self.addEventListener('install', () => {
+  self.skipWaiting()
+})
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      )
-    )
-  );
-});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim())
+})
 
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).catch(() => caches.match("/"));
+self.addEventListener('message', (event) => {
+  if (!event.data) return
+
+  if (event.data.type === 'GET_VERSION') {
+    event.source?.postMessage({
+      type: 'SW_VERSION',
+      version: SW_VERSION,
     })
-  );
-});
+  }
+
+  if (event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
+})
