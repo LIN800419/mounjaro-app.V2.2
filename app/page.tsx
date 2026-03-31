@@ -589,7 +589,16 @@ function MetricLineCard({
   onExpand,
   height = 220,
 }: MetricLineCardProps) {
-  const hasData = data.some((row) => Number(row[dataKey]) > 0);
+  const filteredData = useMemo(
+    () =>
+      data.filter((row) => {
+        const value = Number(row[dataKey]);
+        return Number.isFinite(value) && value > 0;
+      }),
+    [data, dataKey],
+  );
+
+  const hasData = filteredData.length > 0;
 
   return (
     <Card>
@@ -610,7 +619,7 @@ function MetricLineCard({
         ) : (
           <div style={{ width: "100%", height }}>
             <ResponsiveContainer>
-              <LineChart data={data}>
+              <LineChart data={filteredData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
@@ -631,6 +640,7 @@ function MetricLineCard({
                   strokeWidth={2}
                   dot={false}
                   isAnimationActive={false}
+                  connectNulls={false}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -666,9 +676,18 @@ function CompositeMetricsCard({
     { key: "bodyWaterNorm", name: "水分" },
   ];
 
-  const hasData = data.some((row) =>
-    lines.some((line) => Number(row[line.key]) > 0),
+  const filteredData = useMemo(
+    () =>
+      data.filter((row) =>
+        lines.some((line) => {
+          const value = Number(row[line.key]);
+          return Number.isFinite(value) && value > 0;
+        }),
+      ),
+    [data],
   );
+
+  const hasData = filteredData.length > 0;
 
   return (
     <Card className={fullscreen ? "h-full" : undefined}>
@@ -702,7 +721,7 @@ function CompositeMetricsCard({
             </div>
             <div style={{ width: "100%", height }}>
               <ResponsiveContainer>
-                <LineChart data={data}>
+                <LineChart data={filteredData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis domain={[0, 100]} />
@@ -722,6 +741,7 @@ function CompositeMetricsCard({
                       strokeWidth={2}
                       dot={false}
                       isAnimationActive={false}
+                      connectNulls={false}
                     />
                   ))}
                 </LineChart>
@@ -735,14 +755,22 @@ function CompositeMetricsCard({
 }
 
 function normalizeMetricSeries<T extends Record<string, any>>(rows: T[], key: string) {
-  const values = rows.map((row) => Number(row[key])).filter((value) => Number.isFinite(value) && value > 0);
-  if (!values.length) return rows.map(() => 0);
+  const values = rows
+    .map((row) => Number(row[key]))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  if (!values.length) return rows.map(() => null);
+
   const min = Math.min(...values);
   const max = Math.max(...values);
-  if (max === min) return rows.map((row) => (Number(row[key]) > 0 ? 100 : 0));
+
+  if (max === min) {
+    return rows.map((row) => (Number(row[key]) > 0 ? 100 : null));
+  }
+
   return rows.map((row) => {
     const value = Number(row[key]);
-    if (!Number.isFinite(value) || value <= 0) return 0;
+    if (!Number.isFinite(value) || value <= 0) return null;
     return +(((value - min) / (max - min)) * 100).toFixed(1);
   });
 }
@@ -2492,19 +2520,34 @@ export default function SimpleTracker() {
     };
   }, [penInventory, latest?.dose, targetDose, sortedEntries, today]);
 
-  const baseChartData = sortedEntries.map((e, i) => ({
-    i: i + 1,
-    date: fmtDate(e.date),
-    weight: num(e.weight),
-    avg7: getSevenDayAverage(sortedEntries, i),
-    goal: num(settings.goal) || null,
-    bodyFatPct: num(e.bodyFatPct),
-    fatMass: num(e.fatMass),
-    muscleRate: getMuscleRateFromEntry(e),
-    muscleMass: num(e.muscleMass),
-    visceralFat: num(e.visceralFat),
-    bodyWater: num(e.bodyWater),
-  }));
+  const baseChartData = useMemo(
+    () =>
+      sortedEntries.map((e, i) => {
+        const weightValue = num(e.weight);
+        const bodyFatPctValue = num(e.bodyFatPct);
+        const fatMassValue = num(e.fatMass);
+        const muscleRateValue = getMuscleRateFromEntry(e);
+        const muscleMassValue = num(e.muscleMass);
+        const visceralFatValue = num(e.visceralFat);
+        const bodyWaterValue = num(e.bodyWater);
+
+        return {
+          i: i + 1,
+          date: fmtDate(e.date),
+          rawDate: e.date,
+          weight: weightValue > 0 ? weightValue : null,
+          avg7: weightValue > 0 ? getSevenDayAverage(sortedEntries, i) : null,
+          goal: num(settings.goal) || null,
+          bodyFatPct: bodyFatPctValue > 0 ? bodyFatPctValue : null,
+          fatMass: fatMassValue > 0 ? fatMassValue : null,
+          muscleRate: muscleRateValue > 0 ? muscleRateValue : null,
+          muscleMass: muscleMassValue > 0 ? muscleMassValue : null,
+          visceralFat: visceralFatValue > 0 ? visceralFatValue : null,
+          bodyWater: bodyWaterValue > 0 ? bodyWaterValue : null,
+        };
+      }),
+    [sortedEntries, settings.goal],
+  );
 
   const chartData = useMemo(() => {
     const rows = baseChartData.map((row) => ({ ...row }));
