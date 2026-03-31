@@ -48,6 +48,7 @@ import {
 } from "recharts";
 
 type Sex = "male" | "female";
+type BmrMethod = "mifflin" | "katch";
 type Appetite = "下降" | "正常" | "偏餓";
 type CravingLevel = "低" | "中" | "高";
 type SideEffect =
@@ -72,6 +73,7 @@ type Entry = {
   weight: string;
   bodyFatPct: string;
   fatMass: string;
+  muscleRate: string;
   muscleMass: string;
   visceralFat: string;
   bodyWater: string;
@@ -89,6 +91,7 @@ type Settings = {
   firstShotDate: string;
   notificationsOn: boolean;
   elcdMode: boolean;
+  bmrMethod: BmrMethod;
   height: string;
   age: string;
   goal: string;
@@ -495,6 +498,19 @@ function fileToDataUrl(file: File) {
   });
 }
 
+
+function getMuscleRateValue(weight: number, muscleMass: number) {
+  if (!weight || !muscleMass) return 0;
+  return +((muscleMass / weight) * 100).toFixed(1);
+}
+
+function getMuscleRateFromEntry(entry?: Partial<Entry> | null) {
+  if (!entry) return 0;
+  const direct = num((entry as any).muscleRate);
+  if (direct > 0) return direct;
+  return getMuscleRateValue(num(entry.weight), num(entry.muscleMass));
+}
+
 function estimateETA(latestWeight: number, goalWeight: number, weeklyLoss: number) {
   if (!latestWeight || !goalWeight || weeklyLoss <= 0) {
     return { weeks: 0, date: "-", text: "資料不足" };
@@ -530,6 +546,205 @@ type BodyCompRowProps = {
 function clampPercent(value: number, min: number, max: number) {
   if (max <= min) return 0;
   return Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+}
+
+
+function getBMRByLeanMass(weight: number, bodyFatPct: number, fatMass: number) {
+  let leanMass = 0;
+  if (fatMass > 0 && weight > fatMass) {
+    leanMass = weight - fatMass;
+  } else if (weight > 0 && bodyFatPct > 0 && bodyFatPct < 100) {
+    leanMass = weight * (1 - bodyFatPct / 100);
+  }
+  if (!leanMass || leanMass <= 0) return 0;
+  return Math.round(370 + 21.6 * leanMass);
+}
+
+const COMPOSITE_METRICS = [
+  { key: "weight", title: "體重", unit: "kg" },
+  { key: "bodyFatPct", title: "體脂率", unit: "%" },
+  { key: "fatMass", title: "脂肪重", unit: "kg" },
+  { key: "muscleRate", title: "肌肉率", unit: "%" },
+  { key: "muscleMass", title: "肌肉量", unit: "kg" },
+  { key: "visceralFat", title: "內臟脂肪", unit: "" },
+  { key: "bodyWater", title: "水分", unit: "%" },
+] as const;
+
+type MetricLineCardProps = {
+  title: string;
+  data: Array<Record<string, any>>;
+  dataKey: string;
+  unit?: string;
+  goalValue?: number | null;
+  onExpand?: () => void;
+  height?: number;
+};
+
+function MetricLineCard({
+  title,
+  data,
+  dataKey,
+  unit = "",
+  goalValue = null,
+  onExpand,
+  height = 220,
+}: MetricLineCardProps) {
+  const hasData = data.some((row) => Number(row[dataKey]) > 0);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardTitle>{title}</CardTitle>
+        {onExpand ? (
+          <Button type="button" variant="outline" size="sm" onClick={onExpand}>
+            <Expand className="h-4 w-4 mr-1" />
+            放大
+          </Button>
+        ) : null}
+      </CardHeader>
+      <CardContent>
+        {!hasData ? (
+          <div className="flex items-center justify-center text-sm text-slate-500" style={{ height }}>
+            尚無足夠資料可顯示圖表
+          </div>
+        ) : (
+          <div style={{ width: "100%", height }}>
+            <ResponsiveContainer>
+              <LineChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip
+                  formatter={(value: any) => [
+                    `${Number(value || 0).toFixed(1)}${unit}`,
+                    title,
+                  ]}
+                />
+                {goalValue !== null && goalValue > 0 ? (
+                  <ReferenceLine y={goalValue} stroke="#ef4444" strokeDasharray="4 4" />
+                ) : null}
+                <Line
+                  type="monotone"
+                  dataKey={dataKey}
+                  name={title}
+                  stroke="#0f172a"
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type CompositeMetricsCardProps = {
+  title: string;
+  data: Array<Record<string, any>>;
+  onExpand?: () => void;
+  height?: number;
+  fullscreen?: boolean;
+};
+
+function CompositeMetricsCard({
+  title,
+  data,
+  onExpand,
+  height = 260,
+  fullscreen = false,
+}: CompositeMetricsCardProps) {
+  const lines = [
+    { key: "weightNorm", name: "體重" },
+    { key: "bodyFatPctNorm", name: "體脂率" },
+    { key: "fatMassNorm", name: "脂肪重" },
+    { key: "muscleRateNorm", name: "肌肉率" },
+    { key: "muscleMassNorm", name: "肌肉量" },
+    { key: "visceralFatNorm", name: "內臟脂肪" },
+    { key: "bodyWaterNorm", name: "水分" },
+  ];
+
+  const hasData = data.some((row) =>
+    lines.some((line) => Number(row[line.key]) > 0),
+  );
+
+  return (
+    <Card className={fullscreen ? "h-full" : undefined}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div className="space-y-1">
+          <CardTitle>{title}</CardTitle>
+          <div className="text-xs text-slate-500">
+            已將不同單位正規化成 0~100，方便一起比較趨勢。
+          </div>
+        </div>
+        {onExpand ? (
+          <Button type="button" variant="outline" size="sm" onClick={onExpand}>
+            <Expand className="h-4 w-4 mr-1" />
+            放大
+          </Button>
+        ) : null}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!hasData ? (
+          <div className="flex items-center justify-center text-sm text-slate-500" style={{ height }}>
+            尚無足夠資料可顯示綜合曲線圖
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+              {lines.map((line) => (
+                <span key={line.key} className="rounded-full border px-2 py-1">
+                  {line.name}
+                </span>
+              ))}
+            </div>
+            <div style={{ width: "100%", height }}>
+              <ResponsiveContainer>
+                <LineChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip
+                    formatter={(value: any, name: any) => [
+                      `${Number(value || 0).toFixed(1)}%`,
+                      String(name),
+                    ]}
+                  />
+                  {lines.map((line, index) => (
+                    <Line
+                      key={line.key}
+                      type="monotone"
+                      dataKey={line.key}
+                      name={line.name}
+                      stroke={["#0f172a", "#7c3aed", "#dc2626", "#059669", "#ea580c", "#334155", "#0284c7"][index]}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function normalizeMetricSeries<T extends Record<string, any>>(rows: T[], key: string) {
+  const values = rows.map((row) => Number(row[key])).filter((value) => Number.isFinite(value) && value > 0);
+  if (!values.length) return rows.map(() => 0);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (max === min) return rows.map((row) => (Number(row[key]) > 0 ? 100 : 0));
+  return rows.map((row) => {
+    const value = Number(row[key]);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return +(((value - min) / (max - min)) * 100).toFixed(1);
+  });
 }
 
 function BodyCompositionRow({
@@ -771,6 +986,7 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
       if (!active) return;
       setLoggedIn(Boolean(session?.user));
       setCurrentEmail(session?.user?.email || "");
+      setEmail(session?.user?.email || "");
       setReady(true);
     };
 
@@ -782,6 +998,7 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
       if (!active) return;
       setLoggedIn(Boolean(session?.user));
       setCurrentEmail(session?.user?.email || "");
+      if (session?.user?.email) setEmail(session.user.email);
       setReady(true);
     });
 
@@ -842,7 +1059,7 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
     }
 
     if (!trimmedOtp) {
-      setMessage("請輸入驗證碼");
+      setMessage("請輸入 6 碼驗證碼");
       return;
     }
 
@@ -862,150 +1079,107 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setOtp("");
-    setLoggedIn(true);
-    setCurrentEmail(trimmedEmail);
-    setMessage("");
+    setMessage("登入成功，正在載入資料...");
   };
 
   const signOut = async () => {
     setLoading(true);
-    setMessage("");
-
-    const { error } = await supabase.auth.signOut();
-
+    await supabase.auth.signOut();
     setLoading(false);
-
-    if (error) {
-      setMessage(`登出失敗：${error.message}`);
-      return;
-    }
-
-    setLoggedIn(false);
-    setCurrentEmail("");
-    setEmail("");
-    setOtp("");
     setStep("email");
+    setOtp("");
     setMessage("已登出");
   };
 
   if (!ready) {
     return (
-      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 flex items-center justify-center">
-        <Card className="w-full">
-          <CardContent className="p-6 text-center text-slate-600">登入狀態讀取中...</CardContent>
-        </Card>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="rounded-2xl border bg-white px-6 py-5 text-sm text-slate-600 shadow-sm">
+          載入登入狀態中...
+        </div>
       </div>
     );
   }
 
-  if (!loggedIn) {
+  if (loggedIn) {
     return (
-      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 flex items-center justify-center">
-        <Card className="w-full shadow-sm">
-          <CardHeader>
-            <CardTitle>帳號登入</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="text-sm text-slate-600">請先登入，才能同步雲端資料。</div>
-
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="login-email">Email</Label>
-                <Input
-                  id="login-email"
-                  type="email"
-                  inputMode="email"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  placeholder="請輸入 Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
-              {step === "otp" ? (
-                <div className="space-y-2">
-                  <Label htmlFor="login-otp">驗證碼</Label>
-                  <Input
-                    id="login-otp"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="請輸入 6 碼驗證碼"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                  />
-                </div>
-              ) : null}
-
-              {message ? (
-                <div
-                  className={`rounded-xl border px-3 py-2 text-sm ${
-                    message.includes("已寄出") || message.includes("成功")
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-amber-200 bg-amber-50 text-amber-700"
-                  }`}
-                >
-                  {message}
-                </div>
-              ) : null}
-
-              {step === "email" ? (
-                <Button onClick={sendOtp} disabled={loading} className="w-full">
-                  {loading ? "寄送中..." : "寄送驗證碼"}
-                </Button>
-              ) : (
-                <div className="space-y-2">
-                  <Button onClick={verifyOtp} disabled={loading} className="w-full">
-                    {loading ? "登入中..." : "確認登入"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={sendOtp}
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    {loading ? "處理中..." : "重新寄送驗證碼"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setStep("email");
-                      setOtp("");
-                      setMessage("");
-                    }}
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    返回修改 Email
-                  </Button>
-                </div>
-              )}
+      <div className="relative">
+        <div className="sticky top-0 z-50 bg-slate-50/90 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-3 pt-3">
+            <div className="min-w-0 rounded-xl border bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
+              已登入：<span className="font-medium text-slate-800">{currentEmail || "-"}</span>
             </div>
-          </CardContent>
-        </Card>
+            <Button type="button" variant="outline" size="sm" onClick={signOut} disabled={loading}>
+              登出
+            </Button>
+          </div>
+        </div>
+        {children}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="w-full max-w-md mx-auto px-3 pt-3">
-        <Card className="shadow-sm">
-          <CardContent className="p-3 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-xs text-slate-500">目前登入帳號</div>
-              <div className="text-sm font-medium break-all">{currentEmail || "已登入"}</div>
-            </div>
-            <Button type="button" variant="outline" onClick={signOut} disabled={loading}>
-              {loading ? "登出中..." : "登出"}
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-3xl border bg-white p-5 shadow-sm space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">猛健樂個人版 Pro</h1>
+          <p className="mt-2 text-sm text-slate-500">請先登入，資料才會同步到雲端。</p>
+        </div>
+
+        <div className="space-y-3">
+          <Input
+            type="email"
+            placeholder="請輸入 Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
+          />
+
+          {step === "otp" ? (
+            <Input
+              inputMode="numeric"
+              placeholder="請輸入 6 碼驗證碼"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              disabled={loading}
+            />
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          {step === "email" ? (
+            <Button type="button" className="w-full" onClick={sendOtp} disabled={loading}>
+              {loading ? "寄送中..." : "寄送驗證碼"}
             </Button>
-          </CardContent>
-        </Card>
+          ) : (
+            <>
+              <Button type="button" className="w-full" onClick={verifyOtp} disabled={loading}>
+                {loading ? "驗證中..." : "驗證碼登入"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setStep("email");
+                  setOtp("");
+                  setMessage("");
+                }}
+                disabled={loading}
+              >
+                返回重寄
+              </Button>
+            </>
+          )}
+        </div>
+
+        {message ? (
+          <div className={`text-sm ${message.includes("失敗") ? "text-red-600" : "text-emerald-600"}`}>
+            {message}
+          </div>
+        ) : null}
       </div>
-      {children}
     </div>
   );
 }
@@ -1022,6 +1196,7 @@ export default function SimpleTracker() {
     firstShotDate: today || "2026-01-01",
     notificationsOn: true,
     elcdMode: false,
+    bmrMethod: "mifflin",
     height: "173",
     age: "35",
     goal: "90",
@@ -1044,6 +1219,7 @@ export default function SimpleTracker() {
     weight: "",
     bodyFatPct: "",
     fatMass: "",
+    muscleRate: "",
     muscleMass: "",
     visceralFat: "",
     bodyWater: "",
@@ -1071,6 +1247,7 @@ export default function SimpleTracker() {
   const [photoNote, setPhotoNote] = useState("");
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudUserId, setCloudUserId] = useState("");
+  const [expandedChart, setExpandedChart] = useState<null | { type: "metric" | "composite"; key?: string; title: string; unit?: string; goalValue?: number | null }>(null);
 
   const penQuickPresets = [
     { label: "10 → 2.5", strength: "10", dose: "2.5" },
@@ -1082,116 +1259,6 @@ export default function SimpleTracker() {
     { label: "15 → 10", strength: "15", dose: "10" },
     { label: "15 → 12.5", strength: "15", dose: "12.5" },
   ] as const;
-
-  const loadCloudDataForUser = async (userId: string) => {
-    if (!userId || !today) return false;
-
-    const freshDefaults: Settings = { ...defaultSettings, firstShotDate: today };
-
-    const { data: cloudRow, error } = await supabase
-      .from("tracker_data")
-      .select("payload")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Cloud reload failed:", error);
-      return false;
-    }
-
-    if (!cloudRow?.payload) {
-      return false;
-    }
-
-    const payload = cloudRow.payload as Partial<CloudPayload>;
-
-    const nextEntries: Entry[] = Array.isArray(payload.entries)
-      ? payload.entries.map((item, index) => {
-          const fallbackSideEffects =
-            Array.isArray(item?.sideEffects) && item.sideEffects.length
-              ? item.sideEffects.map((se) => ({
-                  effect: (se?.effect || "無") as SideEffect,
-                  severity: String(se?.severity || "0"),
-                }))
-              : [
-                  {
-                    effect: (item?.sideEffect || "無") as SideEffect,
-                    severity: String(item?.sideEffectSeverity || "0"),
-                  },
-                ];
-
-          const firstActive =
-            fallbackSideEffects.find((se) => se.effect !== "無") || fallbackSideEffects[0];
-
-          return {
-            id:
-              item?.id ||
-              `cloud-${item?.date || "item"}-${index}-${Math.random()
-                .toString(36)
-                .slice(2, 8)}`,
-            date: item?.date || today,
-            weight: String(item?.weight || ""),
-            bodyFatPct: String(item?.bodyFatPct || ""),
-            fatMass: String(item?.fatMass || ""),
-            muscleMass: String(item?.muscleMass || ""),
-            visceralFat: String(item?.visceralFat || ""),
-            bodyWater: String(item?.bodyWater || ""),
-            dose: String(item?.dose || "2.5"),
-            appetite: (item?.appetite || "正常") as Appetite,
-            cravingLevel: (item?.cravingLevel || "中") as CravingLevel,
-            sideEffect: (firstActive?.effect || "無") as SideEffect,
-            sideEffectSeverity: String(firstActive?.severity || "0"),
-            sideEffects: fallbackSideEffects,
-            exerciseMin: String(item?.exerciseMin || "0"),
-            isShotDay: Boolean(item?.isShotDay),
-          };
-        })
-      : [];
-
-    const nextSettings: Settings = {
-      ...freshDefaults,
-      ...(payload.settings || {}),
-    };
-
-    const nextPenInventory: PenInventory = {
-      penStrength: String(payload.penInventory?.penStrength || "10"),
-      totalGrids: String(payload.penInventory?.totalGrids || "240"),
-      penStartDate: String(payload.penInventory?.penStartDate || today),
-      manualAdjustGrids: String(payload.penInventory?.manualAdjustGrids || "0"),
-    };
-
-    const nextPhotos: PhotoRecord[] = Array.isArray(payload.photoRecords)
-      ? payload.photoRecords.map((item, index) => ({
-          id:
-            item?.id ||
-            `photo-${item?.date || "item"}-${index}-${Math.random()
-              .toString(36)
-              .slice(2, 8)}`,
-          date: String(item?.date || today),
-          note: String(item?.note || ""),
-          imageData: String(item?.imageData || ""),
-        }))
-      : [];
-
-    setEntries(nextEntries);
-    setSettings(nextSettings);
-    setTempSettings(nextSettings);
-    setPenInventory(nextPenInventory);
-    setPhotoRecords(nextPhotos);
-    setForm((prev) => ({
-      ...prev,
-      date: today,
-      bodyFatPct: prev.bodyFatPct || "",
-      fatMass: prev.fatMass || "",
-      muscleMass: prev.muscleMass || "",
-      visceralFat: prev.visceralFat || "",
-      bodyWater: prev.bodyWater || "",
-    }));
-    setPhotoDate(today);
-    setCloudReady(true);
-    return true;
-  };
-
 
   useEffect(() => {
     setMounted(true);
@@ -1255,6 +1322,14 @@ export default function SimpleTracker() {
                   weight: item?.weight || "",
                   bodyFatPct: String(item?.bodyFatPct || item?.bodyFat || ""),
                   fatMass: String(item?.fatMass || item?.bodyFatMass || item?.fatKg || ""),
+                  muscleRate: String(
+                    item?.muscleRate ||
+                      getMuscleRateValue(
+                        num(item?.weight || 0),
+                        num(item?.muscleMass || 0),
+                      ) ||
+                      ""
+                  ),
                   muscleMass: String(item?.muscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
                   bodyWater: String(item?.bodyWater || item?.water || ""),
@@ -1329,10 +1404,91 @@ export default function SimpleTracker() {
       if (user) {
         setCloudUserId(user.id);
 
-        const loadedFromCloud = await loadCloudDataForUser(user.id);
+        const { data: cloudRow, error } = await supabase
+          .from("tracker_data")
+          .select("payload")
+          .eq("user_id", user.id)
+          .maybeSingle();
 
-        if (loadedFromCloud) {
-          return;
+        if (!error && cloudRow?.payload) {
+          const payload = cloudRow.payload as Partial<CloudPayload>;
+
+          finalEntries = Array.isArray(payload.entries)
+            ? payload.entries.map((item, index) => {
+                const fallbackSideEffects =
+                  Array.isArray(item?.sideEffects) && item.sideEffects.length
+                    ? item.sideEffects.map((se) => ({
+                        effect: (se?.effect || "無") as SideEffect,
+                        severity: String(se?.severity || "0"),
+                      }))
+                    : [
+                        {
+                          effect: (item?.sideEffect || "無") as SideEffect,
+                          severity: String(item?.sideEffectSeverity || "0"),
+                        },
+                      ];
+
+                const firstActive =
+                  fallbackSideEffects.find((se) => se.effect !== "無") || fallbackSideEffects[0];
+
+                return {
+                  id:
+                    item?.id ||
+                    `cloud-${item?.date || "item"}-${index}-${Math.random()
+                      .toString(36)
+                      .slice(2, 8)}`,
+                  date: item?.date || today,
+                  weight: String(item?.weight || ""),
+                  bodyFatPct: String(item?.bodyFatPct || ""),
+                  fatMass: String(item?.fatMass || ""),
+                  muscleRate: String(
+                    item?.muscleRate ||
+                      getMuscleRateValue(num(item?.weight || 0), num(item?.muscleMass || 0)) ||
+                      ""
+                  ),
+                  muscleMass: String(item?.muscleMass || ""),
+                  visceralFat: String(item?.visceralFat || ""),
+                  bodyWater: String(item?.bodyWater || ""),
+                  dose: String(item?.dose || "2.5"),
+                  appetite: (item?.appetite || "正常") as Appetite,
+                  cravingLevel: (item?.cravingLevel || "中") as CravingLevel,
+                  sideEffect: (firstActive?.effect || "無") as SideEffect,
+                  sideEffectSeverity: String(firstActive?.severity || "0"),
+                  sideEffects: fallbackSideEffects,
+                  exerciseMin: String(item?.exerciseMin || "0"),
+                  isShotDay: Boolean(item?.isShotDay),
+                };
+              })
+            : localEntries;
+
+          finalSettings = {
+            ...freshDefaults,
+            ...(payload.settings || {}),
+          };
+
+          finalPenInventory = {
+            penStrength: String(payload.penInventory?.penStrength || localPenInventory.penStrength || "10"),
+            totalGrids: String(payload.penInventory?.totalGrids || localPenInventory.totalGrids || "240"),
+            penStartDate: String(payload.penInventory?.penStartDate || localPenInventory.penStartDate || today),
+            manualAdjustGrids: String(
+              payload.penInventory?.manualAdjustGrids || localPenInventory.manualAdjustGrids || "0"
+            ),
+          };
+
+          finalPhotos = Array.isArray(payload.photoRecords)
+            ? payload.photoRecords.map((item, index) => ({
+                id:
+                  item?.id ||
+                  `photo-${item?.date || "item"}-${index}-${Math.random()
+                    .toString(36)
+                    .slice(2, 8)}`,
+                date: String(item?.date || today),
+                note: String(item?.note || ""),
+                imageData: String(item?.imageData || ""),
+              }))
+            : localPhotos;
+        } else if (error) {
+          console.error("Cloud load failed:", error);
         }
       }
 
@@ -1347,6 +1503,7 @@ export default function SimpleTracker() {
         date: today,
         bodyFatPct: prev.bodyFatPct || "",
         fatMass: prev.fatMass || "",
+        muscleRate: prev.muscleRate || "",
         muscleMass: prev.muscleMass || "",
         visceralFat: prev.visceralFat || "",
         bodyWater: prev.bodyWater || "",
@@ -1371,71 +1528,6 @@ export default function SimpleTracker() {
     localStorage.setItem(PEN_INVENTORY_KEY, JSON.stringify(penInventory));
     localStorage.setItem(PHOTO_RECORDS_KEY, JSON.stringify(photoRecords));
   }, [entries, settings, penInventory, photoRecords, mounted]);
-
-  useEffect(() => {
-    if (!mounted || !today) return;
-
-    let active = true;
-
-    const reloadCloudData = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!active) return;
-
-      if (!user) {
-        setCloudUserId("");
-        return;
-      }
-
-      setCloudUserId(user.id);
-      await loadCloudDataForUser(user.id);
-    };
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!active) return;
-
-      if (!session?.user) {
-        setCloudUserId("");
-        return;
-      }
-
-      setCloudUserId(session.user.id);
-
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
-        void loadCloudDataForUser(session.user.id);
-      }
-    });
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void reloadCloudData();
-      }
-    };
-
-    const handleFocus = () => {
-      void reloadCloudData();
-    };
-
-    const handlePageShow = () => {
-      void reloadCloudData();
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("pageshow", handlePageShow);
-
-    return () => {
-      active = false;
-      subscription.unsubscribe();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("pageshow", handlePageShow);
-    };
-  }, [mounted, today]);
 
   useEffect(() => {
     if (!mounted || !cloudReady || !cloudUserId) return;
@@ -1478,12 +1570,15 @@ export default function SimpleTracker() {
   const latestWeight = latest ? num(latest.weight) : 0;
   const latestBodyFatPct = latest ? num(latest.bodyFatPct) : 0;
   const latestFatMass = latest ? num(latest.fatMass) : 0;
+  const latestMuscleRate = latest ? getMuscleRateFromEntry(latest) : 0;
   const latestMuscleMass = latest ? num(latest.muscleMass) : 0;
   const latestVisceralFat = latest ? num(latest.visceralFat) : 0;
   const latestBodyWater = latest ? num(latest.bodyWater) : 0;
   const bmi = getBMI(num(settings.height), latestWeight);
   const bmiLabel = getBMILabel(bmi);
-  const bmr = getBMR(latestWeight, num(settings.height), num(settings.age), settings.sex);
+  const bmrMifflin = getBMR(latestWeight, num(settings.height), num(settings.age), settings.sex);
+  const bmrKatch = getBMRByLeanMass(latestWeight, latestBodyFatPct, latestFatMass);
+  const bmr = settings.bmrMethod === "katch" ? (bmrKatch || bmrMifflin) : bmrMifflin;
   const tdee = bmr ? Math.round(bmr * num(settings.activity || 1.2)) : 0;
 
   let minCalories = 0;
@@ -1955,9 +2050,11 @@ export default function SimpleTracker() {
       base: `${sexLabel}基礎代謝約 ${bmr} kcal`,
       target: `建議減脂熱量約 ${cutCalories} kcal/天`,
       note:
-        settings.sex === "female"
-          ? "女性版菜單會把基準熱量抓得更保守，份量通常比男性版略少。"
-          : "男性版菜單會依較高熱量需求，保留較足夠的蛋白質與主食份量。",
+        settings.bmrMethod === "katch"
+          ? "目前使用體脂器公式，會依最新體脂/脂肪重推估瘦體重，飲食會更強調保肌與蛋白質。"
+          : settings.sex === "female"
+            ? "目前使用一般公式，女性版菜單會把基準熱量抓得更保守，份量通常比男性版略少。"
+            : "目前使用一般公式，男性版菜單會依較高熱量需求，保留較足夠的蛋白質與主食份量。",
     };
   }, [bmr, tdee, cutCalories, settings.sex]);
 
@@ -2365,7 +2462,7 @@ export default function SimpleTracker() {
     };
   }, [penInventory, latest?.dose, targetDose, sortedEntries, today]);
 
-  const chartData = sortedEntries.map((e, i) => ({
+  const baseChartData = sortedEntries.map((e, i) => ({
     i: i + 1,
     date: fmtDate(e.date),
     weight: num(e.weight),
@@ -2373,10 +2470,35 @@ export default function SimpleTracker() {
     goal: num(settings.goal) || null,
     bodyFatPct: num(e.bodyFatPct),
     fatMass: num(e.fatMass),
+    muscleRate: getMuscleRateFromEntry(e),
     muscleMass: num(e.muscleMass),
     visceralFat: num(e.visceralFat),
     bodyWater: num(e.bodyWater),
   }));
+
+  const chartData = useMemo(() => {
+    const rows = baseChartData.map((row) => ({ ...row }));
+    const normalizedSeries = {
+      weightNorm: normalizeMetricSeries(rows, "weight"),
+      bodyFatPctNorm: normalizeMetricSeries(rows, "bodyFatPct"),
+      fatMassNorm: normalizeMetricSeries(rows, "fatMass"),
+      muscleRateNorm: normalizeMetricSeries(rows, "muscleRate"),
+      muscleMassNorm: normalizeMetricSeries(rows, "muscleMass"),
+      visceralFatNorm: normalizeMetricSeries(rows, "visceralFat"),
+      bodyWaterNorm: normalizeMetricSeries(rows, "bodyWater"),
+    };
+
+    return rows.map((row, index) => ({
+      ...row,
+      weightNorm: normalizedSeries.weightNorm[index],
+      bodyFatPctNorm: normalizedSeries.bodyFatPctNorm[index],
+      fatMassNorm: normalizedSeries.fatMassNorm[index],
+      muscleRateNorm: normalizedSeries.muscleRateNorm[index],
+      muscleMassNorm: normalizedSeries.muscleMassNorm[index],
+      visceralFatNorm: normalizedSeries.visceralFatNorm[index],
+      bodyWaterNorm: normalizedSeries.bodyWaterNorm[index],
+    }));
+  }, [baseChartData]);
 
   const shotPattern = useMemo(() => {
     if (!latestShotDate || !sortedEntries.length) {
@@ -2514,6 +2636,7 @@ export default function SimpleTracker() {
       weight: "",
       bodyFatPct: "",
       fatMass: "",
+      muscleRate: "",
       muscleMass: "",
       visceralFat: "",
       bodyWater: "",
@@ -2548,6 +2671,7 @@ export default function SimpleTracker() {
       weight: item.weight,
       bodyFatPct: item.bodyFatPct || "",
       fatMass: item.fatMass || "",
+      muscleRate: item.muscleRate || String(getMuscleRateFromEntry(item) || ""),
       muscleMass: item.muscleMass || "",
       visceralFat: item.visceralFat || "",
       bodyWater: item.bodyWater || "",
@@ -2581,6 +2705,7 @@ export default function SimpleTracker() {
         weight: baseWeight,
         bodyFatPct: latest?.bodyFatPct || form.bodyFatPct || "",
         fatMass: latest?.fatMass || form.fatMass || "",
+        muscleRate: latest?.muscleRate || form.muscleRate || String(getMuscleRateFromEntry(latest) || ""),
         muscleMass: latest?.muscleMass || form.muscleMass || "",
         visceralFat: latest?.visceralFat || form.visceralFat || "",
         bodyWater: latest?.bodyWater || form.bodyWater || "",
@@ -2828,7 +2953,9 @@ export default function SimpleTracker() {
               BMR
             </div>
             <div className="text-2xl font-semibold">{bmr || "-"}</div>
-            <div className="text-xs text-slate-500">kcal</div>
+            <div className="text-xs text-slate-500">
+              kcal｜{settings.bmrMethod === "katch" ? "體脂器公式" : "一般公式"}
+            </div>
           </CardContent>
         </Card>
 
@@ -2946,6 +3073,13 @@ export default function SimpleTracker() {
           </CardContent>
         </Card>
       </div>
+
+      <CompositeMetricsCard
+        title="各項指標綜合曲線圖"
+        data={chartData}
+        onExpand={() => setExpandedChart({ type: "composite", title: "各項指標綜合曲線圖" })}
+      />
+
 
       <Card>
         <CardContent className="p-4 space-y-3">
@@ -3065,6 +3199,14 @@ export default function SimpleTracker() {
                     placeholder="例如 15.7"
                     value={form.fatMass}
                     onChange={(e) => setForm({ ...form, fatMass: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>肌肉率 (%)</Label>
+                  <Input
+                    placeholder="例如 52.1"
+                    value={form.muscleRate}
+                    onChange={(e) => setForm({ ...form, muscleRate: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -3301,48 +3443,53 @@ export default function SimpleTracker() {
 
         <TabsContent value="chart">
           <div className="grid gap-4 grid-cols-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>體重趨勢</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    {num(settings.goal) ? <ReferenceLine y={num(settings.goal)} /> : null}
-                    <Line dataKey="weight" strokeWidth={2} dot />
-                    <Line dataKey="avg7" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+            <MetricLineCard
+              title="體重趨勢"
+              data={chartData}
+              dataKey="weight"
+              unit="kg"
+              goalValue={num(settings.goal) || null}
+              onExpand={() =>
+                setExpandedChart({
+                  type: "metric",
+                  key: "weight",
+                  title: "體重趨勢",
+                  unit: "kg",
+                  goalValue: num(settings.goal) || null,
+                })
+              }
+              height={260}
+            />
+
+            <CompositeMetricsCard
+              title="各項指標綜合曲線圖"
+              data={chartData}
+              onExpand={() => setExpandedChart({ type: "composite", title: "各項指標綜合曲線圖" })}
+            />
 
             {[
               { key: "bodyFatPct", title: "體脂率趨勢", unit: "%" },
               { key: "fatMass", title: "脂肪重趨勢", unit: "kg" },
+              { key: "muscleRate", title: "肌肉率趨勢", unit: "%" },
               { key: "muscleMass", title: "肌肉量趨勢", unit: "kg" },
               { key: "visceralFat", title: "內臟脂肪趨勢", unit: "" },
               { key: "bodyWater", title: "水分趨勢", unit: "%" },
             ].map((metric) => (
-              <Card key={metric.key}>
-                <CardHeader>
-                  <CardTitle>{metric.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={chartData.filter((item) => Number((item as any)[metric.key]) > 0)}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip formatter={(value) => [`${value}${metric.unit}`, metric.title]} />
-                      <Line dataKey={metric.key} strokeWidth={2} dot />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+              <MetricLineCard
+                key={metric.key}
+                title={metric.title}
+                data={chartData}
+                dataKey={metric.key}
+                unit={metric.unit}
+                onExpand={() =>
+                  setExpandedChart({
+                    type: "metric",
+                    key: metric.key,
+                    title: metric.title,
+                    unit: metric.unit,
+                  })
+                }
+              />
             ))}
 
             <Card>
@@ -3358,7 +3505,11 @@ export default function SimpleTracker() {
                 </div>
                 <div>{plateau.text}</div>
                 <div>估算體脂：{bodyFat || "-"}%</div>
+                <div>最新肌肉率：{latestMuscleRate || "-"}%</div>
                 <div>7日移動平均：{chartData.length ? chartData[chartData.length - 1].avg7 : "-"} kg</div>
+                <div>
+                  BMR：{bmr || "-"} kcal（{settings.bmrMethod === "katch" ? "體脂器公式" : "一般公式"}）
+                </div>
                 <div>TDEE：{tdee || "-"} kcal</div>
                 <div>建議減脂熱量：{cutCalories || "-"} kcal</div>
                 <div>性別版型：{settings.sex === "female" ? "女性建議" : "男性建議"}</div>
@@ -3381,6 +3532,14 @@ export default function SimpleTracker() {
                 <div>{calorieAdvice.base}</div>
                 <div>{calorieAdvice.target}</div>
                 <div className="text-slate-500">{calorieAdvice.note}</div>
+                <div className="text-slate-500">
+                  目前算法：{settings.bmrMethod === "katch" ? "體脂器公式（瘦體重導向）" : "一般公式（體重 / 身高 / 年齡 / 性別）"}
+                </div>
+                <div className="text-emerald-700">
+                  {settings.bmrMethod === "katch"
+                    ? "飲食指南會更重視保肌：每餐優先蛋白質、避免熱量降太低。"
+                    : "飲食指南以一般減脂熱量控制為主，適合沒有穩定體脂器資料時使用。"}
+                </div>
                 <div className="text-emerald-700">{bodyCompositionMenuHint}</div>
               </div>
               <CardContent className="space-y-4">
@@ -3597,6 +3756,27 @@ export default function SimpleTracker() {
                       <SelectItem value="1.725">高度活動</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>基礎代謝率算法</Label>
+                  <Select
+                    value={tempSettings.bmrMethod}
+                    onValueChange={(v: BmrMethod) => setTempSettings({ ...tempSettings, bmrMethod: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mifflin">一般公式（體重 / 身高 / 年齡 / 性別）</SelectItem>
+                      <SelectItem value="katch">體脂器公式（依最新體脂 / 脂肪重）</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-slate-500">
+                    {tempSettings.bmrMethod === "katch"
+                      ? "優先使用最新脂肪重；若未填脂肪重則改用體脂率推估瘦體重。"
+                      : "適合一般情況，依最新體重與基本資料計算。"}
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between border rounded-xl p-3">
@@ -4094,6 +4274,44 @@ export default function SimpleTracker() {
           </div>
         </TabsContent>
       </Tabs>
+      {expandedChart ? (
+        <div className="fixed inset-0 z-50 bg-black/80 p-3">
+          <div className="flex h-full w-full items-center justify-center">
+            <div className="relative h-full w-full overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <div>
+                  <div className="text-base font-semibold">{expandedChart.title}</div>
+                  <div className="text-xs text-slate-500">建議將手機橫向檢視，趨勢會更清楚。</div>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setExpandedChart(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="h-[calc(100%-64px)] overflow-auto p-3">
+                <div className="mx-auto h-full w-full max-w-6xl landscape:max-w-none">
+                  {expandedChart.type === "composite" ? (
+                    <CompositeMetricsCard
+                      title={expandedChart.title}
+                      data={chartData}
+                      fullscreen
+                    />
+                  ) : expandedChart.key ? (
+                    <MetricLineCard
+                      title={expandedChart.title}
+                      data={chartData}
+                      dataKey={expandedChart.key}
+                      unit={expandedChart.unit || ""}
+                      goalValue={expandedChart.goalValue || null}
+                      height={420}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       </div>
     </InlineAuthGate>
   );
