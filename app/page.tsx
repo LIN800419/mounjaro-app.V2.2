@@ -2211,7 +2211,8 @@ export default function SimpleTracker() {
         "application/json;charset=utf-8",
       );
 
-      const text = await file.text();
+      const rawText = await file.text();
+      const text = rawText.replace(/^\uFEFF/, "").trim();
       const parsed: ImportPayload = JSON.parse(text);
 
       const importedEntries: Entry[] = Array.isArray(parsed.entries)
@@ -2297,7 +2298,11 @@ export default function SimpleTracker() {
       alert("資料匯入成功，且已先自動備份匯入前資料");
     } catch (error) {
       console.error(error);
-      alert("匯入失敗，請確認是不是正確的 JSON 備份檔");
+      alert(
+        `匯入失敗：${
+          error instanceof Error ? error.message : "請確認是不是正確的 JSON 備份檔"
+        }`
+      );
     }
   };
 
@@ -3630,7 +3635,7 @@ export default function SimpleTracker() {
                 <label className="block">
                   <input
                     type="file"
-                    accept="application/json,.json"
+                    accept=".json,.txt,application/json,text/plain"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
