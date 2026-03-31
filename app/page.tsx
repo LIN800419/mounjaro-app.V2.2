@@ -2175,6 +2175,125 @@ export default function SimpleTracker() {
     );
   };
 
+
+  type ImportPayload = {
+    settings?: Partial<Settings>;
+    entries?: Entry[];
+    penInventory?: Partial<PenInventory>;
+    photoRecords?: PhotoRecord[];
+  };
+
+  const importJSON = async (file?: File | null) => {
+    if (!file) return;
+
+    const backupPayload = {
+      settings,
+      entries: sortedEntries,
+      penInventory,
+      photoRecords,
+    };
+
+    const ok = window.confirm(
+      "匯入前會先自動備份目前資料，接著用備份檔覆蓋現有紀錄、設定、筆庫存與照片資料，確定要繼續嗎？",
+    );
+    if (!ok) return;
+
+    try {
+      downloadTextFile(
+        `mounjaro-backup-before-import-${today}.json`,
+        JSON.stringify(backupPayload, null, 2),
+      );
+
+      const text = await file.text();
+      const parsed: ImportPayload = JSON.parse(text);
+
+      const importedEntries: Entry[] = Array.isArray(parsed.entries)
+        ? parsed.entries.map((item, index) => {
+            const fallbackSideEffects =
+              Array.isArray(item?.sideEffects) && item.sideEffects.length
+                ? item.sideEffects.map((se) => ({
+                    effect: (se?.effect || "無") as SideEffect,
+                    severity: String(se?.severity || "0"),
+                  }))
+                : [
+                    {
+                      effect: (item?.sideEffect || "無") as SideEffect,
+                      severity: String(item?.sideEffectSeverity || "0"),
+                    },
+                  ];
+
+            const firstActive =
+              fallbackSideEffects.find((se) => se.effect !== "無") || fallbackSideEffects[0];
+
+            return {
+              id:
+                item?.id ||
+                `import-${item?.date || "item"}-${index}-${Math.random()
+                  .toString(36)
+                  .slice(2, 8)}`,
+              date: item?.date || today,
+              weight: String(item?.weight || ""),
+              bodyFatPct: String(item?.bodyFatPct || ""),
+              fatMass: String(item?.fatMass || ""),
+              muscleMass: String(item?.muscleMass || ""),
+              visceralFat: String(item?.visceralFat || ""),
+              bodyWater: String(item?.bodyWater || ""),
+              dose: String(item?.dose || "2.5"),
+              appetite: (item?.appetite || "正常") as Appetite,
+              cravingLevel: (item?.cravingLevel || "中") as CravingLevel,
+              sideEffect: (firstActive?.effect || "無") as SideEffect,
+              sideEffectSeverity: String(firstActive?.severity || "0"),
+              sideEffects: fallbackSideEffects,
+              exerciseMin: String(item?.exerciseMin || "0"),
+              isShotDay: Boolean(item?.isShotDay),
+            };
+          })
+        : [];
+
+      const importedSettings: Settings = {
+        ...defaultSettings,
+        firstShotDate: today || defaultSettings.firstShotDate,
+        ...(parsed.settings || {}),
+      };
+
+      const importedPenInventory: PenInventory = {
+        penStrength: String(parsed.penInventory?.penStrength || "10"),
+        totalGrids: String(parsed.penInventory?.totalGrids || "240"),
+        penStartDate: String(parsed.penInventory?.penStartDate || today),
+        manualAdjustGrids: String(parsed.penInventory?.manualAdjustGrids || "0"),
+      };
+
+      const importedPhotos: PhotoRecord[] = Array.isArray(parsed.photoRecords)
+        ? parsed.photoRecords.map((item, index) => ({
+            id:
+              item?.id ||
+              `photo-${item?.date || "item"}-${index}-${Math.random()
+                .toString(36)
+                .slice(2, 8)}`,
+            date: String(item?.date || today),
+            note: String(item?.note || ""),
+            imageData: String(item?.imageData || ""),
+          }))
+        : [];
+
+      setEntries(importedEntries);
+      setSettings(importedSettings);
+      setTempSettings(importedSettings);
+      setPenInventory(importedPenInventory);
+      setPhotoRecords(importedPhotos);
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(importedEntries));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(importedSettings));
+      localStorage.setItem(PEN_INVENTORY_KEY, JSON.stringify(importedPenInventory));
+      localStorage.setItem(PHOTO_RECORDS_KEY, JSON.stringify(importedPhotos));
+
+      alert("資料匯入成功，且已先自動備份匯入前資料");
+    } catch (error) {
+      console.error(error);
+      alert("匯入失敗，請確認是不是正確的 JSON 備份檔");
+    }
+  };
+
   const requestNotificationPermission = async () => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     const permission = await Notification.requestPermission();
@@ -3501,6 +3620,21 @@ export default function SimpleTracker() {
                   <Download className="w-4 h-4 mr-1" />
                   匯出 JSON
                 </Button>
+                <label className="block">
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      importJSON(file);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                  <span className="flex w-full cursor-pointer items-center justify-center rounded-md border px-4 py-2 text-sm font-medium bg-white hover:bg-slate-50">
+                    匯入 JSON（會先自動備份）
+                  </span>
+                </label>
               </CardContent>
             </Card>
           </div>
