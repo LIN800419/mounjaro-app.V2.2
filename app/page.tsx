@@ -32,6 +32,8 @@ import {
   Download,
   Syringe,
   RotateCcw,
+  Expand,
+  X,
 } from "lucide-react";
 import {
   LineChart,
@@ -67,6 +69,11 @@ type Entry = {
   id: string;
   date: string;
   weight: string;
+  bodyFatPct: string;
+  fatMass: string;
+  muscleMass: string;
+  visceralFat: string;
+  bodyWater: string;
   dose: string;
   appetite: Appetite;
   cravingLevel: CravingLevel;
@@ -204,6 +211,14 @@ function estimateBodyFat(bmi: number, age: number, sex: Sex) {
   if (!bmi || !age) return 0;
   const sexValue = sex === "female" ? 0 : 1;
   return +(1.2 * bmi + 0.23 * age - 10.8 * sexValue - 5.4).toFixed(1);
+}
+
+function getMetricTrendLabel(current: number, previous: number, lowerIsBetter = false) {
+  if (!current || !previous) return "資料不足";
+  const diff = +(current - previous).toFixed(1);
+  if (Math.abs(diff) < 0.2) return "大致持平";
+  if (lowerIsBetter) return diff < 0 ? `下降 ${Math.abs(diff)}` : `上升 ${diff}`;
+  return diff > 0 ? `上升 ${diff}` : `下降 ${Math.abs(diff)}`;
 }
 
 function getIdealWeightRange(heightCm: string) {
@@ -491,7 +506,243 @@ function estimateETA(latestWeight: number, goalWeight: number, weeklyLoss: numbe
   return { weeks, date: dateStr, text };
 }
 
+
+type BodyCompRowProps = {
+  label: string;
+  value: number;
+  min: number;
+  normalMin: number;
+  normalMax: number;
+  max: number;
+  unit?: string;
+  colorClass?: string;
+  idealText?: string;
+};
+
+function clampPercent(value: number, min: number, max: number) {
+  if (max <= min) return 0;
+  return Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+}
+
+function BodyCompositionRow({
+  label,
+  value,
+  min,
+  normalMin,
+  normalMax,
+  max,
+  unit = '',
+  colorClass = 'bg-slate-700',
+  idealText,
+}: BodyCompRowProps) {
+  const valuePercent = clampPercent(value || 0, min, max);
+  const normalStart = clampPercent(normalMin, min, max);
+  const normalEnd = clampPercent(normalMax, min, max);
+  const normalWidth = Math.max(0, normalEnd - normalStart);
+
+  return (
+    <div className="grid grid-cols-[120px_1fr] border-b last:border-b-0">
+      <div className="bg-slate-100 p-3">
+        <div className="text-base font-semibold text-slate-700">{label}</div>
+        <div className="text-xs text-slate-500">理想值 {idealText || `${normalMin} ~ ${normalMax}${unit}`}</div>
+        <div className="text-xs text-slate-400 mt-1">目前 {value ? `${value}${unit}` : '-'}</div>
+      </div>
+      <div className="relative bg-white p-3 flex items-center">
+        <div className="relative h-6 w-full overflow-hidden rounded-sm bg-slate-100 border">
+          <div className="absolute inset-y-0 left-0 w-1/3 border-r bg-slate-50" />
+          <div className="absolute inset-y-0 left-1/3 w-1/3 border-r bg-slate-50" />
+          <div
+            className="absolute inset-y-0 bg-[#dce8ec]"
+            style={{ left: `${normalStart}%`, width: `${normalWidth}%` }}
+          />
+          <div
+            className={`absolute inset-y-[4px] rounded-r-sm ${colorClass}`}
+            style={{ width: `${Math.max(8, valuePercent)}%` }}
+          />
+        </div>
+      </div>
+
+
+      
+
+    </div>
+  );
+}
+
+function BodyCompositionTypeCard({
+  type,
+  headline,
+  weight,
+  muscle,
+  bodyFatMass,
+  weightIdeal,
+  muscleIdeal,
+  bodyFatIdeal,
+}: {
+  type: string;
+  headline: string;
+  weight: number;
+  muscle: number;
+  bodyFatMass: number;
+  weightIdeal: string;
+  muscleIdeal: string;
+  bodyFatIdeal: string;
+}) {
+  const typeTone =
+    type === 'I型'
+      ? { ring: 'border-emerald-200', badge: 'bg-emerald-600', overlay: 'text-emerald-300/55' }
+      : type === 'D型'
+        ? { ring: 'border-amber-200', badge: 'bg-amber-600', overlay: 'text-amber-300/55' }
+        : { ring: 'border-rose-200', badge: 'bg-rose-600', overlay: 'text-amber-300/55' };
+
+  return (
+    <div className={`rounded-2xl border bg-white overflow-hidden ${typeTone.ring}`}>
+      <div className="flex items-center gap-3 px-4 py-4 border-b bg-slate-50">
+        <div className={`flex h-11 w-11 items-center justify-center rounded-full text-white text-lg font-bold ${typeTone.badge}`}>
+          {type.charAt(0)}
+        </div>
+        <div>
+          <div className="text-3xl font-black tracking-tight">{type}</div>
+          <div className="text-sm text-slate-600 mt-1">{headline}</div>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        <div className="text-xl font-semibold text-slate-700">肌肉脂肪分析</div>
+        <div className="overflow-hidden rounded-xl border">
+          <div className="grid grid-cols-[120px_1fr] bg-slate-100 text-sm font-semibold text-slate-600">
+            <div className="bg-[#97b0b8] text-white p-3">指標</div>
+            <div className="grid grid-cols-3 text-center">
+              <div className="p-3 border-l">低</div>
+              <div className="p-3 border-l bg-[#97b0b8] text-white">正常</div>
+              <div className="p-3 border-l">高</div>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[180px] font-black leading-none ${typeTone.overlay}`}>
+              {type.charAt(0)}
+            </div>
+            <BodyCompositionRow
+              label="體重"
+              value={weight}
+              min={40}
+              normalMin={Number(weightIdeal.split('~')[0]) || 54}
+              normalMax={Number(weightIdeal.split('~')[1]) || 73}
+              max={130}
+              unit=" kg"
+              colorClass="bg-slate-700"
+              idealText={`${weightIdeal} kg`}
+            />
+            <BodyCompositionRow
+              label="骨骼肌重"
+              value={muscle}
+              min={15}
+              normalMin={Number(muscleIdeal.split('~')[0]) || 27}
+              normalMax={Number(muscleIdeal.split('~')[1]) || 33}
+              max={45}
+              unit=" kg"
+              colorClass="bg-slate-700"
+              idealText={`${muscleIdeal} kg`}
+            />
+            <BodyCompositionRow
+              label="體脂肪重"
+              value={bodyFatMass}
+              min={3}
+              normalMin={Number(bodyFatIdeal.split('~')[0]) || 8}
+              normalMax={Number(bodyFatIdeal.split('~')[1]) || 15}
+              max={45}
+              unit=" kg"
+              colorClass="bg-rose-600"
+              idealText={`${bodyFatIdeal} kg`}
+            />
+          </div>
+        </div>
+      </div>
+
+
+      
+
+    </div>
+  );
+}
+
+function MiniBodyTypeCard({
+  type,
+  headline,
+  weight,
+  muscle,
+  bodyFatMass,
+  onClick,
+}: {
+  type: string;
+  headline: string;
+  weight: number;
+  muscle: number;
+  bodyFatMass: number;
+  onClick?: () => void;
+}) {
+  const typeTone =
+    type === 'I型'
+      ? { ring: 'border-emerald-200 bg-emerald-50/40', badge: 'bg-emerald-600', accent: 'text-emerald-700' }
+      : type === 'D型'
+        ? { ring: 'border-amber-200 bg-amber-50/40', badge: 'bg-amber-600', accent: 'text-amber-700' }
+        : type === 'C型'
+          ? { ring: 'border-rose-200 bg-rose-50/40', badge: 'bg-rose-600', accent: 'text-rose-700' }
+          : { ring: 'border-slate-200 bg-slate-50', badge: 'bg-slate-500', accent: 'text-slate-700' };
+
+  const safeValues = [weight, muscle, bodyFatMass].map((v) => (Number.isFinite(v) ? Math.max(0, v) : 0));
+  const maxValue = Math.max(...safeValues, 1);
+  const bars = [
+    { label: '體重', value: weight, color: 'bg-slate-700' },
+    { label: '肌肉', value: muscle, color: 'bg-slate-600' },
+    { label: '脂肪', value: bodyFatMass, color: 'bg-rose-600' },
+  ];
+
+  return (
+    <Card
+      className={`overflow-hidden border ${typeTone.ring} ${onClick ? "cursor-pointer active:scale-[0.99] transition-transform" : ""}`}
+      onClick={onClick}
+    >
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-black text-white ${typeTone.badge}`}>
+              {type && type !== '-' ? type.charAt(0) : '?'}
+            </div>
+            <div className="min-w-0">
+              <div className={`text-lg font-black tracking-tight ${typeTone.accent}`}>{type || '-'}</div>
+              <div className="text-xs text-slate-600 line-clamp-2">{headline}</div>
+            </div>
+          </div>
+          <Badge variant="secondary" className="shrink-0 inline-flex items-center gap-1"><Expand className="h-3 w-3" />首頁速覽</Badge>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          {bars.map((item) => (
+            <div key={item.label} className="rounded-xl border bg-white p-2">
+              <div className="text-slate-500">{item.label}</div>
+              <div className="mt-1 text-sm font-semibold">{item.value ? `${item.value}kg` : '-'}</div>
+              <div className="mt-2 h-16 rounded-lg bg-slate-100 p-1 flex items-end justify-center">
+                <div
+                  className={`w-full rounded-md ${item.color}`}
+                  style={{ height: `${Math.max(14, (Math.max(0, item.value) / maxValue) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-xl border bg-white px-3 py-2 text-xs text-slate-600">
+點一下可放大檢視完整 I / C / D 體態圖
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SimpleTracker() {
+
   const [mounted, setMounted] = useState(false);
   const [today, setToday] = useState("");
   const [notificationPermission, setNotificationPermission] = useState<
@@ -522,6 +773,11 @@ export default function SimpleTracker() {
   const [form, setForm] = useState<Omit<Entry, "id">>({
     date: "",
     weight: "",
+    bodyFatPct: "",
+    fatMass: "",
+    muscleMass: "",
+    visceralFat: "",
+    bodyWater: "",
     dose: "2.5",
     appetite: "正常",
     cravingLevel: "中",
@@ -605,6 +861,11 @@ export default function SimpleTracker() {
                     .slice(2, 8)}`,
                 date: item?.date || today,
                 weight: item?.weight || "",
+                bodyFatPct: String(item?.bodyFatPct || item?.bodyFat || ""),
+                fatMass: String(item?.fatMass || item?.bodyFatMass || item?.fatKg || ""),
+                muscleMass: String(item?.muscleMass || ""),
+                visceralFat: String(item?.visceralFat || ""),
+                bodyWater: String(item?.bodyWater || item?.water || ""),
                 dose: item?.dose || "2.5",
                 appetite: item?.appetite || "正常",
                 cravingLevel: item?.cravingLevel || "中",
@@ -672,6 +933,11 @@ export default function SimpleTracker() {
     setForm((prev) => ({
       ...prev,
       date: today,
+      bodyFatPct: prev.bodyFatPct || "",
+      fatMass: prev.fatMass || "",
+      muscleMass: prev.muscleMass || "",
+      visceralFat: prev.visceralFat || "",
+      bodyWater: prev.bodyWater || "",
     }));
     setPhotoDate(today);
   }, [today]);
@@ -706,6 +972,11 @@ export default function SimpleTracker() {
   const latest = sortedEntries.length ? sortedEntries[sortedEntries.length - 1] : null;
 
   const latestWeight = latest ? num(latest.weight) : 0;
+  const latestBodyFatPct = latest ? num(latest.bodyFatPct) : 0;
+  const latestFatMass = latest ? num(latest.fatMass) : 0;
+  const latestMuscleMass = latest ? num(latest.muscleMass) : 0;
+  const latestVisceralFat = latest ? num(latest.visceralFat) : 0;
+  const latestBodyWater = latest ? num(latest.bodyWater) : 0;
   const bmi = getBMI(num(settings.height), latestWeight);
   const bmiLabel = getBMILabel(bmi);
   const bmr = getBMR(latestWeight, num(settings.height), num(settings.age), settings.sex);
@@ -859,17 +1130,228 @@ export default function SimpleTracker() {
     return { level: "低", text: "目前飲食失控風險較低" };
   }, [latest]);
 
+
+  const previousEntry = useMemo(() => {
+    return sortedEntries.length >= 2 ? sortedEntries[sortedEntries.length - 2] : null;
+  }, [sortedEntries]);
+
+  const bodyCompositionAI = useMemo(() => {
+    const weightLow = +(18.5 * (num(settings.height) / 100) * (num(settings.height) / 100)).toFixed(1);
+    const weightHigh = +(24 * (num(settings.height) / 100) * (num(settings.height) / 100)).toFixed(1);
+    const muscleLow = settings.sex === "female" ? 21 : 27;
+    const muscleHigh = settings.sex === "female" ? 27 : 33;
+    const bodyFatPct = latestBodyFatPct || bodyFat;
+    const bodyFatMass = latestFatMass || (latestWeight && bodyFatPct ? +((latestWeight * bodyFatPct) / 100).toFixed(1) : 0);
+    const bodyFatMassLow = settings.sex === "female" ? +(weightLow * 0.18).toFixed(1) : +(weightLow * 0.14).toFixed(1);
+    const bodyFatMassHigh = settings.sex === "female" ? +(weightHigh * 0.30).toFixed(1) : +(weightHigh * 0.22).toFixed(1);
+
+    if (!latest) {
+      return {
+        type: '-',
+        summary: '先累積身體組成資料後再分析',
+        headline: '尚無足夠資料判讀體態',
+        meaning: '先記錄體脂率、肌肉量、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。',
+        caution: ['至少先記錄 2~3 筆體脂、肌肉量、水分與內臟脂肪'],
+        menuAdjustments: ['先維持現有熱量與蛋白質規劃'],
+        bodyFatMass: 0,
+        weightIdeal: `${weightLow}~${weightHigh}`,
+        muscleIdeal: `${muscleLow}~${muscleHigh}`,
+        bodyFatIdeal: `${bodyFatMassLow}~${bodyFatMassHigh}`,
+      };
+    }
+
+    const muscleMass = latestMuscleMass;
+    const visceralFat = latestVisceralFat;
+    const bodyWater = latestBodyWater;
+    const prevBodyFat = previousEntry ? num(previousEntry.bodyFatPct) : 0;
+    const prevFatMass = previousEntry ? num(previousEntry.fatMass) : 0;
+    const prevMuscle = previousEntry ? num(previousEntry.muscleMass) : 0;
+    const prevWater = previousEntry ? num(previousEntry.bodyWater) : 0;
+
+    let type = 'C型';
+    let headline = '體脂肪重高於骨骼肌重';
+    let summary = '目前偏向體脂較高、肌肉量相對不足的體態，重點是減脂同時保住肌肉。';
+    let meaning = '這類體態通常代表體脂偏高、骨骼肌支撐不夠，不能只追求體重下降，還要顧蛋白質與阻力訓練。';
+    const caution: string[] = [];
+    const menuAdjustments: string[] = [];
+
+    const isLean =
+      bodyFatPct > 0 &&
+      bodyFatPct <= (settings.sex === 'female' ? 30 : 22) &&
+      visceralFat > 0 &&
+      visceralFat <= 9 &&
+      muscleMass >= muscleLow;
+
+    const isDenseHighFat =
+      (visceralFat >= 12 && bodyFatPct >= (settings.sex === 'female' ? 34 : 27)) ||
+      (muscleMass >= muscleHigh && bodyFatPct >= (settings.sex === 'female' ? 32 : 24));
+
+    if (isLean) {
+      type = 'I型';
+      headline = '骨骼肌保留較佳，體脂控制相對理想';
+      summary = '脂肪控制與肌肉保留相對較好，體態正往精瘦型前進。';
+      meaning = '這代表你目前的減脂方向比較漂亮，體脂沒有明顯壓過肌肉量，現在更該注意不要減太快。';
+      caution.push('避免熱量切太低，免得肌肉量反而掉太快');
+      caution.push('持續固定阻力訓練或至少維持步行與蛋白質');
+      menuAdjustments.push('主食維持目前份量，不要再大砍');
+      menuAdjustments.push('每餐優先蛋白質 1 掌心以上');
+    } else if (isDenseHighFat) {
+      type = 'D型';
+      headline = '肌肉量不差，但脂肪與內臟脂肪負擔偏高';
+      summary = '目前偏向脂肪與內臟脂肪負擔較高型，先以穩定減脂與改善代謝為主。';
+      meaning = '這類體態常見於有一定肌肉基礎，但腹部脂肪與整體脂肪偏高；重點不是增肌，而是先把脂肪壓下來。';
+      caution.push('先把精緻澱粉、含糖飲料、宵夜壓低');
+      caution.push('內臟脂肪較高時，比起極端節食，更重要的是穩定執行');
+      menuAdjustments.push('晚餐主食再少 1/4 份，蔬菜與蛋白質提高');
+      menuAdjustments.push('每週至少 3 天安排 20~30 分鐘活動');
+    } else {
+      caution.push('現在最重要的是讓體脂慢慢降、肌肉量不要明顯掉');
+      caution.push('別只看體重，體脂與腰腹脂肪趨勢更重要');
+      menuAdjustments.push('早餐與加餐補足蛋白質，放鬆餐頻率先收斂');
+      menuAdjustments.push('維持中等熱量赤字，不要忽高忽低');
+    }
+
+    if ((prevBodyFat && bodyFatPct && bodyFatPct > prevBodyFat + 0.3) || (prevFatMass && bodyFatMass && bodyFatMass > prevFatMass + 0.3)) {
+      caution.push('最近體脂率或脂肪重有回升，先檢查放鬆餐與隱藏熱量');
+    } else if ((prevBodyFat && bodyFatPct && bodyFatPct < prevBodyFat - 0.3) || (prevFatMass && bodyFatMass && bodyFatMass < prevFatMass - 0.3)) {
+      menuAdjustments.push('最近體脂或脂肪重有往下，維持目前乾淨飲食節奏');
+    }
+
+    if (prevMuscle && muscleMass && muscleMass < prevMuscle - 0.3) {
+      caution.push('肌肉量有下降跡象，蛋白質與阻力訓練要補上');
+      menuAdjustments.push('每天蛋白質分散到 3 餐以上，不要全擠在一餐');
+    }
+
+    if (prevWater && bodyWater && bodyWater < prevWater - 0.5) {
+      caution.push('水分下降較明顯，最近的體重下降可能混有水分波動');
+    } else if (bodyWater && bodyWater < 45) {
+      caution.push('水分偏低，先把補水與電解質穩住');
+    }
+
+    return {
+      type,
+      headline,
+      summary,
+      meaning,
+      caution,
+      menuAdjustments,
+      bodyFatMass,
+      weightIdeal: `${weightLow}~${weightHigh}`,
+      muscleIdeal: `${muscleLow}~${muscleHigh}`,
+      bodyFatIdeal: `${bodyFatMassLow}~${bodyFatMassHigh}`,
+    };
+  }, [
+    latest,
+    bodyFat,
+    latestBodyFatPct,
+    latestMuscleMass,
+    latestVisceralFat,
+    latestBodyWater,
+    latestWeight,
+    previousEntry,
+    settings.sex,
+    settings.height,
+  ]);
+
   const waterVsFat = useMemo(() => {
-    if (sortedEntries.length < 2) return "資料不足";
-    const first = sortedEntries[0];
-    const last = sortedEntries[sortedEntries.length - 1];
+    if (sortedEntries.length < 3) {
+      return {
+        tag: "觀察中",
+        title: "資料不足",
+        detail: "至少先累積 3 筆以上身體組成紀錄，再判斷脂肪、水分或肌肉變化。",
+        confidence: "低" as const,
+        reasons: ["目前可用資料太少"],
+      };
+    }
+
+    const recent = sortedEntries.slice(-4);
+    const first = recent[0];
+    const last = recent[recent.length - 1];
+    const weightDelta = +(num(last.weight) - num(first.weight)).toFixed(1);
+    const fatPctDelta = +(num(last.bodyFatPct) - num(first.bodyFatPct)).toFixed(1);
+    const fatMassDelta = +(num(last.fatMass) - num(first.fatMass)).toFixed(1);
+    const muscleDelta = +(num(last.muscleMass) - num(first.muscleMass)).toFixed(1);
+    const waterDelta = +(num(last.bodyWater) - num(first.bodyWater)).toFixed(1);
+    const visceralDelta = +(num(last.visceralFat) - num(first.visceralFat)).toFixed(1);
     const days = Math.max(1, daysBetween(first.date, last.date));
-    const totalLoss = num(first.weight) - num(last.weight);
-    if (days <= 10 && totalLoss >= 2) return "前期下降偏快，較可能包含較多水分變化";
-    if (weeklyLoss >= 1.2) return "下降速度偏快，可能水分與脂肪都有";
-    if (weeklyLoss > 0 && weeklyLoss <= 1) return "目前節奏較像穩定脂肪下降";
-    return "先持續觀察 1~2 週再判斷";
-  }, [sortedEntries, weeklyLoss]);
+
+    const reasons: string[] = [];
+    let confidenceScore = 0;
+    let tag = "觀察中";
+    let title = "趨勢尚不明確";
+    let detail = "目前像是混合波動，先持續觀察 1~2 週，不要只看單日數字。";
+
+    const weightDown = weightDelta <= -0.4;
+    const fatDown = fatMassDelta <= -0.3;
+    const fatPctDown = fatPctDelta <= -0.3;
+    const waterDown = waterDelta <= -0.8;
+    const muscleDown = muscleDelta <= -0.5;
+    const fatUp = fatMassDelta >= 0.3 || fatPctDelta >= 0.3;
+
+    if (weightDown && fatDown && fatPctDown && !muscleDown) {
+      tag = "脂肪主導";
+      title = "目前下降以脂肪為主";
+      detail = "體重、體脂率、脂肪重都有往下，且肌肉量沒有明顯掉，這是比較理想的減脂型態。";
+      reasons.push("體脂率下降");
+      reasons.push("脂肪重下降");
+      reasons.push("肌肉量保留尚可");
+      confidenceScore += 3;
+    } else if (weightDown && waterDown && !fatDown && Math.abs(fatPctDelta) < 0.3) {
+      tag = "水分主導";
+      title = "最近較像水分波動";
+      detail = "體重有下降，但脂肪重與體脂率沒有同步明顯往下，反而水分變化更明顯，先別過度解讀單次體重。";
+      reasons.push("水分下降較明顯");
+      reasons.push("脂肪指標變化有限");
+      confidenceScore += 3;
+    } else if (weightDown && muscleDown && (!fatDown || fatPctDelta >= 0)) {
+      tag = "肌肉警訊";
+      title = "這波下降可能混有肌肉流失";
+      detail = "體重下降同時肌肉量也掉，而且脂肪指標改善不夠明顯，接下來要優先補蛋白質並加上阻力訓練。";
+      reasons.push("肌肉量下降");
+      reasons.push("脂肪改善不明顯");
+      confidenceScore += 3;
+    } else if (weightDown && fatDown && waterDown) {
+      tag = "混合下降";
+      title = "目前像脂肪＋水分混合下降";
+      detail = "這波體重下降同時有脂肪重與水分下降，方向不差，但不要把所有下降都當成純脂肪。";
+      reasons.push("脂肪重下降");
+      reasons.push("水分也同步下降");
+      confidenceScore += 2;
+    } else if (weightDelta >= 0.3 && fatUp) {
+      tag = "脂肪回升";
+      title = "近期有脂肪回升跡象";
+      detail = "體重沒有往下，脂肪重或體脂率反而有上升，先檢查放鬆餐、外食份量、宵夜與飲料。";
+      reasons.push("體脂率或脂肪重上升");
+      confidenceScore += 2;
+    }
+
+    if (visceralDelta <= -1) {
+      reasons.push("內臟脂肪有下降");
+      confidenceScore += 1;
+    } else if (visceralDelta >= 1) {
+      reasons.push("內臟脂肪有回升");
+    }
+
+    if (days >= 7) confidenceScore += 1;
+    if (recent.every((entry) => num(entry.weight) > 0 && num(entry.bodyFatPct) > 0 && num(entry.fatMass) > 0)) {
+      confidenceScore += 1;
+    }
+
+    const confidence =
+      confidenceScore >= 5 ? ("高" as const) : confidenceScore >= 3 ? ("中" as const) : ("低" as const);
+
+    if (!reasons.length) {
+      reasons.push("近期數值變化不夠一致");
+    }
+
+    return {
+      tag,
+      title,
+      detail,
+      confidence,
+      reasons,
+    };
+  }, [sortedEntries]);
 
   const strategyMode = useMemo(() => {
     if (!latest) return ["先建立第一筆紀錄"];
@@ -975,9 +1457,20 @@ export default function SimpleTracker() {
     };
   }, [bmr, tdee, cutCalories, settings.sex]);
 
+  const bodyCompositionMenuHint = useMemo(() => {
+    if (!latest) return "先建立身體組成紀錄，再做菜單微調。";
+    if (bodyCompositionAI.type === "I型") {
+      return "菜單微調：主食先維持，不要過度壓熱量；重點放在穩定蛋白質與運動維持線條。";
+    }
+    if (bodyCompositionAI.type === "D型") {
+      return "菜單微調：先減少晚餐澱粉與零食密度，優先蔬菜、豆腐、雞胸、魚肉，外食避開含糖飲與炸物。";
+    }
+    return "菜單微調：早餐與加餐補足蛋白質，放鬆餐頻率先收斂，主食維持中等份量即可。";
+  }, [latest, bodyCompositionAI]);
+
   const cheatDecision = useMemo(() => {
     if (!latest || sortedEntries.length < 3) {
-      return { level: "-", reason: "資料不足", plan: [] as string[] };
+      return { level: "-", reason: "資料不足", plan: [] as string[], rule: "先累積紀錄" };
     }
 
     let score = 0;
@@ -991,11 +1484,12 @@ export default function SimpleTracker() {
       return {
         level: "建議放鬆一餐",
         reason: "停滯+高壓+高嘴饞",
+        rule: "一餐放鬆，不延續到下一餐",
         plan: [
           "優先蛋白質：燒肉/牛排/雞腿",
-          "碳水可吃：飯1碗或漢堡1個",
-          "避免：甜點+含糖飲料",
-          "一餐結束，不延續下一餐",
+          "碳水可吃：飯 1 碗或漢堡 1 個",
+          "避免：甜點+含糖飲料一起上",
+          "吃完就收，不把放鬆餐變成放鬆日",
         ],
       };
     }
@@ -1004,11 +1498,12 @@ export default function SimpleTracker() {
       return {
         level: "可控放鬆",
         reason: "有嘴饞或減重趨緩",
+        rule: "可吃外食，但份量要收斂",
         plan: [
           "炸物可吃但減半",
-          "可樂改零卡",
+          "飲料改零卡或無糖",
           "先吃蛋白質再吃其他",
-          "總量控制在TDEE內",
+          "總量控制在 TDEE 內較穩",
         ],
       };
     }
@@ -1016,9 +1511,64 @@ export default function SimpleTracker() {
     return {
       level: "不建議",
       reason: "目前減脂順利",
+      rule: "以計畫內飲食為主，真的要吃就選相對乾淨版",
       plan: ["維持現在飲食", "嘴饞用蛋白質替代", "避免高熱量誘惑"],
     };
   }, [latest, sortedEntries, plateau, weeklyLoss]);
+
+  const cheatRestaurantOptions = useMemo(() => {
+    const stricter = cheatDecision.level === "不建議";
+    const moderate = cheatDecision.level === "可控放鬆";
+
+    return [
+      {
+        brand: "麥當勞",
+        title: stricter ? "相對乾淨版" : moderate ? "可控放鬆版" : "放鬆餐版",
+        combos: stricter
+          ? [
+              "麥香鷄 / 嫩煎鷄腿堡 擇一 + 無糖茶 / 黑咖啡",
+              "若很餓可加 4 塊麥克鷄塊，不再加薯條",
+            ]
+          : moderate
+            ? [
+                "主餐漢堡 1 份 + 小薯 1 份 + 零卡可樂",
+                "或 6 塊麥克鷄塊 + 漢堡 + 無糖飲，甜點先略過",
+              ]
+            : [
+                "漢堡 1 份 + 小薯 1 份 + 零卡飲",
+                "真的很想吃炸物時，以雞塊或小薯擇一，不要雙炸物",
+              ],
+        note: "重點是保留滿足感，但不要再疊加甜點與含糖飲。",
+      },
+      {
+        brand: "Subway / 潛艇堡類",
+        title: "高蛋白外食版",
+        combos: [
+          "6 吋雞肉類 + 雙倍蔬菜 + 無糖飲",
+          "醬料先選清爽型，避免雙醬與餅乾一起上",
+        ],
+        note: "這類最適合放鬆日又不想讓脂肪重回升。",
+      },
+      {
+        brand: "便利商店",
+        title: "最穩定的收斂版",
+        combos: [
+          "雞胸肉 + 茶葉蛋 + 地瓜 + 無糖豆漿",
+          "或 飯糰 1 個 + 沙拉 + 茶葉蛋 + 無糖茶",
+        ],
+        note: "當天若已經嘴饞高，便利商店反而最好控量。",
+      },
+      {
+        brand: "便當 / 小火鍋",
+        title: "台式外食版",
+        combos: [
+          "便當選雞腿/魚排/滷牛，飯半碗到 1 碗，青菜加量",
+          "小火鍋選肉片 + 豆腐 + 蔬菜，主食半份到 1 份",
+        ],
+        note: "比起完全不吃，吃一份可控的正餐通常更不容易失守。",
+      },
+    ];
+  }, [cheatDecision.level]);
 
   const doseAI = useMemo(() => {
     if (!latest || sortedEntries.length < 3) {
@@ -1317,6 +1867,11 @@ export default function SimpleTracker() {
     weight: num(e.weight),
     avg7: getSevenDayAverage(sortedEntries, i),
     goal: num(settings.goal) || null,
+    bodyFatPct: num(e.bodyFatPct),
+    fatMass: num(e.fatMass),
+    muscleMass: num(e.muscleMass),
+    visceralFat: num(e.visceralFat),
+    bodyWater: num(e.bodyWater),
   }));
 
   const shotPattern = useMemo(() => {
@@ -1453,6 +2008,11 @@ export default function SimpleTracker() {
     setForm({
       date: today,
       weight: "",
+      bodyFatPct: "",
+      fatMass: "",
+      muscleMass: "",
+      visceralFat: "",
+      bodyWater: "",
       dose: "2.5",
       appetite: "正常",
       cravingLevel: "中",
@@ -1482,6 +2042,11 @@ export default function SimpleTracker() {
     setForm({
       date: item.date,
       weight: item.weight,
+      bodyFatPct: item.bodyFatPct || "",
+      fatMass: item.fatMass || "",
+      muscleMass: item.muscleMass || "",
+      visceralFat: item.visceralFat || "",
+      bodyWater: item.bodyWater || "",
       dose: item.dose,
       appetite: item.appetite,
       cravingLevel: item.cravingLevel,
@@ -1510,6 +2075,11 @@ export default function SimpleTracker() {
         id: crypto.randomUUID(),
         date: today,
         weight: baseWeight,
+        bodyFatPct: latest?.bodyFatPct || form.bodyFatPct || "",
+        fatMass: latest?.fatMass || form.fatMass || "",
+        muscleMass: latest?.muscleMass || form.muscleMass || "",
+        visceralFat: latest?.visceralFat || form.visceralFat || "",
+        bodyWater: latest?.bodyWater || form.bodyWater || "",
         dose: latest?.dose || form.dose || "2.5",
         appetite: latest?.appetite || "正常",
         cravingLevel: latest?.cravingLevel || "中",
@@ -1561,6 +2131,11 @@ export default function SimpleTracker() {
     const header = [
       "date",
       "weight",
+      "bodyFatPct",
+      "fatMass",
+      "muscleMass",
+      "visceralFat",
+      "bodyWater",
       "dose",
       "appetite",
       "cravingLevel",
@@ -1573,6 +2148,11 @@ export default function SimpleTracker() {
     const rows = sortedEntries.map((e) => [
       e.date,
       e.weight,
+      e.bodyFatPct,
+      e.fatMass,
+      e.muscleMass,
+      e.visceralFat,
+      e.bodyWater,
       e.dose,
       e.appetite,
       e.cravingLevel,
@@ -1826,12 +2406,27 @@ export default function SimpleTracker() {
         </Card>
 
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2">
               <Droplets className="w-4 h-4" />
               水分/脂肪判斷
             </div>
-            <div className="text-sm">{waterVsFat}</div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{waterVsFat.tag}</Badge>
+              <Badge
+                variant={
+                  waterVsFat.confidence === "高"
+                    ? "default"
+                    : waterVsFat.confidence === "中"
+                      ? "secondary"
+                      : "outline"
+                }
+              >
+                信心 {waterVsFat.confidence}
+              </Badge>
+            </div>
+            <div className="text-sm font-medium">{waterVsFat.title}</div>
+            <div className="text-sm text-slate-500">{waterVsFat.detail}</div>
           </CardContent>
         </Card>
 
@@ -1895,6 +2490,9 @@ export default function SimpleTracker() {
       <Tabs defaultValue="add" className="space-y-4">
         <div className="-mx-1 overflow-x-auto pb-1">
           <TabsList className="inline-flex h-auto w-max min-w-full gap-1 rounded-2xl bg-white p-1 shadow-sm">
+            <TabsTrigger value="settings" className="rounded-xl shrink-0 px-4">
+              設定
+            </TabsTrigger>
             <TabsTrigger value="add" className="rounded-xl shrink-0 px-4">
               新增
             </TabsTrigger>
@@ -1906,9 +2504,6 @@ export default function SimpleTracker() {
             </TabsTrigger>
             <TabsTrigger value="strategy" className="rounded-xl shrink-0 px-4">
               策略
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="rounded-xl shrink-0 px-4">
-              設定
             </TabsTrigger>
             <TabsTrigger value="shots" className="rounded-xl shrink-0 px-4">
               施打
@@ -1946,6 +2541,49 @@ export default function SimpleTracker() {
                     placeholder="體重"
                     value={form.weight}
                     onChange={(e) => setForm({ ...form, weight: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>體脂率 (%)</Label>
+                  <Input
+                    placeholder="例如 32.5"
+                    value={form.bodyFatPct}
+                    onChange={(e) => setForm({ ...form, bodyFatPct: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>脂肪重 (kg)</Label>
+                  <Input
+                    placeholder="例如 15.7"
+                    value={form.fatMass}
+                    onChange={(e) => setForm({ ...form, fatMass: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>肌肉量 (kg)</Label>
+                  <Input
+                    placeholder="例如 54.2"
+                    value={form.muscleMass}
+                    onChange={(e) => setForm({ ...form, muscleMass: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>內臟脂肪</Label>
+                  <Input
+                    placeholder="例如 12"
+                    value={form.visceralFat}
+                    onChange={(e) => setForm({ ...form, visceralFat: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>水分 (%)</Label>
+                  <Input
+                    placeholder="例如 46.8"
+                    value={form.bodyWater}
+                    onChange={(e) => setForm({ ...form, bodyWater: e.target.value })}
                   />
                 </div>
               </div>
@@ -2119,6 +2757,12 @@ export default function SimpleTracker() {
                           </div>
                           <div>體重：{item.weight} kg</div>
                           <div>
+                            體脂：{item.bodyFatPct || "-"}%｜脂肪重：{item.fatMass || "-"} kg｜肌肉量：{item.muscleMass || "-"} kg
+                          </div>
+                          <div>
+                            內臟脂肪：{item.visceralFat || "-"}｜水分：{item.bodyWater || "-"}%
+                          </div>
+                          <div>
                             食慾：{item.appetite}｜嘴饞：{item.cravingLevel}
                           </div>
                           <div>
@@ -2171,6 +2815,31 @@ export default function SimpleTracker() {
               </CardContent>
             </Card>
 
+            {[
+              { key: "bodyFatPct", title: "體脂率趨勢", unit: "%" },
+              { key: "fatMass", title: "脂肪重趨勢", unit: "kg" },
+              { key: "muscleMass", title: "肌肉量趨勢", unit: "kg" },
+              { key: "visceralFat", title: "內臟脂肪趨勢", unit: "" },
+              { key: "bodyWater", title: "水分趨勢", unit: "%" },
+            ].map((metric) => (
+              <Card key={metric.key}>
+                <CardHeader>
+                  <CardTitle>{metric.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={chartData.filter((item) => Number((item as any)[metric.key]) > 0)}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip formatter={(value) => [`${value}${metric.unit}`, metric.title]} />
+                      <Line dataKey={metric.key} strokeWidth={2} dot />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            ))}
+
             <Card>
               <CardHeader>
                 <CardTitle>分析摘要</CardTitle>
@@ -2188,6 +2857,7 @@ export default function SimpleTracker() {
                 <div>TDEE：{tdee || "-"} kcal</div>
                 <div>建議減脂熱量：{cutCalories || "-"} kcal</div>
                 <div>性別版型：{settings.sex === "female" ? "女性建議" : "男性建議"}</div>
+                <div>水分/脂肪判斷：{waterVsFat.title}（信心 {waterVsFat.confidence}）</div>
               </CardContent>
             </Card>
           </div>
@@ -2206,6 +2876,7 @@ export default function SimpleTracker() {
                 <div>{calorieAdvice.base}</div>
                 <div>{calorieAdvice.target}</div>
                 <div className="text-slate-500">{calorieAdvice.note}</div>
+                <div className="text-emerald-700">{bodyCompositionMenuHint}</div>
               </div>
               <CardContent className="space-y-4">
                 {mealPlans.map((plan) => (
@@ -2844,6 +3515,9 @@ export default function SimpleTracker() {
               <CardContent className="space-y-3">
                 <div className="text-xl font-semibold">{cheatDecision.level}</div>
                 <div className="text-sm text-slate-500">原因：{cheatDecision.reason}</div>
+                <div className="rounded-xl border bg-slate-50 p-3 text-sm">
+                  原則：{cheatDecision.rule}
+                </div>
               </CardContent>
             </Card>
 
@@ -2854,6 +3528,28 @@ export default function SimpleTracker() {
               <CardContent className="space-y-2 text-sm">
                 {cheatDecision.plan.map((p) => (
                   <div key={p}>• {p}</div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>外食放鬆餐範例</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {cheatRestaurantOptions.map((option) => (
+                  <div key={option.brand} className="rounded-xl border p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-medium">{option.brand}</div>
+                      <Badge variant="outline">{option.title}</Badge>
+                    </div>
+                    <div className="space-y-1 text-sm text-slate-700">
+                      {option.combos.map((combo) => (
+                        <div key={combo}>• {combo}</div>
+                      ))}
+                    </div>
+                    <div className="text-xs text-slate-500">{option.note}</div>
+                  </div>
                 ))}
               </CardContent>
             </Card>
