@@ -842,7 +842,8 @@ function BodyCompositionTypeCard({
             </div>
           </div>
 
-          <div className="relative">
+          <div className="relative touch-feedback">
+        <TouchFeedbackStyles />
             <div className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[180px] font-black leading-none ${typeTone.overlay}`}>
               {type.charAt(0)}
             </div>
@@ -924,6 +925,7 @@ function MiniBodyTypeCard({
 
   return (
     <Card
+      data-clickable={onClick ? "true" : undefined}
       className={`overflow-hidden border ${typeTone.ring} ${onClick ? "cursor-pointer active:scale-[0.99] transition-transform" : ""}`}
       onClick={onClick}
     >
@@ -964,6 +966,33 @@ function MiniBodyTypeCard({
   );
 }
 
+
+function TouchFeedbackStyles() {
+  return (
+    <style jsx global>{`
+      .touch-feedback button:not(:disabled),
+      .touch-feedback [role="button"]:not([aria-disabled="true"]),
+      .touch-feedback [data-clickable="true"] {
+        transition:
+          transform 0.14s ease,
+          opacity 0.14s ease,
+          box-shadow 0.14s ease,
+          filter 0.14s ease,
+          background-color 0.14s ease;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+      }
+
+      .touch-feedback button:not(:disabled):active,
+      .touch-feedback [role="button"]:not([aria-disabled="true"]):active,
+      .touch-feedback [data-clickable="true"]:active {
+        transform: scale(0.97);
+        opacity: 0.88;
+        filter: brightness(0.98);
+      }
+    `}</style>
+  );
+}
 
 function InlineAuthGate({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState("");
@@ -1120,7 +1149,8 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 touch-feedback">
+      <TouchFeedbackStyles />
       <div className="w-full max-w-md rounded-3xl border bg-white p-5 shadow-sm space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">猛健樂個人版 Pro</h1>
@@ -2877,7 +2907,8 @@ export default function SimpleTracker() {
 
   return (
     <InlineAuthGate>
-      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 space-y-4 pb-24">
+      <div className="touch-feedback w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 space-y-4 pb-24">
+        <TouchFeedbackStyles />
       <div className="rounded-2xl bg-white/90 backdrop-blur border p-4 shadow-sm space-y-3">
         <div>
           <h1 className="text-xl font-bold">猛健樂個人版 Pro</h1>
