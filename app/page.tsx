@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import AuthGate from "@/components/AuthGate";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -750,6 +749,267 @@ function MiniBodyTypeCard({
   );
 }
 
+
+function InlineAuthGate({ children }: { children: React.ReactNode }) {
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [currentEmail, setCurrentEmail] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    const init = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!active) return;
+      setLoggedIn(Boolean(session?.user));
+      setCurrentEmail(session?.user?.email || "");
+      setReady(true);
+    };
+
+    init();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setLoggedIn(Boolean(session?.user));
+      setCurrentEmail(session?.user?.email || "");
+      setReady(true);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const sendOtp = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail) {
+      setMessage("請先輸入 Email");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email: trimmedEmail,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+
+    setLoading(false);
+
+    if (error) {
+      const lower = (error.message || "").toLowerCase();
+
+      if (lower.includes("email rate limit exceeded")) {
+        setMessage("驗證碼寄送過於頻繁，請稍後再試。");
+        return;
+      }
+
+      if (lower.includes("rate limit")) {
+        setMessage("操作過於頻繁，請稍後再試。");
+        return;
+      }
+
+      setMessage(`驗證碼寄送失敗：${error.message}`);
+      return;
+    }
+
+    setStep("otp");
+    setMessage("驗證碼已寄出，請到信箱查看 6 碼驗證碼。");
+  };
+
+  const verifyOtp = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedOtp = otp.trim();
+
+    if (!trimmedEmail) {
+      setMessage("請先輸入 Email");
+      return;
+    }
+
+    if (!trimmedOtp) {
+      setMessage("請輸入驗證碼");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: trimmedEmail,
+      token: trimmedOtp,
+      type: "email",
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setMessage(`登入失敗：${error.message}`);
+      return;
+    }
+
+    setOtp("");
+    setLoggedIn(true);
+    setCurrentEmail(trimmedEmail);
+    setMessage("");
+  };
+
+  const signOut = async () => {
+    setLoading(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.signOut();
+
+    setLoading(false);
+
+    if (error) {
+      setMessage(`登出失敗：${error.message}`);
+      return;
+    }
+
+    setLoggedIn(false);
+    setCurrentEmail("");
+    setEmail("");
+    setOtp("");
+    setStep("email");
+    setMessage("已登出");
+  };
+
+  if (!ready) {
+    return (
+      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 flex items-center justify-center">
+        <Card className="w-full">
+          <CardContent className="p-6 text-center text-slate-600">登入狀態讀取中...</CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!loggedIn) {
+    return (
+      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 flex items-center justify-center">
+        <Card className="w-full shadow-sm">
+          <CardHeader>
+            <CardTitle>帳號登入</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-sm text-slate-600">請先登入，才能同步雲端資料。</div>
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="login-email">Email</Label>
+                <Input
+                  id="login-email"
+                  type="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  placeholder="請輸入 Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              {step === "otp" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="login-otp">驗證碼</Label>
+                  <Input
+                    id="login-otp"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="請輸入 6 碼驗證碼"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                  />
+                </div>
+              ) : null}
+
+              {message ? (
+                <div
+                  className={`rounded-xl border px-3 py-2 text-sm ${
+                    message.includes("已寄出") || message.includes("成功")
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-amber-200 bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {message}
+                </div>
+              ) : null}
+
+              {step === "email" ? (
+                <Button onClick={sendOtp} disabled={loading} className="w-full">
+                  {loading ? "寄送中..." : "寄送驗證碼"}
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <Button onClick={verifyOtp} disabled={loading} className="w-full">
+                    {loading ? "登入中..." : "確認登入"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={sendOtp}
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    {loading ? "處理中..." : "重新寄送驗證碼"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setStep("email");
+                      setOtp("");
+                      setMessage("");
+                    }}
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    返回修改 Email
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="w-full max-w-md mx-auto px-3 pt-3">
+        <Card className="shadow-sm">
+          <CardContent className="p-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-slate-500">目前登入帳號</div>
+              <div className="text-sm font-medium break-all">{currentEmail || "已登入"}</div>
+            </div>
+            <Button type="button" variant="outline" onClick={signOut} disabled={loading}>
+              {loading ? "登出中..." : "登出"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default function SimpleTracker() {
 
   const [mounted, setMounted] = useState(false);
@@ -823,9 +1083,8 @@ export default function SimpleTracker() {
     { label: "15 → 12.5", strength: "15", dose: "12.5" },
   ] as const;
 
-
-  const reloadCloudData = async (userId: string) => {
-    if (!userId || !today) return;
+  const loadCloudDataForUser = async (userId: string) => {
+    if (!userId || !today) return false;
 
     const freshDefaults: Settings = { ...defaultSettings, firstShotDate: today };
 
@@ -837,10 +1096,12 @@ export default function SimpleTracker() {
 
     if (error) {
       console.error("Cloud reload failed:", error);
-      return;
+      return false;
     }
 
-    if (!cloudRow?.payload) return;
+    if (!cloudRow?.payload) {
+      return false;
+    }
 
     const payload = cloudRow.payload as Partial<CloudPayload>;
 
@@ -912,7 +1173,6 @@ export default function SimpleTracker() {
         }))
       : [];
 
-    setCloudUserId(userId);
     setEntries(nextEntries);
     setSettings(nextSettings);
     setTempSettings(nextSettings);
@@ -929,18 +1189,9 @@ export default function SimpleTracker() {
     }));
     setPhotoDate(today);
     setCloudReady(true);
+    return true;
   };
 
-  const refreshCloudDataFromSession = async () => {
-    if (!today) return;
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user?.id) return;
-    await reloadCloudData(user.id);
-  };
 
   useEffect(() => {
     setMounted(true);
@@ -953,27 +1204,6 @@ export default function SimpleTracker() {
       setNotificationPermission("unsupported");
     }
   }, []);
-
-
-  useEffect(() => {
-    if (!today) return;
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.id) {
-        setCloudUserId(session.user.id);
-        reloadCloudData(session.user.id).catch(() => {});
-      } else {
-        setCloudUserId("");
-        setCloudReady(false);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [today]);
 
   useEffect(() => {
     if (!today) return;
@@ -1099,86 +1329,10 @@ export default function SimpleTracker() {
       if (user) {
         setCloudUserId(user.id);
 
-        const { data: cloudRow, error } = await supabase
-          .from("tracker_data")
-          .select("payload")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const loadedFromCloud = await loadCloudDataForUser(user.id);
 
-        if (!error && cloudRow?.payload) {
-          const payload = cloudRow.payload as Partial<CloudPayload>;
-
-          finalEntries = Array.isArray(payload.entries)
-            ? payload.entries.map((item, index) => {
-                const fallbackSideEffects =
-                  Array.isArray(item?.sideEffects) && item.sideEffects.length
-                    ? item.sideEffects.map((se) => ({
-                        effect: (se?.effect || "無") as SideEffect,
-                        severity: String(se?.severity || "0"),
-                      }))
-                    : [
-                        {
-                          effect: (item?.sideEffect || "無") as SideEffect,
-                          severity: String(item?.sideEffectSeverity || "0"),
-                        },
-                      ];
-
-                const firstActive =
-                  fallbackSideEffects.find((se) => se.effect !== "無") || fallbackSideEffects[0];
-
-                return {
-                  id:
-                    item?.id ||
-                    `cloud-${item?.date || "item"}-${index}-${Math.random()
-                      .toString(36)
-                      .slice(2, 8)}`,
-                  date: item?.date || today,
-                  weight: String(item?.weight || ""),
-                  bodyFatPct: String(item?.bodyFatPct || ""),
-                  fatMass: String(item?.fatMass || ""),
-                  muscleMass: String(item?.muscleMass || ""),
-                  visceralFat: String(item?.visceralFat || ""),
-                  bodyWater: String(item?.bodyWater || ""),
-                  dose: String(item?.dose || "2.5"),
-                  appetite: (item?.appetite || "正常") as Appetite,
-                  cravingLevel: (item?.cravingLevel || "中") as CravingLevel,
-                  sideEffect: (firstActive?.effect || "無") as SideEffect,
-                  sideEffectSeverity: String(firstActive?.severity || "0"),
-                  sideEffects: fallbackSideEffects,
-                  exerciseMin: String(item?.exerciseMin || "0"),
-                  isShotDay: Boolean(item?.isShotDay),
-                };
-              })
-            : localEntries;
-
-          finalSettings = {
-            ...freshDefaults,
-            ...(payload.settings || {}),
-          };
-
-          finalPenInventory = {
-            penStrength: String(payload.penInventory?.penStrength || localPenInventory.penStrength || "10"),
-            totalGrids: String(payload.penInventory?.totalGrids || localPenInventory.totalGrids || "240"),
-            penStartDate: String(payload.penInventory?.penStartDate || localPenInventory.penStartDate || today),
-            manualAdjustGrids: String(
-              payload.penInventory?.manualAdjustGrids || localPenInventory.manualAdjustGrids || "0"
-            ),
-          };
-
-          finalPhotos = Array.isArray(payload.photoRecords)
-            ? payload.photoRecords.map((item, index) => ({
-                id:
-                  item?.id ||
-                  `photo-${item?.date || "item"}-${index}-${Math.random()
-                    .toString(36)
-                    .slice(2, 8)}`,
-                date: String(item?.date || today),
-                note: String(item?.note || ""),
-                imageData: String(item?.imageData || ""),
-              }))
-            : localPhotos;
-        } else if (error) {
-          console.error("Cloud load failed:", error);
+        if (loadedFromCloud) {
+          return;
         }
       }
 
@@ -1210,32 +1364,6 @@ export default function SimpleTracker() {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
 
-
-  useEffect(() => {
-    if (!mounted || !today) return;
-
-    const handleRefresh = () => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      refreshCloudDataFromSession().catch(() => {});
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refreshCloudDataFromSession().catch(() => {});
-      }
-    };
-
-    window.addEventListener("focus", handleRefresh);
-    window.addEventListener("pageshow", handleRefresh);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener("focus", handleRefresh);
-      window.removeEventListener("pageshow", handleRefresh);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [mounted, today]);
-
   useEffect(() => {
     if (!mounted) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
@@ -1243,6 +1371,71 @@ export default function SimpleTracker() {
     localStorage.setItem(PEN_INVENTORY_KEY, JSON.stringify(penInventory));
     localStorage.setItem(PHOTO_RECORDS_KEY, JSON.stringify(photoRecords));
   }, [entries, settings, penInventory, photoRecords, mounted]);
+
+  useEffect(() => {
+    if (!mounted || !today) return;
+
+    let active = true;
+
+    const reloadCloudData = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!active) return;
+
+      if (!user) {
+        setCloudUserId("");
+        return;
+      }
+
+      setCloudUserId(user.id);
+      await loadCloudDataForUser(user.id);
+    };
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+
+      if (!session?.user) {
+        setCloudUserId("");
+        return;
+      }
+
+      setCloudUserId(session.user.id);
+
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+        void loadCloudDataForUser(session.user.id);
+      }
+    });
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void reloadCloudData();
+      }
+    };
+
+    const handleFocus = () => {
+      void reloadCloudData();
+    };
+
+    const handlePageShow = () => {
+      void reloadCloudData();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [mounted, today]);
 
   useEffect(() => {
     if (!mounted || !cloudReady || !cloudUserId) return;
@@ -2558,7 +2751,7 @@ export default function SimpleTracker() {
   if (!mounted || !today) return null;
 
   return (
-    <AuthGate>
+    <InlineAuthGate>
       <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 space-y-4 pb-24">
       <div className="rounded-2xl bg-white/90 backdrop-blur border p-4 shadow-sm space-y-3">
         <div>
@@ -3902,6 +4095,6 @@ export default function SimpleTracker() {
         </TabsContent>
       </Tabs>
       </div>
-    </AuthGate>
+    </InlineAuthGate>
   );
 }
