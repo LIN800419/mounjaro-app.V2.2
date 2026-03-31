@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import AuthGate from "@/components/AuthGate";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -747,6 +746,267 @@ function MiniBodyTypeCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+
+function InlineAuthGate({ children }: { children: React.ReactNode }) {
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [currentEmail, setCurrentEmail] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    const init = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!active) return;
+      setLoggedIn(Boolean(session?.user));
+      setCurrentEmail(session?.user?.email || "");
+      setReady(true);
+    };
+
+    init();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setLoggedIn(Boolean(session?.user));
+      setCurrentEmail(session?.user?.email || "");
+      setReady(true);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const sendOtp = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail) {
+      setMessage("請先輸入 Email");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email: trimmedEmail,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+
+    setLoading(false);
+
+    if (error) {
+      const lower = (error.message || "").toLowerCase();
+
+      if (lower.includes("email rate limit exceeded")) {
+        setMessage("驗證碼寄送過於頻繁，請稍後再試。");
+        return;
+      }
+
+      if (lower.includes("rate limit")) {
+        setMessage("操作過於頻繁，請稍後再試。");
+        return;
+      }
+
+      setMessage(`驗證碼寄送失敗：${error.message}`);
+      return;
+    }
+
+    setStep("otp");
+    setMessage("驗證碼已寄出，請到信箱查看 6 碼驗證碼。");
+  };
+
+  const verifyOtp = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedOtp = otp.trim();
+
+    if (!trimmedEmail) {
+      setMessage("請先輸入 Email");
+      return;
+    }
+
+    if (!trimmedOtp) {
+      setMessage("請輸入驗證碼");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: trimmedEmail,
+      token: trimmedOtp,
+      type: "email",
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setMessage(`登入失敗：${error.message}`);
+      return;
+    }
+
+    setOtp("");
+    setLoggedIn(true);
+    setCurrentEmail(trimmedEmail);
+    setMessage("");
+  };
+
+  const signOut = async () => {
+    setLoading(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.signOut();
+
+    setLoading(false);
+
+    if (error) {
+      setMessage(`登出失敗：${error.message}`);
+      return;
+    }
+
+    setLoggedIn(false);
+    setCurrentEmail("");
+    setEmail("");
+    setOtp("");
+    setStep("email");
+    setMessage("已登出");
+  };
+
+  if (!ready) {
+    return (
+      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 flex items-center justify-center">
+        <Card className="w-full">
+          <CardContent className="p-6 text-center text-slate-600">登入狀態讀取中...</CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!loggedIn) {
+    return (
+      <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 flex items-center justify-center">
+        <Card className="w-full shadow-sm">
+          <CardHeader>
+            <CardTitle>帳號登入</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-sm text-slate-600">請先登入，才能同步雲端資料。</div>
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="login-email">Email</Label>
+                <Input
+                  id="login-email"
+                  type="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  placeholder="請輸入 Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              {step === "otp" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="login-otp">驗證碼</Label>
+                  <Input
+                    id="login-otp"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="請輸入 6 碼驗證碼"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                  />
+                </div>
+              ) : null}
+
+              {message ? (
+                <div
+                  className={`rounded-xl border px-3 py-2 text-sm ${
+                    message.includes("已寄出") || message.includes("成功")
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-amber-200 bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {message}
+                </div>
+              ) : null}
+
+              {step === "email" ? (
+                <Button onClick={sendOtp} disabled={loading} className="w-full">
+                  {loading ? "寄送中..." : "寄送驗證碼"}
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <Button onClick={verifyOtp} disabled={loading} className="w-full">
+                    {loading ? "登入中..." : "確認登入"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={sendOtp}
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    {loading ? "處理中..." : "重新寄送驗證碼"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setStep("email");
+                      setOtp("");
+                      setMessage("");
+                    }}
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    返回修改 Email
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="w-full max-w-md mx-auto px-3 pt-3">
+        <Card className="shadow-sm">
+          <CardContent className="p-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-slate-500">目前登入帳號</div>
+              <div className="text-sm font-medium break-all">{currentEmail || "已登入"}</div>
+            </div>
+            <Button type="button" variant="outline" onClick={signOut} disabled={loading}>
+              {loading ? "登出中..." : "登出"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -2392,7 +2652,7 @@ export default function SimpleTracker() {
   if (!mounted || !today) return null;
 
   return (
-    <AuthGate>
+    <InlineAuthGate>
       <div className="w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 space-y-4 pb-24">
       <div className="rounded-2xl bg-white/90 backdrop-blur border p-4 shadow-sm space-y-3">
         <div>
@@ -3736,6 +3996,6 @@ export default function SimpleTracker() {
         </TabsContent>
       </Tabs>
       </div>
-    </AuthGate>
+    </InlineAuthGate>
   );
 }
