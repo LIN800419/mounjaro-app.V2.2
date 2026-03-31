@@ -467,9 +467,13 @@ function getSevenDayAverage(entries: Entry[], index: number) {
   return +(values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(1);
 }
 
-function downloadTextFile(filename: string, content: string) {
+function downloadFile(
+  filename: string,
+  content: string,
+  mimeType = "text/plain;charset=utf-8",
+) {
   if (typeof window === "undefined") return;
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -2162,16 +2166,18 @@ export default function SimpleTracker() {
       e.exerciseMin,
       e.isShotDay ? "Y" : "N",
     ]);
-    downloadTextFile(
+    downloadFile(
       `mounjaro-records-${today}.csv`,
       [header, ...rows].map((r) => r.join(",")).join("\n"),
+      "text/csv;charset=utf-8",
     );
   };
 
   const exportJSON = () => {
-    downloadTextFile(
+    downloadFile(
       `mounjaro-records-${today}.json`,
       JSON.stringify({ settings, entries: sortedEntries, penInventory, photoRecords }, null, 2),
+      "application/json;charset=utf-8",
     );
   };
 
@@ -2199,9 +2205,10 @@ export default function SimpleTracker() {
     if (!ok) return;
 
     try {
-      downloadTextFile(
+      downloadFile(
         `mounjaro-backup-before-import-${today}.json`,
         JSON.stringify(backupPayload, null, 2),
+        "application/json;charset=utf-8",
       );
 
       const text = await file.text();
