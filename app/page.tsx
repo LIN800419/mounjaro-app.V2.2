@@ -669,6 +669,8 @@ type CompositeMetricsCardProps = {
   onExpand?: () => void;
   height?: number;
   fullscreen?: boolean;
+  activeKeys?: string[];
+  onToggleKey?: (key: string) => void;
 };
 
 function CompositeMetricsCard({
@@ -677,29 +679,51 @@ function CompositeMetricsCard({
   onExpand,
   height = 260,
   fullscreen = false,
+  activeKeys,
+  onToggleKey,
 }: CompositeMetricsCardProps) {
   const lines = [
-    { key: "weightNorm", name: "體重" },
-    { key: "bodyFatPctNorm", name: "體脂率" },
-    { key: "fatMassNorm", name: "脂肪重" },
-    { key: "muscleRateNorm", name: "肌肉率" },
-    { key: "muscleMassNorm", name: "肌肉量" },
-    { key: "visceralFatNorm", name: "內臟脂肪" },
-    { key: "bodyWaterNorm", name: "水分" },
+    { key: "weightTrend", name: "體重", color: METRIC_COLORS.weight },
+    { key: "bodyFatPctTrend", name: "體脂率", color: METRIC_COLORS.bodyFatPct },
+    { key: "fatMassTrend", name: "脂肪重", color: METRIC_COLORS.fatMass },
+    { key: "muscleRateTrend", name: "肌肉率", color: METRIC_COLORS.muscleRate },
+    { key: "muscleMassTrend", name: "肌肉量", color: METRIC_COLORS.muscleMass },
+    { key: "visceralFatTrend", name: "內臟脂肪", color: METRIC_COLORS.visceralFat },
+    { key: "bodyWaterTrend", name: "水分", color: METRIC_COLORS.bodyWater },
   ];
+
+  const visibleLines = lines.filter((line) =>
+    activeKeys && activeKeys.length ? activeKeys.includes(line.key) : true,
+  );
 
   const filteredData = useMemo(
     () =>
       data.filter((row) =>
-        lines.some((line) => {
+        visibleLines.some((line) => {
           const value = Number(row[line.key]);
           return Number.isFinite(value) && value > 0;
         }),
       ),
-    [data],
+    [data, visibleLines],
   );
 
-  const hasData = filteredData.length > 0;
+  const yDomain = useMemo(() => {
+    const values = filteredData.flatMap((row) =>
+      visibleLines
+        .map((line) => Number(row[line.key]))
+        .filter((value) => Number.isFinite(value) && value > 0),
+    );
+
+    if (!values.length) return [80, 120] as [number, number];
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const padding = Math.max(3, (max - min) * 0.15);
+
+    return [Math.max(0, Math.floor(min - padding)), Math.ceil(max + padding)] as [number, number];
+  }, [filteredData, visibleLines]);
+
+  const hasData = filteredData.length > 0 && visibleLines.length > 0;
 
   return (
     <Card className={fullscreen ? "h-full" : undefined}>
@@ -707,7 +731,7 @@ function CompositeMetricsCard({
         <div className="space-y-1">
           <CardTitle>{title}</CardTitle>
           <div className="text-xs text-slate-500">
-            已將不同單位正規化成 0~100，方便一起比較趨勢。
+            各指標已換算成「第一筆資料 = 100」的相對趨勢，只看走勢，不看原始單位大小。
           </div>
         </div>
         {onExpand ? (
@@ -725,31 +749,44 @@ function CompositeMetricsCard({
         ) : (
           <>
             <div className="flex flex-wrap gap-2 text-xs text-slate-600">
-              {lines.map((line) => (
-                <span key={line.key} className="rounded-full border px-2 py-1">
-                  {line.name}
-                </span>
-              ))}
+              {lines.map((line) => {
+                const active = activeKeys && activeKeys.length ? activeKeys.includes(line.key) : true;
+                return (
+                  <button
+                    key={line.key}
+                    type="button"
+                    onClick={() => onToggleKey?.(line.key)}
+                    className={`rounded-full border px-2 py-1 transition ${active ? "text-white" : "bg-white text-slate-600"}`}
+                    style={{
+                      borderColor: line.color,
+                      backgroundColor: active ? line.color : "white",
+                    }}
+                  >
+                    {line.name}
+                  </button>
+                );
+              })}
             </div>
             <div style={{ width: "100%", height }}>
               <ResponsiveContainer>
                 <LineChart data={filteredData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
-                  <YAxis domain={[0, 100]} />
+                  <YAxis domain={yDomain} />
                   <Tooltip
                     formatter={(value: any, name: any) => [
-                      `${Number(value || 0).toFixed(1)}%`,
-                      String(name),
+                      `${Number(value || 0).toFixed(1)}`,
+                      `${String(name)}（第一筆=100）`,
                     ]}
                   />
-                  {lines.map((line, index) => (
+                  <ReferenceLine y={100} stroke="#94a3b8" strokeDasharray="4 4" />
+                  {visibleLines.map((line) => (
                     <Line
                       key={line.key}
                       type="monotone"
                       dataKey={line.key}
                       name={line.name}
-                      stroke={["#0f172a", "#7c3aed", "#dc2626", "#059669", "#ea580c", "#334155", "#0284c7"][index]}
+                      stroke={line.color}
                       strokeWidth={2}
                       dot={false}
                       isAnimationActive={false}
@@ -766,24 +803,17 @@ function CompositeMetricsCard({
   );
 }
 
-function normalizeMetricSeries<T extends Record<string, any>>(rows: T[], key: string) {
-  const values = rows
-    .map((row) => Number(row[key]))
-    .filter((value) => Number.isFinite(value) && value > 0);
+function normalizeTrendSeries<T extends Record<string, any>>(rows: T[], key: string) {
+  const values = rows.map((row) => Number(row[key]));
+  const firstValid = values.find((value) => Number.isFinite(value) && value > 0);
 
-  if (!values.length) return rows.map(() => null);
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-
-  if (max === min) {
-    return rows.map((row) => (Number(row[key]) > 0 ? 100 : null));
+  if (!Number.isFinite(firstValid) || !firstValid || firstValid <= 0) {
+    return rows.map(() => null);
   }
 
-  return rows.map((row) => {
-    const value = Number(row[key]);
+  return values.map((value) => {
     if (!Number.isFinite(value) || value <= 0) return null;
-    return +(((value - min) / (max - min)) * 100).toFixed(1);
+    return +(((value / firstValid) * 100)).toFixed(1);
   });
 }
 
@@ -1318,6 +1348,15 @@ export default function SimpleTracker() {
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudUserId, setCloudUserId] = useState("");
   const [expandedChart, setExpandedChart] = useState<null | { type: "metric" | "composite"; key?: string; title: string; unit?: string; goalValue?: number | null }>(null);
+  const [activeCompositeMetrics, setActiveCompositeMetrics] = useState<string[]>([
+    "weightTrend",
+    "bodyFatPctTrend",
+    "fatMassTrend",
+    "muscleRateTrend",
+    "muscleMassTrend",
+    "visceralFatTrend",
+    "bodyWaterTrend",
+  ]);
 
   const penQuickPresets = [
     { label: "10 → 2.5", strength: "10", dose: "2.5" },
@@ -2563,27 +2602,36 @@ export default function SimpleTracker() {
 
   const chartData = useMemo(() => {
     const rows = baseChartData.map((row) => ({ ...row }));
-    const normalizedSeries = {
-      weightNorm: normalizeMetricSeries(rows, "weight"),
-      bodyFatPctNorm: normalizeMetricSeries(rows, "bodyFatPct"),
-      fatMassNorm: normalizeMetricSeries(rows, "fatMass"),
-      muscleRateNorm: normalizeMetricSeries(rows, "muscleRate"),
-      muscleMassNorm: normalizeMetricSeries(rows, "muscleMass"),
-      visceralFatNorm: normalizeMetricSeries(rows, "visceralFat"),
-      bodyWaterNorm: normalizeMetricSeries(rows, "bodyWater"),
+    const trendSeries = {
+      weightTrend: normalizeTrendSeries(rows, "weight"),
+      bodyFatPctTrend: normalizeTrendSeries(rows, "bodyFatPct"),
+      fatMassTrend: normalizeTrendSeries(rows, "fatMass"),
+      muscleRateTrend: normalizeTrendSeries(rows, "muscleRate"),
+      muscleMassTrend: normalizeTrendSeries(rows, "muscleMass"),
+      visceralFatTrend: normalizeTrendSeries(rows, "visceralFat"),
+      bodyWaterTrend: normalizeTrendSeries(rows, "bodyWater"),
     };
 
     return rows.map((row, index) => ({
       ...row,
-      weightNorm: normalizedSeries.weightNorm[index],
-      bodyFatPctNorm: normalizedSeries.bodyFatPctNorm[index],
-      fatMassNorm: normalizedSeries.fatMassNorm[index],
-      muscleRateNorm: normalizedSeries.muscleRateNorm[index],
-      muscleMassNorm: normalizedSeries.muscleMassNorm[index],
-      visceralFatNorm: normalizedSeries.visceralFatNorm[index],
-      bodyWaterNorm: normalizedSeries.bodyWaterNorm[index],
+      weightTrend: trendSeries.weightTrend[index],
+      bodyFatPctTrend: trendSeries.bodyFatPctTrend[index],
+      fatMassTrend: trendSeries.fatMassTrend[index],
+      muscleRateTrend: trendSeries.muscleRateTrend[index],
+      muscleMassTrend: trendSeries.muscleMassTrend[index],
+      visceralFatTrend: trendSeries.visceralFatTrend[index],
+      bodyWaterTrend: trendSeries.bodyWaterTrend[index],
     }));
   }, [baseChartData]);
+
+  const toggleCompositeMetric = (key: string) => {
+    setActiveCompositeMetrics((prev) => {
+      if (prev.includes(key)) {
+        return prev.length === 1 ? prev : prev.filter((item) => item !== key);
+      }
+      return [...prev, key];
+    });
+  };
 
   const shotPattern = useMemo(() => {
     if (!latestShotDate || !sortedEntries.length) {
@@ -3163,6 +3211,8 @@ export default function SimpleTracker() {
       <CompositeMetricsCard
         title="各項指標綜合曲線圖"
         data={chartData}
+        activeKeys={activeCompositeMetrics}
+        onToggleKey={toggleCompositeMetric}
         onExpand={() => setExpandedChart({ type: "composite", title: "各項指標綜合曲線圖" })}
       />
 
@@ -3551,6 +3601,8 @@ export default function SimpleTracker() {
             <CompositeMetricsCard
               title="各項指標綜合曲線圖"
               data={chartData}
+              activeKeys={activeCompositeMetrics}
+              onToggleKey={toggleCompositeMetric}
               onExpand={() => setExpandedChart({ type: "composite", title: "各項指標綜合曲線圖" })}
             />
 
@@ -4381,6 +4433,8 @@ export default function SimpleTracker() {
                     <CompositeMetricsCard
                       title={expandedChart.title}
                       data={chartData}
+                      activeKeys={activeCompositeMetrics}
+                      onToggleKey={toggleCompositeMetric}
                       fullscreen
                     />
                   ) : expandedChart.key ? (
