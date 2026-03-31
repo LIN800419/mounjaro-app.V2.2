@@ -3404,7 +3404,7 @@ export default function SimpleTracker() {
                           </div>
                           <div>體重：{item.weight} kg</div>
                           <div>
-                            體脂：{item.bodyFatPct || "-"}%｜脂肪重：{item.fatMass || "-"} kg｜肌肉量：{item.muscleMass || "-"} kg
+                            體脂：{item.bodyFatPct || "-"}%｜脂肪重：{item.fatMass || "-"} kg｜肌肉率：{getMuscleRateFromEntry(item) || "-"}%｜肌肉量：{item.muscleMass || "-"} kg
                           </div>
                           <div>
                             內臟脂肪：{item.visceralFat || "-"}｜水分：{item.bodyWater || "-"}%
