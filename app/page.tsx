@@ -4231,6 +4231,31 @@ export default function SimpleTracker() {
                 <Card>
                   <CardContent className="p-4 space-y-1">
                     <div className="flex items-center gap-2 text-sm">
+                      <Flame className="w-4 h-4" />
+                      BMR
+                    </div>
+                    <div className="text-2xl font-semibold">{bmr || "-"}</div>
+                    <div className="text-xs text-slate-500">kcal</div>
+                    <div className="text-[11px] text-slate-400">
+                      {settings.bmrMethod === "katch" ? "使用體脂器公式" : "使用 Mifflin 公式"}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Flame className="w-4 h-4" />
+                      建議熱量
+                    </div>
+                    <div className="text-2xl font-semibold">{cutCalories || "-"}</div>
+                    <div className="text-xs text-slate-500">kcal</div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2 text-sm">
                       <Bell className="w-4 h-4" />
                       下次施打
                       {nextShot.shouldNotify ? (
@@ -4244,30 +4269,6 @@ export default function SimpleTracker() {
                     <div className="text-[11px] text-slate-400">
                       基準：{nextShot.source}（{nextShot.baseDate}）
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4 space-y-1">
-                    <div className="flex items-center gap-2 text-sm">
-                      <TrendingDown className="w-4 h-4" />
-                      本週變化
-                    </div>
-                    <div className="text-2xl font-semibold">
-                      {recent7Delta > 0 ? "+" : ""}{recent7Delta || 0}
-                    </div>
-                    <div className="text-xs text-slate-500">kg</div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4 space-y-1">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Flame className="w-4 h-4" />
-                      建議熱量
-                    </div>
-                    <div className="text-2xl font-semibold">{cutCalories || "-"}</div>
-                    <div className="text-xs text-slate-500">kcal</div>
                   </CardContent>
                 </Card>
 
