@@ -193,7 +193,11 @@ function plusDays(dateStr: string, days: number) {
   return formatLocalDate(d);
 }
 
-function getNextShotDate(baseShotDate: string, intervalDays: number, todayStr: string) {
+function getNextShotDate(
+  baseShotDate: string,
+  intervalDays: number,
+  todayStr: string,
+) {
   if (!baseShotDate) return "";
 
   const safeInterval = Math.max(1, intervalDays || 7);
@@ -209,9 +213,12 @@ function getNextShotDate(baseShotDate: string, intervalDays: number, todayStr: s
 function getLatestShotDate(entries: Entry[]) {
   const shotEntries = entries.filter((entry) => entry.isShotDay);
   if (!shotEntries.length) return "";
-  return [...shotEntries].sort(
-    (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
-  )[shotEntries.length - 1]?.date || "";
+  return (
+    [...shotEntries].sort(
+      (a, b) =>
+        parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
+    )[shotEntries.length - 1]?.date || ""
+  );
 }
 
 function fmtDate(dateStr: string) {
@@ -225,11 +232,16 @@ function estimateBodyFat(bmi: number, age: number, sex: Sex) {
   return +(1.2 * bmi + 0.23 * age - 10.8 * sexValue - 5.4).toFixed(1);
 }
 
-function getMetricTrendLabel(current: number, previous: number, lowerIsBetter = false) {
+function getMetricTrendLabel(
+  current: number,
+  previous: number,
+  lowerIsBetter = false,
+) {
   if (!current || !previous) return "資料不足";
   const diff = +(current - previous).toFixed(1);
   if (Math.abs(diff) < 0.2) return "大致持平";
-  if (lowerIsBetter) return diff < 0 ? `下降 ${Math.abs(diff)}` : `上升 ${diff}`;
+  if (lowerIsBetter)
+    return diff < 0 ? `下降 ${Math.abs(diff)}` : `上升 ${diff}`;
   return diff > 0 ? `上升 ${diff}` : `下降 ${Math.abs(diff)}`;
 }
 
@@ -253,15 +265,59 @@ function getMealAdjustmentLabel(adjust: MealAdjustment) {
 }
 
 function resolveMealTier(targetCalories: number) {
-  if (targetCalories <= 1250) return { tier: "1200" as MealTierKey, adjust: "0" as MealAdjustment, label: "1200 kcal 基礎版" };
-  if (targetCalories <= 1350) return { tier: "1200" as MealTierKey, adjust: "+1" as MealAdjustment, label: "1200 kcal 基礎版 + 微加量" };
-  if (targetCalories <= 1450) return { tier: "1400" as MealTierKey, adjust: "0" as MealAdjustment, label: "1400 kcal 基礎版" };
-  if (targetCalories <= 1550) return { tier: "1400" as MealTierKey, adjust: "+1" as MealAdjustment, label: "1400 kcal 基礎版 + 微加量" };
-  if (targetCalories <= 1650) return { tier: "1600" as MealTierKey, adjust: "0" as MealAdjustment, label: "1600 kcal 基礎版" };
-  if (targetCalories <= 1750) return { tier: "1600" as MealTierKey, adjust: "+1" as MealAdjustment, label: "1600 kcal 基礎版 + 微加量" };
-  if (targetCalories <= 1850) return { tier: "1800" as MealTierKey, adjust: "0" as MealAdjustment, label: "1800 kcal 基礎版" };
-  if (targetCalories <= 1950) return { tier: "1800" as MealTierKey, adjust: "+1" as MealAdjustment, label: "1800 kcal 基礎版 + 微加量" };
-  return { tier: "2000" as MealTierKey, adjust: "0" as MealAdjustment, label: "2000 kcal 基礎版" };
+  if (targetCalories <= 1250)
+    return {
+      tier: "1200" as MealTierKey,
+      adjust: "0" as MealAdjustment,
+      label: "1200 kcal 基礎版",
+    };
+  if (targetCalories <= 1350)
+    return {
+      tier: "1200" as MealTierKey,
+      adjust: "+1" as MealAdjustment,
+      label: "1200 kcal 基礎版 + 微加量",
+    };
+  if (targetCalories <= 1450)
+    return {
+      tier: "1400" as MealTierKey,
+      adjust: "0" as MealAdjustment,
+      label: "1400 kcal 基礎版",
+    };
+  if (targetCalories <= 1550)
+    return {
+      tier: "1400" as MealTierKey,
+      adjust: "+1" as MealAdjustment,
+      label: "1400 kcal 基礎版 + 微加量",
+    };
+  if (targetCalories <= 1650)
+    return {
+      tier: "1600" as MealTierKey,
+      adjust: "0" as MealAdjustment,
+      label: "1600 kcal 基礎版",
+    };
+  if (targetCalories <= 1750)
+    return {
+      tier: "1600" as MealTierKey,
+      adjust: "+1" as MealAdjustment,
+      label: "1600 kcal 基礎版 + 微加量",
+    };
+  if (targetCalories <= 1850)
+    return {
+      tier: "1800" as MealTierKey,
+      adjust: "0" as MealAdjustment,
+      label: "1800 kcal 基礎版",
+    };
+  if (targetCalories <= 1950)
+    return {
+      tier: "1800" as MealTierKey,
+      adjust: "+1" as MealAdjustment,
+      label: "1800 kcal 基礎版 + 微加量",
+    };
+  return {
+    tier: "2000" as MealTierKey,
+    adjust: "0" as MealAdjustment,
+    label: "2000 kcal 基礎版",
+  };
 }
 
 function getMealAdjustmentGuide(
@@ -302,7 +358,9 @@ function getMealAdjustmentGuide(
     return [`本餐微加量：${base[0]}`];
   }
 
-  return [`本餐可擇一加量：${base[0]}`, base[1] ? `或 ${base[1]}` : ""].filter(Boolean);
+  return [`本餐可擇一加量：${base[0]}`, base[1] ? `或 ${base[1]}` : ""].filter(
+    Boolean,
+  );
 }
 
 function getDailyMenuSeed() {
@@ -395,19 +453,48 @@ function buildMealPlans(
       {
         title: "第 1 天｜清爽高蛋白版",
         meals: [
-          { name: "早餐", items: nausea ? ["無糖豆漿 250ml", "蘇打餅 2 片", "水煮蛋 1 顆"] : ["無糖豆漿", "茶葉蛋 2 顆", "全麥吐司 1 片"] },
-          { name: "午餐", items: severeCraving ? ["雞胸便當 1 份", "飯 1/3 碗", "青菜加量"] : ["雞胸肉 100g", "糙米飯 1/3 碗", "青菜 2 份", "豆腐 1/2 盒"] },
-          { name: "晚餐", items: lowAppetite ? ["蒸蛋 1 份", "嫩豆腐 1 盒", "青菜 2 份"] : ["鯛魚 / 白肉魚 100g", "地瓜 80g", "青菜 2 份"] },
-          { name: "加餐", items: constipation ? ["奇異果 1 顆", "水 500ml"] : ["無糖優格 1 份"] },
+          {
+            name: "早餐",
+            items: nausea
+              ? ["無糖豆漿 250ml", "蘇打餅 2 片", "水煮蛋 1 顆"]
+              : ["無糖豆漿", "茶葉蛋 2 顆", "全麥吐司 1 片"],
+          },
+          {
+            name: "午餐",
+            items: severeCraving
+              ? ["雞胸便當 1 份", "飯 1/3 碗", "青菜加量"]
+              : ["雞胸肉 100g", "糙米飯 1/3 碗", "青菜 2 份", "豆腐 1/2 盒"],
+          },
+          {
+            name: "晚餐",
+            items: lowAppetite
+              ? ["蒸蛋 1 份", "嫩豆腐 1 盒", "青菜 2 份"]
+              : ["鯛魚 / 白肉魚 100g", "地瓜 80g", "青菜 2 份"],
+          },
+          {
+            name: "加餐",
+            items: constipation
+              ? ["奇異果 1 顆", "水 500ml"]
+              : ["無糖優格 1 份"],
+          },
         ],
       },
       {
         title: "第 2 天｜超商方便版",
         meals: [
           { name: "早餐", items: ["茶葉蛋 2 顆", "無糖豆漿 1 瓶"] },
-          { name: "午餐", items: ["舒肥雞胸 1 份", "沙拉 1 盒", "飯糰半個到 1 個"] },
-          { name: "晚餐", items: ["關東煮：白蘿蔔、豆腐、蛋", "再加雞胸或豆干 1 份"] },
-          { name: "加餐", items: severeCraving ? ["茶葉蛋 1 顆"] : ["毛豆 1 份"] },
+          {
+            name: "午餐",
+            items: ["舒肥雞胸 1 份", "沙拉 1 盒", "飯糰半個到 1 個"],
+          },
+          {
+            name: "晚餐",
+            items: ["關東煮：白蘿蔔、豆腐、蛋", "再加雞胸或豆干 1 份"],
+          },
+          {
+            name: "加餐",
+            items: severeCraving ? ["茶葉蛋 1 顆"] : ["毛豆 1 份"],
+          },
         ],
       },
       {
@@ -423,7 +510,10 @@ function buildMealPlans(
         title: "第 4 天｜食慾差友善版",
         meals: [
           { name: "早餐", items: ["無糖優格 1 碗", "香蕉半根"] },
-          { name: "午餐", items: ["蒸蛋", "嫩豆腐", "清湯", "少量飯 1/4~1/3 碗"] },
+          {
+            name: "午餐",
+            items: ["蒸蛋", "嫩豆腐", "清湯", "少量飯 1/4~1/3 碗"],
+          },
           { name: "晚餐", items: ["魚片湯", "青菜 2 份", "地瓜半條"] },
           { name: "加餐", items: ["豆漿 200~250ml"] },
         ],
@@ -450,7 +540,10 @@ function buildMealPlans(
         title: "第 7 天｜聚餐收斂版",
         meals: [
           { name: "早餐", items: ["茶葉蛋 2 顆", "黑咖啡 / 無糖茶"] },
-          { name: "午餐", items: ["外食正常吃，但主食先抓半份以下", "先吃蛋白質與青菜"] },
+          {
+            name: "午餐",
+            items: ["外食正常吃，但主食先抓半份以下", "先吃蛋白質與青菜"],
+          },
           { name: "晚餐", items: ["回歸清淡：豆腐、魚肉、蔬菜"] },
           { name: "加餐", items: ["真的餓再吃優格或毛豆"] },
         ],
@@ -460,10 +553,25 @@ function buildMealPlans(
       {
         title: "第 1 天｜標準減脂版",
         meals: [
-          { name: "早餐", items: nausea ? ["無糖豆漿 250ml", "蘇打餅 2~3 片", "水煮蛋 1 顆"] : ["無糖豆漿", "茶葉蛋 2 顆", "全麥吐司 2 片"] },
+          {
+            name: "早餐",
+            items: nausea
+              ? ["無糖豆漿 250ml", "蘇打餅 2~3 片", "水煮蛋 1 顆"]
+              : ["無糖豆漿", "茶葉蛋 2 顆", "全麥吐司 2 片"],
+          },
           { name: "午餐", items: ["雞胸肉 120g", "糙米飯半碗", "青菜 2 份"] },
-          { name: "晚餐", items: lowAppetite ? ["蒸蛋", "嫩豆腐 1 盒", "地瓜半條"] : ["魚肉 120g", "地瓜 100g", "青菜 2 份"] },
-          { name: "加餐", items: severeCraving ? ["茶葉蛋 1 顆", "無糖豆漿 1 瓶"] : ["無糖優格 1 份"] },
+          {
+            name: "晚餐",
+            items: lowAppetite
+              ? ["蒸蛋", "嫩豆腐 1 盒", "地瓜半條"]
+              : ["魚肉 120g", "地瓜 100g", "青菜 2 份"],
+          },
+          {
+            name: "加餐",
+            items: severeCraving
+              ? ["茶葉蛋 1 顆", "無糖豆漿 1 瓶"]
+              : ["無糖優格 1 份"],
+          },
         ],
       },
       {
@@ -471,7 +579,10 @@ function buildMealPlans(
         meals: [
           { name: "早餐", items: ["雞胸三明治 1 份", "無糖咖啡"] },
           { name: "午餐", items: ["便當選烤雞 / 滷牛", "飯半碗", "青菜加量"] },
-          { name: "晚餐", items: ["小火鍋：肉 + 豆腐 + 菜", "主食 1/3~1/2 份"] },
+          {
+            name: "晚餐",
+            items: ["小火鍋：肉 + 豆腐 + 菜", "主食 1/3~1/2 份"],
+          },
           { name: "加餐", items: ["毛豆或茶葉蛋"] },
         ],
       },
@@ -526,8 +637,14 @@ function buildMealPlans(
         title: "第 1 天｜高蛋白標準版",
         meals: [
           { name: "早餐", items: ["無糖豆漿", "茶葉蛋 2 顆", "全麥吐司 2 片"] },
-          { name: "午餐", items: ["雞胸肉 120~150g", "飯半碗到 3/4 碗", "青菜 2 份"] },
-          { name: "晚餐", items: ["魚肉 / 瘦牛 120g", "地瓜 100g", "青菜 2 份"] },
+          {
+            name: "午餐",
+            items: ["雞胸肉 120~150g", "飯半碗到 3/4 碗", "青菜 2 份"],
+          },
+          {
+            name: "晚餐",
+            items: ["魚肉 / 瘦牛 120g", "地瓜 100g", "青菜 2 份"],
+          },
           { name: "加餐", items: ["無糖優格 1 份", "或 毛豆 1 份"] },
         ],
       },
@@ -535,7 +652,10 @@ function buildMealPlans(
         title: "第 2 天｜日常外食版",
         meals: [
           { name: "早餐", items: ["雞胸三明治", "黑咖啡"] },
-          { name: "午餐", items: ["便當選烤雞 / 滷排", "飯半碗到 3/4 碗", "青菜加量"] },
+          {
+            name: "午餐",
+            items: ["便當選烤雞 / 滷排", "飯半碗到 3/4 碗", "青菜加量"],
+          },
           { name: "晚餐", items: ["小火鍋：肉片 + 豆腐 + 菜", "主食半份"] },
           { name: "加餐", items: ["茶葉蛋 1 顆", "水果 1 份"] },
         ],
@@ -544,7 +664,10 @@ function buildMealPlans(
         title: "第 3 天｜家常飽足版",
         meals: [
           { name: "早餐", items: ["地瓜", "蛋 2 顆", "無糖豆漿"] },
-          { name: "午餐", items: ["滷牛腱 / 雞腿排", "飯 3/4 碗", "青菜 2 份"] },
+          {
+            name: "午餐",
+            items: ["滷牛腱 / 雞腿排", "飯 3/4 碗", "青菜 2 份"],
+          },
           { name: "晚餐", items: ["豬里肌 / 魚肉", "菇類", "地瓜 100g"] },
           { name: "加餐", items: ["優格 / 毛豆"] },
         ],
@@ -562,7 +685,10 @@ function buildMealPlans(
         title: "第 5 天｜台式便當版",
         meals: [
           { name: "早餐", items: ["鮪魚蛋吐司", "無糖拿鐵"] },
-          { name: "午餐", items: ["便當：雞腿去皮 / 滷牛", "飯半碗到 3/4 碗", "青菜多"] },
+          {
+            name: "午餐",
+            items: ["便當：雞腿去皮 / 滷牛", "飯半碗到 3/4 碗", "青菜多"],
+          },
           { name: "晚餐", items: ["燙青菜", "豆腐", "瘦肉湯"] },
           { name: "加餐", items: ["茶葉蛋 1 顆", "水果 1 份"] },
         ],
@@ -590,9 +716,18 @@ function buildMealPlans(
       {
         title: "第 1 天｜男性常用減脂版",
         meals: [
-          { name: "早餐", items: ["無糖豆漿 375ml", "蛋 2 顆", "全麥吐司 3 片"] },
-          { name: "午餐", items: ["雞胸肉 150g", "飯 3/4 碗到 1 碗", "青菜 2~3 份"] },
-          { name: "晚餐", items: ["魚 / 牛 / 豬里肌 150g", "地瓜 150g", "青菜 2 份"] },
+          {
+            name: "早餐",
+            items: ["無糖豆漿 375ml", "蛋 2 顆", "全麥吐司 3 片"],
+          },
+          {
+            name: "午餐",
+            items: ["雞胸肉 150g", "飯 3/4 碗到 1 碗", "青菜 2~3 份"],
+          },
+          {
+            name: "晚餐",
+            items: ["魚 / 牛 / 豬里肌 150g", "地瓜 150g", "青菜 2 份"],
+          },
           { name: "加餐", items: ["優格 1 份", "水果 1 份"] },
         ],
       },
@@ -600,7 +735,10 @@ function buildMealPlans(
         title: "第 2 天｜外食工作版",
         meals: [
           { name: "早餐", items: ["三明治 1 份", "無糖咖啡"] },
-          { name: "午餐", items: ["便當選烤雞 / 滷牛", "飯 3/4~1 碗", "青菜加量"] },
+          {
+            name: "午餐",
+            items: ["便當選烤雞 / 滷牛", "飯 3/4~1 碗", "青菜加量"],
+          },
           { name: "晚餐", items: ["小火鍋 + 主食半份到 1 份"] },
           { name: "加餐", items: ["茶葉蛋 + 無糖豆漿"] },
         ],
@@ -655,8 +793,14 @@ function buildMealPlans(
       {
         title: "第 1 天｜高活動量減脂版",
         meals: [
-          { name: "早餐", items: ["無糖豆漿", "蛋 2 顆", "全麥吐司 3 片", "香蕉 1 根"] },
-          { name: "午餐", items: ["雞胸 / 牛肉 150~180g", "飯 1 碗", "青菜 2~3 份"] },
+          {
+            name: "早餐",
+            items: ["無糖豆漿", "蛋 2 顆", "全麥吐司 3 片", "香蕉 1 根"],
+          },
+          {
+            name: "午餐",
+            items: ["雞胸 / 牛肉 150~180g", "飯 1 碗", "青菜 2~3 份"],
+          },
           { name: "晚餐", items: ["魚肉 150g", "地瓜 150~200g", "青菜 2 份"] },
           { name: "加餐", items: ["優格 1 份", "水果 1 份", "堅果少量"] },
         ],
@@ -675,7 +819,10 @@ function buildMealPlans(
         meals: [
           { name: "早餐", items: ["三明治 1 份", "無糖咖啡", "茶葉蛋 1 顆"] },
           { name: "午餐", items: ["便當選烤雞 / 滷牛", "飯 1 碗", "青菜多"] },
-          { name: "晚餐", items: ["小火鍋：肉 + 豆腐 + 菜", "主食半份到 1 份"] },
+          {
+            name: "晚餐",
+            items: ["小火鍋：肉 + 豆腐 + 菜", "主食半份到 1 份"],
+          },
           { name: "加餐", items: ["無糖豆漿", "水果 1 份"] },
         ],
       },
@@ -691,8 +838,14 @@ function buildMealPlans(
       {
         title: "第 5 天｜超商組合版",
         meals: [
-          { name: "早餐", items: ["茶葉蛋 2 顆", "烤地瓜", "無糖拿鐵", "香蕉"] },
-          { name: "午餐", items: ["雞胸 1 份", "沙拉 1 盒", "飯糰 1 個", "豆漿"] },
+          {
+            name: "早餐",
+            items: ["茶葉蛋 2 顆", "烤地瓜", "無糖拿鐵", "香蕉"],
+          },
+          {
+            name: "午餐",
+            items: ["雞胸 1 份", "沙拉 1 盒", "飯糰 1 個", "豆漿"],
+          },
           { name: "晚餐", items: ["關東煮 + 雞胸 + 豆腐 + 蛋"] },
           { name: "加餐", items: ["優格", "堅果", "水果"] },
         ],
@@ -730,9 +883,15 @@ function buildMealPlans(
       items: buildFlexibleMealItems(
         meal.items,
         meal.name as "早餐" | "午餐" | "晚餐" | "加餐",
-        meal.name === "加餐" ? (tier.adjust === "+1" ? "+0.5" : tier.adjust) : tier.adjust,
+        meal.name === "加餐"
+          ? tier.adjust === "+1"
+            ? "+0.5"
+            : tier.adjust
+          : tier.adjust,
         isFemale,
-        meal.name === "加餐" && constipation ? "便秘時今天至少補水 500ml" : undefined,
+        meal.name === "加餐" && constipation
+          ? "便秘時今天至少補水 500ml"
+          : undefined,
       ),
     })),
   });
@@ -771,9 +930,13 @@ function buildMealPlans(
     ],
   };
 
-  return [enrichPlan(todayPlan, "今日推薦"), enrichPlan(altPlan, "替代菜單"), enrichPlan(recoveryPlan, "換口味菜單"), symptomPlan];
+  return [
+    enrichPlan(todayPlan, "今日推薦"),
+    enrichPlan(altPlan, "替代菜單"),
+    enrichPlan(recoveryPlan, "換口味菜單"),
+    symptomPlan,
+  ];
 }
-
 
 function getShotCycleDay(latestShotDate: string, currentDate: string) {
   if (!latestShotDate) return 0;
@@ -798,7 +961,6 @@ function fileToDataUrl(file: File) {
   });
 }
 
-
 function getMuscleRateValue(weight: number, muscleMass: number) {
   if (!weight || !muscleMass) return 0;
   return +((muscleMass / weight) * 100).toFixed(1);
@@ -811,7 +973,11 @@ function getMuscleRateFromEntry(entry?: Partial<Entry> | null) {
   return getMuscleRateValue(num(entry.weight), num(entry.muscleMass));
 }
 
-function estimateETA(latestWeight: number, goalWeight: number, weeklyLoss: number) {
+function estimateETA(
+  latestWeight: number,
+  goalWeight: number,
+  weeklyLoss: number,
+) {
   if (!latestWeight || !goalWeight || weeklyLoss <= 0) {
     return { weeks: 0, date: "-", text: "資料不足" };
   }
@@ -830,7 +996,6 @@ function estimateETA(latestWeight: number, goalWeight: number, weeklyLoss: numbe
   return { weeks, date: dateStr, text };
 }
 
-
 type BodyCompRowProps = {
   label: string;
   value: number;
@@ -847,7 +1012,6 @@ function clampPercent(value: number, min: number, max: number) {
   if (max <= min) return 0;
   return Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
 }
-
 
 function getBMRByLeanMass(weight: number, bodyFatPct: number, fatMass: number) {
   let leanMass = 0;
@@ -925,7 +1089,10 @@ function MetricLineCard({
       </CardHeader>
       <CardContent>
         {!hasData ? (
-          <div className="flex items-center justify-center text-sm text-slate-500" style={{ height }}>
+          <div
+            className="flex items-center justify-center text-sm text-slate-500"
+            style={{ height }}
+          >
             尚無足夠資料可顯示圖表
           </div>
         ) : (
@@ -942,7 +1109,11 @@ function MetricLineCard({
                   ]}
                 />
                 {goalValue !== null && goalValue > 0 ? (
-                  <ReferenceLine y={goalValue} stroke="#ef4444" strokeDasharray="4 4" />
+                  <ReferenceLine
+                    y={goalValue}
+                    stroke="#ef4444"
+                    strokeDasharray="4 4"
+                  />
                 ) : null}
                 <Line
                   type="monotone"
@@ -988,7 +1159,11 @@ function CompositeMetricsCard({
     { key: "fatMassTrend", name: "脂肪重", color: METRIC_COLORS.fatMass },
     { key: "muscleRateTrend", name: "肌肉率", color: METRIC_COLORS.muscleRate },
     { key: "muscleMassTrend", name: "肌肉量", color: METRIC_COLORS.muscleMass },
-    { key: "visceralFatTrend", name: "內臟脂肪", color: METRIC_COLORS.visceralFat },
+    {
+      key: "visceralFatTrend",
+      name: "內臟脂肪",
+      color: METRIC_COLORS.visceralFat,
+    },
     { key: "bodyWaterTrend", name: "水分", color: METRIC_COLORS.bodyWater },
   ];
 
@@ -1020,7 +1195,10 @@ function CompositeMetricsCard({
     const max = Math.max(...values);
     const padding = Math.max(3, (max - min) * 0.15);
 
-    return [Math.max(0, Math.floor(min - padding)), Math.ceil(max + padding)] as [number, number];
+    return [
+      Math.max(0, Math.floor(min - padding)),
+      Math.ceil(max + padding),
+    ] as [number, number];
   }, [filteredData, visibleLines]);
 
   const hasData = filteredData.length > 0 && visibleLines.length > 0;
@@ -1031,7 +1209,8 @@ function CompositeMetricsCard({
         <div className="space-y-1">
           <CardTitle>{title}</CardTitle>
           <div className="text-xs text-slate-500">
-            各指標已換算成「第一筆資料 = 100」的相對趨勢，只看走勢，不看原始單位大小。
+            各指標已換算成「第一筆資料 =
+            100」的相對趨勢，只看走勢，不看原始單位大小。
           </div>
         </div>
         {onExpand ? (
@@ -1043,14 +1222,20 @@ function CompositeMetricsCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {!hasData ? (
-          <div className="flex items-center justify-center text-sm text-slate-500" style={{ height }}>
+          <div
+            className="flex items-center justify-center text-sm text-slate-500"
+            style={{ height }}
+          >
             尚無足夠資料可顯示綜合曲線圖
           </div>
         ) : (
           <>
             <div className="flex flex-wrap gap-2 text-xs text-slate-600">
               {lines.map((line) => {
-                const active = activeKeys && activeKeys.length ? activeKeys.includes(line.key) : true;
+                const active =
+                  activeKeys && activeKeys.length
+                    ? activeKeys.includes(line.key)
+                    : true;
                 return (
                   <button
                     key={line.key}
@@ -1079,7 +1264,11 @@ function CompositeMetricsCard({
                       `${String(name)}（第一筆=100）`,
                     ]}
                   />
-                  <ReferenceLine y={100} stroke="#94a3b8" strokeDasharray="4 4" />
+                  <ReferenceLine
+                    y={100}
+                    stroke="#94a3b8"
+                    strokeDasharray="4 4"
+                  />
                   {visibleLines.map((line) => (
                     <Line
                       key={line.key}
@@ -1103,9 +1292,14 @@ function CompositeMetricsCard({
   );
 }
 
-function normalizeTrendSeries<T extends Record<string, any>>(rows: T[], key: string) {
+function normalizeTrendSeries<T extends Record<string, any>>(
+  rows: T[],
+  key: string,
+) {
   const values = rows.map((row) => Number(row[key]));
-  const firstValid = values.find((value) => Number.isFinite(value) && value > 0);
+  const firstValid = values.find(
+    (value) => Number.isFinite(value) && value > 0,
+  );
 
   if (!Number.isFinite(firstValid) || !firstValid || firstValid <= 0) {
     return rows.map(() => null);
@@ -1113,7 +1307,7 @@ function normalizeTrendSeries<T extends Record<string, any>>(rows: T[], key: str
 
   return values.map((value) => {
     if (!Number.isFinite(value) || value <= 0) return null;
-    return +(((value / firstValid) * 100)).toFixed(1);
+    return +((value / firstValid) * 100).toFixed(1);
   });
 }
 
@@ -1124,8 +1318,8 @@ function BodyCompositionRow({
   normalMin,
   normalMax,
   max,
-  unit = '',
-  colorClass = 'bg-slate-700',
+  unit = "",
+  colorClass = "bg-slate-700",
   idealText,
 }: BodyCompRowProps) {
   const valuePercent = clampPercent(value || 0, min, max);
@@ -1137,8 +1331,12 @@ function BodyCompositionRow({
     <div className="grid grid-cols-[120px_1fr] border-b last:border-b-0">
       <div className="bg-slate-100 p-3">
         <div className="text-base font-semibold text-slate-700">{label}</div>
-        <div className="text-xs text-slate-500">理想值 {idealText || `${normalMin} ~ ${normalMax}${unit}`}</div>
-        <div className="text-xs text-slate-400 mt-1">目前 {value ? `${value}${unit}` : '-'}</div>
+        <div className="text-xs text-slate-500">
+          理想值 {idealText || `${normalMin} ~ ${normalMax}${unit}`}
+        </div>
+        <div className="text-xs text-slate-400 mt-1">
+          目前 {value ? `${value}${unit}` : "-"}
+        </div>
       </div>
       <div className="relative bg-white p-3 flex items-center">
         <div className="relative h-6 w-full overflow-hidden rounded-sm bg-slate-100 border">
@@ -1154,10 +1352,6 @@ function BodyCompositionRow({
           />
         </div>
       </div>
-
-
-      
-
     </div>
   );
 }
@@ -1182,16 +1376,32 @@ function BodyCompositionTypeCard({
   bodyFatIdeal: string;
 }) {
   const typeTone =
-    type === 'I型'
-      ? { ring: 'border-emerald-200', badge: 'bg-emerald-600', overlay: 'text-emerald-300/55' }
-      : type === 'D型'
-        ? { ring: 'border-amber-200', badge: 'bg-amber-600', overlay: 'text-amber-300/55' }
-        : { ring: 'border-rose-200', badge: 'bg-rose-600', overlay: 'text-amber-300/55' };
+    type === "I型"
+      ? {
+          ring: "border-emerald-200",
+          badge: "bg-emerald-600",
+          overlay: "text-emerald-300/55",
+        }
+      : type === "D型"
+        ? {
+            ring: "border-amber-200",
+            badge: "bg-amber-600",
+            overlay: "text-amber-300/55",
+          }
+        : {
+            ring: "border-rose-200",
+            badge: "bg-rose-600",
+            overlay: "text-amber-300/55",
+          };
 
   return (
-    <div className={`rounded-2xl border bg-white overflow-hidden ${typeTone.ring}`}>
+    <div
+      className={`rounded-2xl border bg-white overflow-hidden ${typeTone.ring}`}
+    >
       <div className="flex items-center gap-3 px-4 py-4 border-b bg-slate-50">
-        <div className={`flex h-11 w-11 items-center justify-center rounded-full text-white text-lg font-bold ${typeTone.badge}`}>
+        <div
+          className={`flex h-11 w-11 items-center justify-center rounded-full text-white text-lg font-bold ${typeTone.badge}`}
+        >
           {type.charAt(0)}
         </div>
         <div>
@@ -1213,16 +1423,18 @@ function BodyCompositionTypeCard({
           </div>
 
           <div className="relative touch-feedback">
-        <TouchFeedbackStyles />
-            <div className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[180px] font-black leading-none ${typeTone.overlay}`}>
+            <TouchFeedbackStyles />
+            <div
+              className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[180px] font-black leading-none ${typeTone.overlay}`}
+            >
               {type.charAt(0)}
             </div>
             <BodyCompositionRow
               label="體重"
               value={weight}
               min={40}
-              normalMin={Number(weightIdeal.split('~')[0]) || 54}
-              normalMax={Number(weightIdeal.split('~')[1]) || 73}
+              normalMin={Number(weightIdeal.split("~")[0]) || 54}
+              normalMax={Number(weightIdeal.split("~")[1]) || 73}
               max={130}
               unit=" kg"
               colorClass="bg-slate-700"
@@ -1232,8 +1444,8 @@ function BodyCompositionTypeCard({
               label="骨骼肌重"
               value={muscle}
               min={15}
-              normalMin={Number(muscleIdeal.split('~')[0]) || 27}
-              normalMax={Number(muscleIdeal.split('~')[1]) || 33}
+              normalMin={Number(muscleIdeal.split("~")[0]) || 27}
+              normalMax={Number(muscleIdeal.split("~")[1]) || 33}
               max={45}
               unit=" kg"
               colorClass="bg-slate-700"
@@ -1243,8 +1455,8 @@ function BodyCompositionTypeCard({
               label="體脂肪重"
               value={bodyFatMass}
               min={3}
-              normalMin={Number(bodyFatIdeal.split('~')[0]) || 8}
-              normalMax={Number(bodyFatIdeal.split('~')[1]) || 15}
+              normalMin={Number(bodyFatIdeal.split("~")[0]) || 8}
+              normalMax={Number(bodyFatIdeal.split("~")[1]) || 15}
               max={45}
               unit=" kg"
               colorClass="bg-rose-600"
@@ -1253,10 +1465,6 @@ function BodyCompositionTypeCard({
           </div>
         </div>
       </div>
-
-
-      
-
     </div>
   );
 }
@@ -1277,20 +1485,38 @@ function MiniBodyTypeCard({
   onClick?: () => void;
 }) {
   const typeTone =
-    type === 'I型'
-      ? { ring: 'border-emerald-200 bg-emerald-50/40', badge: 'bg-emerald-600', accent: 'text-emerald-700' }
-      : type === 'D型'
-        ? { ring: 'border-amber-200 bg-amber-50/40', badge: 'bg-amber-600', accent: 'text-amber-700' }
-        : type === 'C型'
-          ? { ring: 'border-rose-200 bg-rose-50/40', badge: 'bg-rose-600', accent: 'text-rose-700' }
-          : { ring: 'border-slate-200 bg-slate-50', badge: 'bg-slate-500', accent: 'text-slate-700' };
+    type === "I型"
+      ? {
+          ring: "border-emerald-200 bg-emerald-50/40",
+          badge: "bg-emerald-600",
+          accent: "text-emerald-700",
+        }
+      : type === "D型"
+        ? {
+            ring: "border-amber-200 bg-amber-50/40",
+            badge: "bg-amber-600",
+            accent: "text-amber-700",
+          }
+        : type === "C型"
+          ? {
+              ring: "border-rose-200 bg-rose-50/40",
+              badge: "bg-rose-600",
+              accent: "text-rose-700",
+            }
+          : {
+              ring: "border-slate-200 bg-slate-50",
+              badge: "bg-slate-500",
+              accent: "text-slate-700",
+            };
 
-  const safeValues = [weight, muscle, bodyFatMass].map((v) => (Number.isFinite(v) ? Math.max(0, v) : 0));
+  const safeValues = [weight, muscle, bodyFatMass].map((v) =>
+    Number.isFinite(v) ? Math.max(0, v) : 0,
+  );
   const maxValue = Math.max(...safeValues, 1);
   const bars = [
-    { label: '體重', value: weight, color: 'bg-slate-700' },
-    { label: '肌肉', value: muscle, color: 'bg-slate-600' },
-    { label: '脂肪', value: bodyFatMass, color: 'bg-rose-600' },
+    { label: "體重", value: weight, color: "bg-slate-700" },
+    { label: "肌肉", value: muscle, color: "bg-slate-600" },
+    { label: "脂肪", value: bodyFatMass, color: "bg-rose-600" },
   ];
 
   return (
@@ -1302,26 +1528,44 @@ function MiniBodyTypeCard({
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-black text-white ${typeTone.badge}`}>
-              {type && type !== '-' ? type.charAt(0) : '?'}
+            <div
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-black text-white ${typeTone.badge}`}
+            >
+              {type && type !== "-" ? type.charAt(0) : "?"}
             </div>
             <div className="min-w-0">
-              <div className={`text-lg font-black tracking-tight ${typeTone.accent}`}>{type || '-'}</div>
-              <div className="text-xs text-slate-600 line-clamp-2">{headline}</div>
+              <div
+                className={`text-lg font-black tracking-tight ${typeTone.accent}`}
+              >
+                {type || "-"}
+              </div>
+              <div className="text-xs text-slate-600 line-clamp-2">
+                {headline}
+              </div>
             </div>
           </div>
-          <Badge variant="secondary" className="shrink-0 inline-flex items-center gap-1"><Expand className="h-3 w-3" />首頁速覽</Badge>
+          <Badge
+            variant="secondary"
+            className="shrink-0 inline-flex items-center gap-1"
+          >
+            <Expand className="h-3 w-3" />
+            首頁速覽
+          </Badge>
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
           {bars.map((item) => (
             <div key={item.label} className="rounded-xl border bg-white p-2">
               <div className="text-slate-500">{item.label}</div>
-              <div className="mt-1 text-sm font-semibold">{item.value ? `${item.value}kg` : '-'}</div>
+              <div className="mt-1 text-sm font-semibold">
+                {item.value ? `${item.value}kg` : "-"}
+              </div>
               <div className="mt-2 h-16 rounded-lg bg-slate-100 p-1 flex items-end justify-center">
                 <div
                   className={`w-full rounded-md ${item.color}`}
-                  style={{ height: `${Math.max(14, (Math.max(0, item.value) / maxValue) * 100)}%` }}
+                  style={{
+                    height: `${Math.max(14, (Math.max(0, item.value) / maxValue) * 100)}%`,
+                  }}
                 />
               </div>
             </div>
@@ -1329,13 +1573,12 @@ function MiniBodyTypeCard({
         </div>
 
         <div className="rounded-xl border bg-white px-3 py-2 text-xs text-slate-600">
-點一下可放大檢視完整 I / C / D 體態圖
+          點一下可放大檢視完整 I / C / D 體態圖
         </div>
       </CardContent>
     </Card>
   );
 }
-
 
 function TouchFeedbackStyles() {
   return (
@@ -1506,9 +1749,18 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
         <div className="sticky top-0 z-50 bg-slate-50/90 backdrop-blur">
           <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-3 pt-3">
             <div className="min-w-0 rounded-xl border bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
-              已登入：<span className="font-medium text-slate-800">{currentEmail || "-"}</span>
+              已登入：
+              <span className="font-medium text-slate-800">
+                {currentEmail || "-"}
+              </span>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={signOut} disabled={loading}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={signOut}
+              disabled={loading}
+            >
               登出
             </Button>
           </div>
@@ -1523,8 +1775,12 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
       <TouchFeedbackStyles />
       <div className="w-full max-w-md rounded-3xl border bg-white p-5 shadow-sm space-y-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">猛健樂個人版 Pro</h1>
-          <p className="mt-2 text-sm text-slate-500">請先登入，資料才會同步到雲端。</p>
+          <h1 className="text-2xl font-bold text-slate-900">
+            猛健樂個人版 Pro
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            請先登入，資料才會同步到雲端。
+          </p>
         </div>
 
         <div className="space-y-3">
@@ -1549,12 +1805,22 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
 
         <div className="space-y-2">
           {step === "email" ? (
-            <Button type="button" className="w-full" onClick={sendOtp} disabled={loading}>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={sendOtp}
+              disabled={loading}
+            >
               {loading ? "寄送中..." : "寄送驗證碼"}
             </Button>
           ) : (
             <>
-              <Button type="button" className="w-full" onClick={verifyOtp} disabled={loading}>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={verifyOtp}
+                disabled={loading}
+              >
                 {loading ? "驗證中..." : "驗證碼登入"}
               </Button>
               <Button
@@ -1575,7 +1841,9 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
         </div>
 
         {message ? (
-          <div className={`text-sm ${message.includes("失敗") ? "text-red-600" : "text-emerald-600"}`}>
+          <div
+            className={`text-sm ${message.includes("失敗") ? "text-red-600" : "text-emerald-600"}`}
+          >
             {message}
           </div>
         ) : null}
@@ -1585,7 +1853,6 @@ function InlineAuthGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function SimpleTracker() {
-
   const [mounted, setMounted] = useState(false);
   const [today, setToday] = useState("");
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
@@ -1646,10 +1913,20 @@ export default function SimpleTracker() {
   const [photoRecords, setPhotoRecords] = useState<PhotoRecord[]>([]);
   const [photoDate, setPhotoDate] = useState("");
   const [photoNote, setPhotoNote] = useState("");
+  const [photoCompareA, setPhotoCompareA] = useState("");
+  const [photoCompareB, setPhotoCompareB] = useState("");
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudUserId, setCloudUserId] = useState("");
-  const [expandedChart, setExpandedChart] = useState<null | { type: "metric" | "composite"; key?: string; title: string; unit?: string; goalValue?: number | null }>(null);
-  const [activeCompositeMetrics, setActiveCompositeMetrics] = useState<string[]>([
+  const [expandedChart, setExpandedChart] = useState<null | {
+    type: "metric" | "composite";
+    key?: string;
+    title: string;
+    unit?: string;
+    goalValue?: number | null;
+  }>(null);
+  const [activeCompositeMetrics, setActiveCompositeMetrics] = useState<
+    string[]
+  >([
     "weightTrend",
     "bodyFatPctTrend",
     "fatMassTrend",
@@ -1679,7 +1956,10 @@ export default function SimpleTracker() {
       const savedTheme = window.localStorage.getItem("mounjaro-theme-mode");
       if (savedTheme === "dark" || savedTheme === "light") {
         setThemeMode(savedTheme);
-      } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      } else if (
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches
+      ) {
         setThemeMode("dark");
       }
     }
@@ -1701,7 +1981,10 @@ export default function SimpleTracker() {
       const photoRecordsData = localStorage.getItem(PHOTO_RECORDS_KEY);
 
       let localEntries: Entry[] = [];
-      let localSettings: Settings = { ...defaultSettings, firstShotDate: today };
+      let localSettings: Settings = {
+        ...defaultSettings,
+        firstShotDate: today,
+      };
       let localPenInventory: PenInventory = {
         penStrength: "10",
         totalGrids: "240",
@@ -1715,7 +1998,8 @@ export default function SimpleTracker() {
           const parsed = JSON.parse(data);
           localEntries = Array.isArray(parsed)
             ? parsed.map((item, index) => {
-                const legacySideEffect = (item?.sideEffect || "無") as SideEffect;
+                const legacySideEffect = (item?.sideEffect ||
+                  "無") as SideEffect;
                 const legacySeverity =
                   item?.sideEffectSeverity ||
                   (item?.sideEffect && item?.sideEffect !== "無" ? "2" : "0");
@@ -1726,10 +2010,16 @@ export default function SimpleTracker() {
                         effect: (se?.effect || "無") as SideEffect,
                         severity: String(se?.severity || "0"),
                       }))
-                    : [{ effect: legacySideEffect, severity: String(legacySeverity) }];
+                    : [
+                        {
+                          effect: legacySideEffect,
+                          severity: String(legacySeverity),
+                        },
+                      ];
 
                 const firstActive =
-                  normalizedSideEffects.find((se) => se.effect !== "無") || normalizedSideEffects[0];
+                  normalizedSideEffects.find((se) => se.effect !== "無") ||
+                  normalizedSideEffects[0];
 
                 return {
                   id:
@@ -1740,14 +2030,16 @@ export default function SimpleTracker() {
                   date: item?.date || today,
                   weight: item?.weight || "",
                   bodyFatPct: String(item?.bodyFatPct || item?.bodyFat || ""),
-                  fatMass: String(item?.fatMass || item?.bodyFatMass || item?.fatKg || ""),
+                  fatMass: String(
+                    item?.fatMass || item?.bodyFatMass || item?.fatKg || "",
+                  ),
                   muscleRate: String(
                     item?.muscleRate ||
                       getMuscleRateValue(
                         num(item?.weight || 0),
                         num(item?.muscleMass || 0),
                       ) ||
-                      ""
+                      "",
                   ),
                   muscleMass: String(item?.muscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
@@ -1768,7 +2060,10 @@ export default function SimpleTracker() {
         }
       }
 
-      const freshDefaults: Settings = { ...defaultSettings, firstShotDate: today };
+      const freshDefaults: Settings = {
+        ...defaultSettings,
+        firstShotDate: today,
+      };
 
       if (settingsData) {
         try {
@@ -1787,7 +2082,9 @@ export default function SimpleTracker() {
             penStrength: String(parsed?.penStrength || "10"),
             totalGrids: String(
               parsed?.totalGrids ||
-                (parsed?.totalPens ? Math.max(0, num(parsed.totalPens)) * 60 : 240)
+                (parsed?.totalPens
+                  ? Math.max(0, num(parsed.totalPens)) * 60
+                  : 240),
             ),
             penStartDate: String(parsed?.penStartDate || today),
             manualAdjustGrids: String(parsed?.manualAdjustGrids || "0"),
@@ -1848,7 +2145,8 @@ export default function SimpleTracker() {
                       ];
 
                 const firstActive =
-                  fallbackSideEffects.find((se) => se.effect !== "無") || fallbackSideEffects[0];
+                  fallbackSideEffects.find((se) => se.effect !== "無") ||
+                  fallbackSideEffects[0];
 
                 return {
                   id:
@@ -1862,8 +2160,11 @@ export default function SimpleTracker() {
                   fatMass: String(item?.fatMass || ""),
                   muscleRate: String(
                     item?.muscleRate ||
-                      getMuscleRateValue(num(item?.weight || 0), num(item?.muscleMass || 0)) ||
-                      ""
+                      getMuscleRateValue(
+                        num(item?.weight || 0),
+                        num(item?.muscleMass || 0),
+                      ) ||
+                      "",
                   ),
                   muscleMass: String(item?.muscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
@@ -1886,11 +2187,25 @@ export default function SimpleTracker() {
           };
 
           finalPenInventory = {
-            penStrength: String(payload.penInventory?.penStrength || localPenInventory.penStrength || "10"),
-            totalGrids: String(payload.penInventory?.totalGrids || localPenInventory.totalGrids || "240"),
-            penStartDate: String(payload.penInventory?.penStartDate || localPenInventory.penStartDate || today),
+            penStrength: String(
+              payload.penInventory?.penStrength ||
+                localPenInventory.penStrength ||
+                "10",
+            ),
+            totalGrids: String(
+              payload.penInventory?.totalGrids ||
+                localPenInventory.totalGrids ||
+                "240",
+            ),
+            penStartDate: String(
+              payload.penInventory?.penStartDate ||
+                localPenInventory.penStartDate ||
+                today,
+            ),
             manualAdjustGrids: String(
-              payload.penInventory?.manualAdjustGrids || localPenInventory.manualAdjustGrids || "0"
+              payload.penInventory?.manualAdjustGrids ||
+                localPenInventory.manualAdjustGrids ||
+                "0",
             ),
           };
 
@@ -1959,16 +2274,14 @@ export default function SimpleTracker() {
         photoRecords,
       };
 
-      const { error } = await supabase
-        .from("tracker_data")
-        .upsert(
-          {
-            user_id: cloudUserId,
-            payload,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" },
-        );
+      const { error } = await supabase.from("tracker_data").upsert(
+        {
+          user_id: cloudUserId,
+          payload,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
 
       if (error) {
         console.error("Supabase sync failed:", error);
@@ -1976,15 +2289,26 @@ export default function SimpleTracker() {
     }, 800);
 
     return () => window.clearTimeout(timer);
-  }, [entries, settings, penInventory, photoRecords, mounted, cloudReady, cloudUserId]);
+  }, [
+    entries,
+    settings,
+    penInventory,
+    photoRecords,
+    mounted,
+    cloudReady,
+    cloudUserId,
+  ]);
 
   const sortedEntries = useMemo(() => {
     return [...entries].sort(
-      (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
+      (a, b) =>
+        parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
     );
   }, [entries]);
 
-  const latest = sortedEntries.length ? sortedEntries[sortedEntries.length - 1] : null;
+  const latest = sortedEntries.length
+    ? sortedEntries[sortedEntries.length - 1]
+    : null;
 
   const latestWeight = latest ? num(latest.weight) : 0;
   const latestBodyFatPct = latest ? num(latest.bodyFatPct) : 0;
@@ -1995,9 +2319,19 @@ export default function SimpleTracker() {
   const latestBodyWater = latest ? num(latest.bodyWater) : 0;
   const bmi = getBMI(num(settings.height), latestWeight);
   const bmiLabel = getBMILabel(bmi);
-  const bmrMifflin = getBMR(latestWeight, num(settings.height), num(settings.age), settings.sex);
-  const bmrKatch = getBMRByLeanMass(latestWeight, latestBodyFatPct, latestFatMass);
-  const bmr = settings.bmrMethod === "katch" ? (bmrKatch || bmrMifflin) : bmrMifflin;
+  const bmrMifflin = getBMR(
+    latestWeight,
+    num(settings.height),
+    num(settings.age),
+    settings.sex,
+  );
+  const bmrKatch = getBMRByLeanMass(
+    latestWeight,
+    latestBodyFatPct,
+    latestFatMass,
+  );
+  const bmr =
+    settings.bmrMethod === "katch" ? bmrKatch || bmrMifflin : bmrMifflin;
   const tdee = bmr ? Math.round(bmr * num(settings.activity || 1.2)) : 0;
 
   let minCalories = 0;
@@ -2028,7 +2362,9 @@ export default function SimpleTracker() {
       return d <= 7 && d >= 0;
     });
     if (recent.length < 2) return 0;
-    return +(num(recent[0].weight) - num(recent[recent.length - 1].weight)).toFixed(1);
+    return +(
+      num(recent[0].weight) - num(recent[recent.length - 1].weight)
+    ).toFixed(1);
   }, [sortedEntries]);
 
   const latestShotDate = useMemo(() => {
@@ -2044,7 +2380,13 @@ export default function SimpleTracker() {
     const fallbackBaseDate = settings.firstShotDate;
     const baseDate = recordBaseDate || fallbackBaseDate;
     if (!baseDate || !today) {
-      return { text: "-", date: "-", shouldNotify: false, baseDate: "-", source: "未設定" };
+      return {
+        text: "-",
+        date: "-",
+        shouldNotify: false,
+        baseDate: "-",
+        source: "未設定",
+      };
     }
 
     const interval = Math.max(1, num(settings.shotInterval || 7));
@@ -2053,19 +2395,35 @@ export default function SimpleTracker() {
 
     return {
       date: nextDate || "-",
-      text: diff > 0 ? `${diff} 天後` : diff === 0 ? "今天" : `已過 ${Math.abs(diff)} 天`,
+      text:
+        diff > 0
+          ? `${diff} 天後`
+          : diff === 0
+            ? "今天"
+            : `已過 ${Math.abs(diff)} 天`,
       shouldNotify: settings.notificationsOn && diff <= 1,
       baseDate,
       source: recordBaseDate ? "最近一次施打日紀錄" : "首次施打日期",
     };
-  }, [latestShotDate, settings.firstShotDate, today, settings.shotInterval, settings.notificationsOn]);
+  }, [
+    latestShotDate,
+    settings.firstShotDate,
+    today,
+    settings.shotInterval,
+    settings.notificationsOn,
+  ]);
 
   const previewNextShot = useMemo(() => {
     const recordBaseDate = latestShotDate;
     const fallbackBaseDate = tempSettings.firstShotDate;
     const baseDate = recordBaseDate || fallbackBaseDate;
     if (!baseDate || !today) {
-      return { date: "-", text: "請先設定首次施打日期", baseDate: "-", source: "未設定" };
+      return {
+        date: "-",
+        text: "請先設定首次施打日期",
+        baseDate: "-",
+        source: "未設定",
+      };
     }
 
     const interval = Math.max(1, num(tempSettings.shotInterval || 7));
@@ -2074,11 +2432,21 @@ export default function SimpleTracker() {
 
     return {
       date: nextDate || "-",
-      text: diff > 0 ? `${diff} 天後` : diff === 0 ? "今天" : `已過 ${Math.abs(diff)} 天`,
+      text:
+        diff > 0
+          ? `${diff} 天後`
+          : diff === 0
+            ? "今天"
+            : `已過 ${Math.abs(diff)} 天`,
       baseDate,
       source: recordBaseDate ? "最近一次施打日紀錄" : "首次施打日期",
     };
-  }, [latestShotDate, tempSettings.firstShotDate, tempSettings.shotInterval, today]);
+  }, [
+    latestShotDate,
+    tempSettings.firstShotDate,
+    tempSettings.shotInterval,
+    today,
+  ]);
 
   const shotCycleDay = useMemo(() => {
     return latestShotDate && today ? getShotCycleDay(latestShotDate, today) : 0;
@@ -2090,7 +2458,11 @@ export default function SimpleTracker() {
     }
     const diff = today ? daysBetween(today, nextShot.date) : 0;
     if (diff > 0) {
-      return { status: "本週尚未施打", text: `距離下次施打還有 ${diff} 天`, overdueDays: 0 };
+      return {
+        status: "本週尚未施打",
+        text: `距離下次施打還有 ${diff} 天`,
+        overdueDays: 0,
+      };
     }
     if (diff === 0) {
       return { status: "今天該施打", text: "今天是施打日", overdueDays: 0 };
@@ -2125,7 +2497,9 @@ export default function SimpleTracker() {
       return d <= 14 && d >= 0;
     });
     if (recent.length < 2) return { isPlateau: false, text: "資料不足" };
-    const delta = Math.abs(num(recent[0].weight) - num(recent[recent.length - 1].weight));
+    const delta = Math.abs(
+      num(recent[0].weight) - num(recent[recent.length - 1].weight),
+    );
     if (delta <= 0.3) {
       return { isPlateau: true, text: "近 2 週體重變化很小，可能進入停滯期" };
     }
@@ -2148,29 +2522,49 @@ export default function SimpleTracker() {
     return { level: "低", text: "目前飲食失控風險較低" };
   }, [latest]);
 
-
   const previousEntry = useMemo(() => {
-    return sortedEntries.length >= 2 ? sortedEntries[sortedEntries.length - 2] : null;
+    return sortedEntries.length >= 2
+      ? sortedEntries[sortedEntries.length - 2]
+      : null;
   }, [sortedEntries]);
 
   const bodyCompositionAI = useMemo(() => {
-    const weightLow = +(18.5 * (num(settings.height) / 100) * (num(settings.height) / 100)).toFixed(1);
-    const weightHigh = +(24 * (num(settings.height) / 100) * (num(settings.height) / 100)).toFixed(1);
+    const weightLow = +(
+      18.5 *
+      (num(settings.height) / 100) *
+      (num(settings.height) / 100)
+    ).toFixed(1);
+    const weightHigh = +(
+      24 *
+      (num(settings.height) / 100) *
+      (num(settings.height) / 100)
+    ).toFixed(1);
     const muscleLow = settings.sex === "female" ? 21 : 27;
     const muscleHigh = settings.sex === "female" ? 27 : 33;
     const bodyFatPct = latestBodyFatPct || bodyFat;
-    const bodyFatMass = latestFatMass || (latestWeight && bodyFatPct ? +((latestWeight * bodyFatPct) / 100).toFixed(1) : 0);
-    const bodyFatMassLow = settings.sex === "female" ? +(weightLow * 0.18).toFixed(1) : +(weightLow * 0.14).toFixed(1);
-    const bodyFatMassHigh = settings.sex === "female" ? +(weightHigh * 0.30).toFixed(1) : +(weightHigh * 0.22).toFixed(1);
+    const bodyFatMass =
+      latestFatMass ||
+      (latestWeight && bodyFatPct
+        ? +((latestWeight * bodyFatPct) / 100).toFixed(1)
+        : 0);
+    const bodyFatMassLow =
+      settings.sex === "female"
+        ? +(weightLow * 0.18).toFixed(1)
+        : +(weightLow * 0.14).toFixed(1);
+    const bodyFatMassHigh =
+      settings.sex === "female"
+        ? +(weightHigh * 0.3).toFixed(1)
+        : +(weightHigh * 0.22).toFixed(1);
 
     if (!latest) {
       return {
-        type: '-',
-        summary: '先累積身體組成資料後再分析',
-        headline: '尚無足夠資料判讀體態',
-        meaning: '先記錄體脂率、肌肉量、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。',
-        caution: ['至少先記錄 2~3 筆體脂、肌肉量、水分與內臟脂肪'],
-        menuAdjustments: ['先維持現有熱量與蛋白質規劃'],
+        type: "-",
+        summary: "先累積身體組成資料後再分析",
+        headline: "尚無足夠資料判讀體態",
+        meaning:
+          "先記錄體脂率、肌肉量、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。",
+        caution: ["至少先記錄 2~3 筆體脂、肌肉量、水分與內臟脂肪"],
+        menuAdjustments: ["先維持現有熱量與蛋白質規劃"],
         bodyFatMass: 0,
         weightIdeal: `${weightLow}~${weightHigh}`,
         muscleIdeal: `${muscleLow}~${muscleHigh}`,
@@ -2186,64 +2580,77 @@ export default function SimpleTracker() {
     const prevMuscle = previousEntry ? num(previousEntry.muscleMass) : 0;
     const prevWater = previousEntry ? num(previousEntry.bodyWater) : 0;
 
-    let type = 'C型';
-    let headline = '體脂肪重高於骨骼肌重';
-    let summary = '目前偏向體脂較高、肌肉量相對不足的體態，重點是減脂同時保住肌肉。';
-    let meaning = '這類體態通常代表體脂偏高、骨骼肌支撐不夠，不能只追求體重下降，還要顧蛋白質與阻力訓練。';
+    let type = "C型";
+    let headline = "體脂肪重高於骨骼肌重";
+    let summary =
+      "目前偏向體脂較高、肌肉量相對不足的體態，重點是減脂同時保住肌肉。";
+    let meaning =
+      "這類體態通常代表體脂偏高、骨骼肌支撐不夠，不能只追求體重下降，還要顧蛋白質與阻力訓練。";
     const caution: string[] = [];
     const menuAdjustments: string[] = [];
 
     const isLean =
       bodyFatPct > 0 &&
-      bodyFatPct <= (settings.sex === 'female' ? 30 : 22) &&
+      bodyFatPct <= (settings.sex === "female" ? 30 : 22) &&
       visceralFat > 0 &&
       visceralFat <= 9 &&
       muscleMass >= muscleLow;
 
     const isDenseHighFat =
-      (visceralFat >= 12 && bodyFatPct >= (settings.sex === 'female' ? 34 : 27)) ||
-      (muscleMass >= muscleHigh && bodyFatPct >= (settings.sex === 'female' ? 32 : 24));
+      (visceralFat >= 12 &&
+        bodyFatPct >= (settings.sex === "female" ? 34 : 27)) ||
+      (muscleMass >= muscleHigh &&
+        bodyFatPct >= (settings.sex === "female" ? 32 : 24));
 
     if (isLean) {
-      type = 'I型';
-      headline = '骨骼肌保留較佳，體脂控制相對理想';
-      summary = '脂肪控制與肌肉保留相對較好，體態正往精瘦型前進。';
-      meaning = '這代表你目前的減脂方向比較漂亮，體脂沒有明顯壓過肌肉量，現在更該注意不要減太快。';
-      caution.push('避免熱量切太低，免得肌肉量反而掉太快');
-      caution.push('持續固定阻力訓練或至少維持步行與蛋白質');
-      menuAdjustments.push('主食維持目前份量，不要再大砍');
-      menuAdjustments.push('每餐優先蛋白質 1 掌心以上');
+      type = "I型";
+      headline = "骨骼肌保留較佳，體脂控制相對理想";
+      summary = "脂肪控制與肌肉保留相對較好，體態正往精瘦型前進。";
+      meaning =
+        "這代表你目前的減脂方向比較漂亮，體脂沒有明顯壓過肌肉量，現在更該注意不要減太快。";
+      caution.push("避免熱量切太低，免得肌肉量反而掉太快");
+      caution.push("持續固定阻力訓練或至少維持步行與蛋白質");
+      menuAdjustments.push("主食維持目前份量，不要再大砍");
+      menuAdjustments.push("每餐優先蛋白質 1 掌心以上");
     } else if (isDenseHighFat) {
-      type = 'D型';
-      headline = '肌肉量不差，但脂肪與內臟脂肪負擔偏高';
-      summary = '目前偏向脂肪與內臟脂肪負擔較高型，先以穩定減脂與改善代謝為主。';
-      meaning = '這類體態常見於有一定肌肉基礎，但腹部脂肪與整體脂肪偏高；重點不是增肌，而是先把脂肪壓下來。';
-      caution.push('先把精緻澱粉、含糖飲料、宵夜壓低');
-      caution.push('內臟脂肪較高時，比起極端節食，更重要的是穩定執行');
-      menuAdjustments.push('晚餐主食再少 1/4 份，蔬菜與蛋白質提高');
-      menuAdjustments.push('每週至少 3 天安排 20~30 分鐘活動');
+      type = "D型";
+      headline = "肌肉量不差，但脂肪與內臟脂肪負擔偏高";
+      summary =
+        "目前偏向脂肪與內臟脂肪負擔較高型，先以穩定減脂與改善代謝為主。";
+      meaning =
+        "這類體態常見於有一定肌肉基礎，但腹部脂肪與整體脂肪偏高；重點不是增肌，而是先把脂肪壓下來。";
+      caution.push("先把精緻澱粉、含糖飲料、宵夜壓低");
+      caution.push("內臟脂肪較高時，比起極端節食，更重要的是穩定執行");
+      menuAdjustments.push("晚餐主食再少 1/4 份，蔬菜與蛋白質提高");
+      menuAdjustments.push("每週至少 3 天安排 20~30 分鐘活動");
     } else {
-      caution.push('現在最重要的是讓體脂慢慢降、肌肉量不要明顯掉');
-      caution.push('別只看體重，體脂與腰腹脂肪趨勢更重要');
-      menuAdjustments.push('早餐與加餐補足蛋白質，放鬆餐頻率先收斂');
-      menuAdjustments.push('維持中等熱量赤字，不要忽高忽低');
+      caution.push("現在最重要的是讓體脂慢慢降、肌肉量不要明顯掉");
+      caution.push("別只看體重，體脂與腰腹脂肪趨勢更重要");
+      menuAdjustments.push("早餐與加餐補足蛋白質，放鬆餐頻率先收斂");
+      menuAdjustments.push("維持中等熱量赤字，不要忽高忽低");
     }
 
-    if ((prevBodyFat && bodyFatPct && bodyFatPct > prevBodyFat + 0.3) || (prevFatMass && bodyFatMass && bodyFatMass > prevFatMass + 0.3)) {
-      caution.push('最近體脂率或脂肪重有回升，先檢查放鬆餐與隱藏熱量');
-    } else if ((prevBodyFat && bodyFatPct && bodyFatPct < prevBodyFat - 0.3) || (prevFatMass && bodyFatMass && bodyFatMass < prevFatMass - 0.3)) {
-      menuAdjustments.push('最近體脂或脂肪重有往下，維持目前乾淨飲食節奏');
+    if (
+      (prevBodyFat && bodyFatPct && bodyFatPct > prevBodyFat + 0.3) ||
+      (prevFatMass && bodyFatMass && bodyFatMass > prevFatMass + 0.3)
+    ) {
+      caution.push("最近體脂率或脂肪重有回升，先檢查放鬆餐與隱藏熱量");
+    } else if (
+      (prevBodyFat && bodyFatPct && bodyFatPct < prevBodyFat - 0.3) ||
+      (prevFatMass && bodyFatMass && bodyFatMass < prevFatMass - 0.3)
+    ) {
+      menuAdjustments.push("最近體脂或脂肪重有往下，維持目前乾淨飲食節奏");
     }
 
     if (prevMuscle && muscleMass && muscleMass < prevMuscle - 0.3) {
-      caution.push('肌肉量有下降跡象，蛋白質與阻力訓練要補上');
-      menuAdjustments.push('每天蛋白質分散到 3 餐以上，不要全擠在一餐');
+      caution.push("肌肉量有下降跡象，蛋白質與阻力訓練要補上");
+      menuAdjustments.push("每天蛋白質分散到 3 餐以上，不要全擠在一餐");
     }
 
     if (prevWater && bodyWater && bodyWater < prevWater - 0.5) {
-      caution.push('水分下降較明顯，最近的體重下降可能混有水分波動');
+      caution.push("水分下降較明顯，最近的體重下降可能混有水分波動");
     } else if (bodyWater && bodyWater < 45) {
-      caution.push('水分偏低，先把補水與電解質穩住');
+      caution.push("水分偏低，先把補水與電解質穩住");
     }
 
     return {
@@ -2286,11 +2693,17 @@ export default function SimpleTracker() {
     const first = recent[0];
     const last = recent[recent.length - 1];
     const weightDelta = +(num(last.weight) - num(first.weight)).toFixed(1);
-    const fatPctDelta = +(num(last.bodyFatPct) - num(first.bodyFatPct)).toFixed(1);
+    const fatPctDelta = +(num(last.bodyFatPct) - num(first.bodyFatPct)).toFixed(
+      1,
+    );
     const fatMassDelta = +(num(last.fatMass) - num(first.fatMass)).toFixed(1);
-    const muscleDelta = +(num(last.muscleMass) - num(first.muscleMass)).toFixed(1);
+    const muscleDelta = +(num(last.muscleMass) - num(first.muscleMass)).toFixed(
+      1,
+    );
     const waterDelta = +(num(last.bodyWater) - num(first.bodyWater)).toFixed(1);
-    const visceralDelta = +(num(last.visceralFat) - num(first.visceralFat)).toFixed(1);
+    const visceralDelta = +(
+      num(last.visceralFat) - num(first.visceralFat)
+    ).toFixed(1);
     const days = Math.max(1, daysBetween(first.date, last.date));
 
     const reasons: string[] = [];
@@ -2309,36 +2722,46 @@ export default function SimpleTracker() {
     if (weightDown && fatDown && fatPctDown && !muscleDown) {
       tag = "脂肪主導";
       title = "目前下降以脂肪為主";
-      detail = "體重、體脂率、脂肪重都有往下，且肌肉量沒有明顯掉，這是比較理想的減脂型態。";
+      detail =
+        "體重、體脂率、脂肪重都有往下，且肌肉量沒有明顯掉，這是比較理想的減脂型態。";
       reasons.push("體脂率下降");
       reasons.push("脂肪重下降");
       reasons.push("肌肉量保留尚可");
       confidenceScore += 3;
-    } else if (weightDown && waterDown && !fatDown && Math.abs(fatPctDelta) < 0.3) {
+    } else if (
+      weightDown &&
+      waterDown &&
+      !fatDown &&
+      Math.abs(fatPctDelta) < 0.3
+    ) {
       tag = "水分主導";
       title = "最近較像水分波動";
-      detail = "體重有下降，但脂肪重與體脂率沒有同步明顯往下，反而水分變化更明顯，先別過度解讀單次體重。";
+      detail =
+        "體重有下降，但脂肪重與體脂率沒有同步明顯往下，反而水分變化更明顯，先別過度解讀單次體重。";
       reasons.push("水分下降較明顯");
       reasons.push("脂肪指標變化有限");
       confidenceScore += 3;
     } else if (weightDown && muscleDown && (!fatDown || fatPctDelta >= 0)) {
       tag = "肌肉警訊";
       title = "這波下降可能混有肌肉流失";
-      detail = "體重下降同時肌肉量也掉，而且脂肪指標改善不夠明顯，接下來要優先補蛋白質並加上阻力訓練。";
+      detail =
+        "體重下降同時肌肉量也掉，而且脂肪指標改善不夠明顯，接下來要優先補蛋白質並加上阻力訓練。";
       reasons.push("肌肉量下降");
       reasons.push("脂肪改善不明顯");
       confidenceScore += 3;
     } else if (weightDown && fatDown && waterDown) {
       tag = "混合下降";
       title = "目前像脂肪＋水分混合下降";
-      detail = "這波體重下降同時有脂肪重與水分下降，方向不差，但不要把所有下降都當成純脂肪。";
+      detail =
+        "這波體重下降同時有脂肪重與水分下降，方向不差，但不要把所有下降都當成純脂肪。";
       reasons.push("脂肪重下降");
       reasons.push("水分也同步下降");
       confidenceScore += 2;
     } else if (weightDelta >= 0.3 && fatUp) {
       tag = "脂肪回升";
       title = "近期有脂肪回升跡象";
-      detail = "體重沒有往下，脂肪重或體脂率反而有上升，先檢查放鬆餐、外食份量、宵夜與飲料。";
+      detail =
+        "體重沒有往下，脂肪重或體脂率反而有上升，先檢查放鬆餐、外食份量、宵夜與飲料。";
       reasons.push("體脂率或脂肪重上升");
       confidenceScore += 2;
     }
@@ -2351,12 +2774,23 @@ export default function SimpleTracker() {
     }
 
     if (days >= 7) confidenceScore += 1;
-    if (recent.every((entry) => num(entry.weight) > 0 && num(entry.bodyFatPct) > 0 && num(entry.fatMass) > 0)) {
+    if (
+      recent.every(
+        (entry) =>
+          num(entry.weight) > 0 &&
+          num(entry.bodyFatPct) > 0 &&
+          num(entry.fatMass) > 0,
+      )
+    ) {
       confidenceScore += 1;
     }
 
     const confidence =
-      confidenceScore >= 5 ? ("高" as const) : confidenceScore >= 3 ? ("中" as const) : ("低" as const);
+      confidenceScore >= 5
+        ? ("高" as const)
+        : confidenceScore >= 3
+          ? ("中" as const)
+          : ("低" as const);
 
     if (!reasons.length) {
       reasons.push("近期數值變化不夠一致");
@@ -2400,7 +2834,11 @@ export default function SimpleTracker() {
       return { enabled: false, score: 0, reasons: ["極低熱量模式未開啟"] };
     }
     if (!latest || sortedEntries.length < 3) {
-      return { enabled: false, score: 0, reasons: ["資料不足，至少需要 3 筆紀錄"] };
+      return {
+        enabled: false,
+        score: 0,
+        reasons: ["資料不足，至少需要 3 筆紀錄"],
+      };
     }
 
     let score = 0;
@@ -2490,7 +2928,12 @@ export default function SimpleTracker() {
 
   const cheatDecision = useMemo(() => {
     if (!latest || sortedEntries.length < 3) {
-      return { level: "-", reason: "資料不足", plan: [] as string[], rule: "先累積紀錄" };
+      return {
+        level: "-",
+        reason: "資料不足",
+        plan: [] as string[],
+        rule: "先累積紀錄",
+      };
     }
 
     let score = 0;
@@ -2694,22 +3137,29 @@ export default function SimpleTracker() {
     });
 
     const appetiteTop =
-      Object.entries(appetiteCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "正常";
+      Object.entries(appetiteCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+      "正常";
     const cravingTop =
       Object.entries(cravingCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "中";
     const exerciseTop =
-      Object.entries(exerciseBuckets).sort((a, b) => b[1] - a[1])[0]?.[0] || "0";
+      Object.entries(exerciseBuckets).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+      "0";
 
     let effectivePattern = "維持目前節奏";
     if (
       exerciseBuckets["21-40"] + exerciseBuckets["41+"] >=
       Math.ceil(sortedEntries.length / 3)
     ) {
-      effectivePattern = "你在有規律活動（尤其 20 分鐘以上）時，較容易維持穩定下降";
+      effectivePattern =
+        "你在有規律活動（尤其 20 分鐘以上）時，較容易維持穩定下降";
     } else if (appetiteDownDays >= Math.ceil(sortedEntries.length / 3)) {
-      effectivePattern = "你在食慾下降的日子更容易守住熱量，這段時間最適合吃乾淨一點";
-    } else if (lowCravingLossDays >= Math.ceil((sortedEntries.length - 1) / 2)) {
-      effectivePattern = "你在嘴饞不高時，體重下降通常更順，控制零食對你特別重要";
+      effectivePattern =
+        "你在食慾下降的日子更容易守住熱量，這段時間最適合吃乾淨一點";
+    } else if (
+      lowCravingLossDays >= Math.ceil((sortedEntries.length - 1) / 2)
+    ) {
+      effectivePattern =
+        "你在嘴饞不高時，體重下降通常更順，控制零食對你特別重要";
     }
 
     let riskWindow = "嘴饞高的日子";
@@ -2744,7 +3194,8 @@ export default function SimpleTracker() {
 
   const currentDoseSeries = useMemo(() => {
     const orderedShotEntries = [...shotEntries].reverse();
-    if (!orderedShotEntries.length) return { dose: "-", shotCount: 0, weeks: 0 };
+    if (!orderedShotEntries.length)
+      return { dose: "-", shotCount: 0, weeks: 0 };
     const latestShot = orderedShotEntries[orderedShotEntries.length - 1];
     let count = 0;
     for (let i = orderedShotEntries.length - 1; i >= 0; i -= 1) {
@@ -2766,7 +3217,9 @@ export default function SimpleTracker() {
 
     const currentDose = num(currentDoseSeries.dose);
     const sideEffectHeavy =
-      latest && latest.sideEffect !== "無" && num(latest.sideEffectSeverity) >= 3;
+      latest &&
+      latest.sideEffect !== "無" &&
+      num(latest.sideEffectSeverity) >= 3;
     const poorResponse =
       plateau.isPlateau ||
       weeklyLoss < 0.3 ||
@@ -2830,7 +3283,9 @@ export default function SimpleTracker() {
     const manualAdjustGrids = Math.max(0, num(penInventory.manualAdjustGrids));
 
     const shotEntriesSinceStart = sortedEntries.filter(
-      (entry) => entry.isShotDay && (!penStartDate || daysBetween(penStartDate, entry.date) >= 0),
+      (entry) =>
+        entry.isShotDay &&
+        (!penStartDate || daysBetween(penStartDate, entry.date) >= 0),
     );
 
     const autoUsedGrids = shotEntriesSinceStart.reduce((sum, entry) => {
@@ -2850,7 +3305,9 @@ export default function SimpleTracker() {
       }
 
       const gridsNeeded = Math.round((dose / strength) * 60);
-      const exactShots = gridsNeeded ? +(remainGrids / gridsNeeded).toFixed(1) : 0;
+      const exactShots = gridsNeeded
+        ? +(remainGrids / gridsNeeded).toFixed(1)
+        : 0;
       const fullShots = gridsNeeded ? Math.floor(remainGrids / gridsNeeded) : 0;
       const months = fullShots ? +(fullShots / 4).toFixed(1) : 0;
 
@@ -2955,7 +3412,9 @@ export default function SimpleTracker() {
     const tagged = sortedEntries
       .map((entry) => ({
         ...entry,
-        dayAfterShot: latestShotDate ? getShotCycleDay(latestShotDate, entry.date) : 0,
+        dayAfterShot: latestShotDate
+          ? getShotCycleDay(latestShotDate, entry.date)
+          : 0,
       }))
       .filter(
         (entry) =>
@@ -2995,9 +3454,11 @@ export default function SimpleTracker() {
     effected.forEach((e) => {
       counts[e.sideEffect] = (counts[e.sideEffect] || 0) + 1;
     });
-    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "無";
+    const top =
+      Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "無";
     const avgSeverity = +(
-      effected.reduce((sum, e) => sum + num(e.sideEffectSeverity), 0) / effected.length
+      effected.reduce((sum, e) => sum + num(e.sideEffectSeverity), 0) /
+      effected.length
     ).toFixed(1);
     return {
       top,
@@ -3024,6 +3485,285 @@ export default function SimpleTracker() {
     return estimateETA(latestWeight, num(settings.goal), weeklyLoss);
   }, [latestWeight, settings.goal, weeklyLoss]);
 
+  const weeklySummary = useMemo(() => {
+    if (!sortedEntries.length) {
+      return {
+        title: "本週尚無資料",
+        summary: "先建立本週紀錄後，這裡會自動整理變化。",
+        bullets: ["至少記錄體重與是否施打"],
+      };
+    }
+
+    const latestEntry = sortedEntries[sortedEntries.length - 1];
+    const windowEntries = sortedEntries.filter((entry) => {
+      const diff = daysBetween(entry.date, latestEntry.date);
+      return diff >= 0 && diff <= 6;
+    });
+
+    const firstEntry = windowEntries[0];
+    const lastEntry = windowEntries[windowEntries.length - 1];
+    const weightDelta = +(
+      num(lastEntry?.weight) - num(firstEntry?.weight)
+    ).toFixed(1);
+    const bodyFatDelta = +(
+      num(lastEntry?.bodyFatPct) - num(firstEntry?.bodyFatPct)
+    ).toFixed(1);
+    const muscleDelta = +(
+      num(lastEntry?.muscleMass) - num(firstEntry?.muscleMass)
+    ).toFixed(1);
+    const shotDone = windowEntries.some((entry) => entry.isShotDay);
+    const stableDays = windowEntries.filter(
+      (entry) => entry.appetite === "下降" || entry.cravingLevel !== "高",
+    ).length;
+
+    let title = "本週持續中";
+    let summary = "本週節奏大致穩定，建議繼續維持。";
+
+    if (weightDelta <= -0.5 && muscleDelta >= -0.2) {
+      title = "本週減脂表現不錯";
+      summary = `體重下降 ${Math.abs(weightDelta)} kg，肌肉量大致守住，方向不錯。`;
+    } else if (weightDelta <= -0.3 && muscleDelta < -0.3) {
+      title = "本週有下降，但要注意保肌";
+      summary = `體重下降 ${Math.abs(weightDelta)} kg，但肌肉量也掉了 ${Math.abs(muscleDelta)} kg。`;
+    } else if (Math.abs(weightDelta) < 0.3) {
+      title = "本週接近持平";
+      summary = "體重變化不大，可再看外食、零食與步數。";
+    } else if (weightDelta > 0.3) {
+      title = "本週有回升";
+      summary = `體重上升 ${weightDelta} kg，先檢查聚餐、放鬆餐與水分波動。`;
+    }
+
+    const bullets = [
+      `體重變化：${weightDelta > 0 ? "+" : ""}${weightDelta} kg`,
+      `體脂率變化：${bodyFatDelta > 0 ? "+" : ""}${bodyFatDelta}%`,
+      `肌肉量變化：${muscleDelta > 0 ? "+" : ""}${muscleDelta} kg`,
+      `本週施打：${shotDone ? "有紀錄" : "未記錄"}`,
+      `相對穩定日數：${stableDays}/${windowEntries.length} 天`,
+    ];
+
+    return { title, summary, bullets };
+  }, [sortedEntries]);
+
+  const milestones = useMemo(() => {
+    if (!sortedEntries.length) return [];
+    const items: Array<{ title: string; detail: string; reached: boolean }> =
+      [];
+    const startWeight = num(sortedEntries[0].weight);
+    const lostWeight = +(startWeight - latestWeight).toFixed(1);
+    const uniqueDates: string[] = [
+      ...new Set(sortedEntries.map((entry) => entry.date)),
+    ].sort();
+    let logStreak = 0;
+
+    if (uniqueDates.length) {
+      logStreak = 1;
+      for (let i = uniqueDates.length - 1; i > 0; i -= 1) {
+        if (daysBetween(uniqueDates[i - 1], uniqueDates[i]) === 1)
+          logStreak += 1;
+        else break;
+      }
+    }
+
+    let shotStreak = 0;
+    const interval = Math.max(1, num(settings.shotInterval || 7));
+    const orderedShots = [...shotEntries].reverse();
+    if (orderedShots.length) {
+      shotStreak = 1;
+      for (let i = orderedShots.length - 1; i > 0; i -= 1) {
+        const gap = daysBetween(orderedShots[i - 1].date, orderedShots[i].date);
+        if (Math.abs(gap - interval) <= 1) shotStreak += 1;
+        else break;
+      }
+    }
+
+    items.push({
+      title: "累計減重 5 kg",
+      detail: lostWeight > 0 ? `目前已減 ${lostWeight} kg` : "尚未開始累計",
+      reached: lostWeight >= 5,
+    });
+    items.push({
+      title: "累計減重 10 kg",
+      detail: lostWeight > 0 ? `目前已減 ${lostWeight} kg` : "尚未開始累計",
+      reached: lostWeight >= 10,
+    });
+    items.push({
+      title: "連續紀錄 7 天",
+      detail: `目前連續 ${logStreak} 天`,
+      reached: logStreak >= 7,
+    });
+    items.push({
+      title: "連續按時施打 4 週",
+      detail: `目前連續 ${shotStreak} 針`,
+      reached: shotStreak >= 4,
+    });
+
+    return items;
+  }, [sortedEntries, latestWeight, shotEntries, settings.shotInterval]);
+
+  const anomalyAlerts = useMemo(() => {
+    const alerts: Array<{ level: "高" | "中"; title: string; detail: string }> =
+      [];
+    if (!sortedEntries.length || !latest) return alerts;
+
+    const latestEntry = sortedEntries[sortedEntries.length - 1];
+    const prevEntry =
+      sortedEntries.length >= 2
+        ? sortedEntries[sortedEntries.length - 2]
+        : null;
+    const todayHasLog = sortedEntries.some((entry) => entry.date === today);
+    const sevenDayEntries = sortedEntries.filter((entry) => {
+      const diff = daysBetween(entry.date, latestEntry.date);
+      return diff >= 0 && diff <= 7;
+    });
+
+    if (!todayHasLog && daysBetween(latestEntry.date, today) >= 2) {
+      alerts.push({
+        level: "中",
+        title: "有一段時間沒記錄",
+        detail: `最近一筆是 ${latestEntry.date}，建議補上體重與施打資訊。`,
+      });
+    }
+
+    if (prevEntry) {
+      const weightJump = +(
+        num(latestEntry.weight) - num(prevEntry.weight)
+      ).toFixed(1);
+      if (weightJump >= 1.2) {
+        alerts.push({
+          level: "中",
+          title: "體重短期上升較快",
+          detail: `最近兩筆增加 ${weightJump} kg，先看聚餐、鹽分與水分波動。`,
+        });
+      }
+
+      const muscleDrop = +(
+        num(latestEntry.muscleMass) - num(prevEntry.muscleMass)
+      ).toFixed(1);
+      const fatPctMove = +(
+        num(latestEntry.bodyFatPct) - num(prevEntry.bodyFatPct)
+      ).toFixed(1);
+      if (muscleDrop <= -0.5 && fatPctMove >= 0) {
+        alerts.push({
+          level: "高",
+          title: "可能有掉肌肉風險",
+          detail: `肌肉量下降 ${Math.abs(muscleDrop)} kg，體脂沒有同步改善。`,
+        });
+      }
+    }
+
+    if (sevenDayEntries.length >= 2) {
+      const first = sevenDayEntries[0];
+      const last = sevenDayEntries[sevenDayEntries.length - 1];
+      const weekWeightDelta = +(num(last.weight) - num(first.weight)).toFixed(
+        1,
+      );
+      if (weekWeightDelta >= 1) {
+        alerts.push({
+          level: "中",
+          title: "本週有明顯回升",
+          detail: `近 7 天增加 ${weekWeightDelta} kg，建議先收斂放鬆餐。`,
+        });
+      }
+    }
+
+    if (shotStatus.overdueDays > 0) {
+      alerts.push({
+        level: "高",
+        title: "施打日已逾期",
+        detail: `目前已超過 ${shotStatus.overdueDays} 天，可記錄補打後重新對齊。`,
+      });
+    }
+
+    return alerts.slice(0, 4);
+  }, [sortedEntries, latest, today, shotStatus.overdueDays]);
+
+  const dashboardSummary = useMemo(() => {
+    const cards = [
+      { label: "今日體重", value: latestWeight ? `${latestWeight} kg` : "-" },
+      {
+        label: "下次施打",
+        value: nextShot.text === "-" ? "未設定" : `${nextShot.text}`,
+      },
+      {
+        label: "本週變化",
+        value: `${recent7Delta > 0 ? "+" : ""}${recent7Delta} kg`,
+      },
+      { label: "建議熱量", value: cutCalories ? `${cutCalories} kcal` : "-" },
+      { label: "BMR", value: bmr ? `${bmr} kcal` : "-" },
+      {
+        label: "剩餘藥量",
+        value: penInventorySummary.remainGrids
+          ? `${penInventorySummary.remainGrids} 格`
+          : "0 格",
+      },
+    ];
+    return cards;
+  }, [
+    latestWeight,
+    nextShot.text,
+    recent7Delta,
+    cutCalories,
+    bmr,
+    penInventorySummary.remainGrids,
+  ]);
+
+  const photoComparison = useMemo(() => {
+    if (!photoRecords.length) {
+      return {
+        before: null as PhotoRecord | null,
+        after: null as PhotoRecord | null,
+        diffDays: 0,
+        weightDelta: 0,
+        summary: "尚無照片可比較",
+      };
+    }
+
+    const sortedPhotos = [...photoRecords].sort(
+      (a, b) =>
+        parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
+    );
+    const before =
+      sortedPhotos.find((item) => item.id === photoCompareA) ||
+      sortedPhotos[0] ||
+      null;
+    const after =
+      sortedPhotos.find((item) => item.id === photoCompareB) ||
+      sortedPhotos[sortedPhotos.length - 1] ||
+      null;
+
+    if (!before || !after) {
+      return {
+        before: null,
+        after: null,
+        diffDays: 0,
+        weightDelta: 0,
+        summary: "尚無照片可比較",
+      };
+    }
+
+    const diffDays = Math.abs(daysBetween(before.date, after.date));
+    const beforeWeight = sortedEntries.find(
+      (entry) => entry.date === before.date,
+    )?.weight;
+    const afterWeight = sortedEntries.find(
+      (entry) => entry.date === after.date,
+    )?.weight;
+    const weightDelta =
+      beforeWeight && afterWeight
+        ? +(num(afterWeight) - num(beforeWeight)).toFixed(1)
+        : 0;
+
+    return {
+      before,
+      after,
+      diffDays,
+      weightDelta,
+      summary:
+        before.id === after.id
+          ? "目前選到同一張照片，可改選不同日期做對比。"
+          : `相隔 ${diffDays} 天${beforeWeight && afterWeight ? `，體重變化 ${weightDelta > 0 ? "+" : ""}${weightDelta} kg` : ""}`,
+    };
+  }, [photoRecords, photoCompareA, photoCompareB, sortedEntries]);
 
   const addSideEffectField = () => {
     setForm((prev) => ({
@@ -3043,7 +3783,8 @@ export default function SimpleTracker() {
       );
 
       const firstActive =
-        nextSideEffects.find((item) => item.effect !== "無") || nextSideEffects[0];
+        nextSideEffects.find((item) => item.effect !== "無") ||
+        nextSideEffects[0];
 
       return {
         ...prev,
@@ -3062,7 +3803,8 @@ export default function SimpleTracker() {
           : prev.sideEffects.filter((_, i) => i !== index);
 
       const firstActive =
-        nextSideEffects.find((item) => item.effect !== "無") || nextSideEffects[0];
+        nextSideEffects.find((item) => item.effect !== "無") ||
+        nextSideEffects[0];
 
       return {
         ...prev,
@@ -3099,7 +3841,9 @@ export default function SimpleTracker() {
     if (!form.weight) return;
     if (editingId) {
       setEntries((prev) =>
-        prev.map((item) => (item.id === editingId ? { ...form, id: editingId } : item)),
+        prev.map((item) =>
+          item.id === editingId ? { ...form, id: editingId } : item,
+        ),
       );
       resetForm();
       return;
@@ -3126,7 +3870,12 @@ export default function SimpleTracker() {
       sideEffects:
         item.sideEffects && item.sideEffects.length
           ? item.sideEffects
-          : [{ effect: item.sideEffect || "無", severity: item.sideEffectSeverity || "0" }],
+          : [
+              {
+                effect: item.sideEffect || "無",
+                severity: item.sideEffectSeverity || "0",
+              },
+            ],
       exerciseMin: item.exerciseMin || "0",
       isShotDay: Boolean(item.isShotDay),
     });
@@ -3148,7 +3897,10 @@ export default function SimpleTracker() {
         weight: baseWeight,
         bodyFatPct: latest?.bodyFatPct || form.bodyFatPct || "",
         fatMass: latest?.fatMass || form.fatMass || "",
-        muscleRate: latest?.muscleRate || form.muscleRate || String(getMuscleRateFromEntry(latest) || ""),
+        muscleRate:
+          latest?.muscleRate ||
+          form.muscleRate ||
+          String(getMuscleRateFromEntry(latest) || ""),
         muscleMass: latest?.muscleMass || form.muscleMass || "",
         visceralFat: latest?.visceralFat || form.visceralFat || "",
         bodyWater: latest?.bodyWater || form.bodyWater || "",
@@ -3160,7 +3912,12 @@ export default function SimpleTracker() {
         sideEffects:
           latest?.sideEffects && latest.sideEffects.length
             ? latest.sideEffects
-            : [{ effect: latest?.sideEffect || "無", severity: latest?.sideEffectSeverity || "0" }],
+            : [
+                {
+                  effect: latest?.sideEffect || "無",
+                  severity: latest?.sideEffectSeverity || "0",
+                },
+              ],
         exerciseMin: latest?.exerciseMin || "0",
         isShotDay: true,
       },
@@ -3199,7 +3956,6 @@ export default function SimpleTracker() {
     setPhotoRecords((prev) => prev.filter((item) => item.id !== id));
   };
 
-
   const requestNotificationPermission = async () => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     const permission = await Notification.requestPermission();
@@ -3218,11 +3974,14 @@ export default function SimpleTracker() {
     if (notificationPermission !== "granted") return;
 
     const sentKey = `mounjaro-notify-${today}`;
-    if (typeof window !== "undefined" && sessionStorage.getItem(sentKey)) return;
+    if (typeof window !== "undefined" && sessionStorage.getItem(sentKey))
+      return;
 
     const messages: string[] = [];
     const diff =
-      nextShot.date && nextShot.date !== "-" ? daysBetween(today, nextShot.date) : 999;
+      nextShot.date && nextShot.date !== "-"
+        ? daysBetween(today, nextShot.date)
+        : 999;
 
     if (
       (settings.remindOneDayBefore && diff === 1) ||
@@ -3230,7 +3989,10 @@ export default function SimpleTracker() {
     ) {
       messages.push(`施打提醒：${nextShot.text}（${nextShot.date}）`);
     }
-    if (settings.remindIfNoLogByNight && !sortedEntries.some((e) => e.date === today)) {
+    if (
+      settings.remindIfNoLogByNight &&
+      !sortedEntries.some((e) => e.date === today)
+    ) {
       messages.push("今天還沒有新增紀錄");
     }
     if (settings.waterReminder && latest?.sideEffect === "便秘") {
@@ -3284,7 +4046,9 @@ export default function SimpleTracker() {
     <InlineAuthGate>
       <div className={isDark ? "dark-ui" : ""}>
         <style jsx global>{`
-          .dark-ui { color-scheme: dark; }
+          .dark-ui {
+            color-scheme: dark;
+          }
           .dark-ui .bg-white,
           .dark-ui .bg-white\/90,
           .dark-ui [data-radix-popper-content-wrapper] .bg-white {
@@ -3318,9 +4082,15 @@ export default function SimpleTracker() {
           .dark-ui .text-black {
             color: rgb(226 232 240) !important;
           }
-          .dark-ui .text-emerald-700 { color: rgb(110 231 183) !important; }
-          .dark-ui .text-emerald-600 { color: rgb(52 211 153) !important; }
-          .dark-ui .text-amber-800 { color: rgb(253 230 138) !important; }
+          .dark-ui .text-emerald-700 {
+            color: rgb(110 231 183) !important;
+          }
+          .dark-ui .text-emerald-600 {
+            color: rgb(52 211 153) !important;
+          }
+          .dark-ui .text-amber-800 {
+            color: rgb(253 230 138) !important;
+          }
           .dark-ui input,
           .dark-ui select,
           .dark-ui textarea,
@@ -3352,1435 +4122,1993 @@ export default function SimpleTracker() {
             color: rgb(226 232 240) !important;
           }
         `}</style>
-        <div className={`touch-feedback w-full max-w-md mx-auto min-h-screen p-3 space-y-4 pb-24 ${isDark ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"}`}>
+        <div
+          className={`touch-feedback w-full max-w-md mx-auto min-h-screen p-3 space-y-4 pb-24 ${isDark ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"}`}
+        >
           <TouchFeedbackStyles />
-      <div className="rounded-2xl bg-white/90 backdrop-blur border p-4 shadow-sm space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold">猛健樂個人版 Pro</h1>
-            <p className="text-xs text-slate-500 mt-1">
-              手機 App 版介面｜體重、施打、AI 分析一次看
-            </p>
-          </div>
-          <Button type="button" size="sm" variant="outline" onClick={toggleTheme}>
-            {isDark ? <Sun className="w-4 h-4 mr-1" /> : <Moon className="w-4 h-4 mr-1" />}
-            {isDark ? "淺色" : "深色"}
-          </Button>
-        </div>
-
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-slate-500">
-            通知：
-            {notificationPermission === "granted"
-              ? "已啟用"
-              : notificationPermission === "denied"
-                ? "已封鎖"
-                : notificationPermission === "unsupported"
-                  ? "不支援"
-                  : "未授權"}
-          </div>
-          <Button size="sm" variant="outline" onClick={requestNotificationPermission}>
-            開啟通知
-          </Button>
-        </div>
-
-        {((
-          (settings.remindOneDayBefore && nextShot.text === "1 天後") ||
-          (settings.remindOnShotDay && nextShot.text === "今天") ||
-          isELCDDay ||
-          shotStatus.overdueDays > 0
-        )) ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm space-y-1">
-            {((
-              (settings.remindOneDayBefore && nextShot.text === "1 天後") ||
-              (settings.remindOnShotDay && nextShot.text === "今天")
-            )) ? (
-              <div>🔔 施打提醒：{nextShot.text}（{nextShot.date}）</div>
-            ) : null}
-            {shotStatus.overdueDays > 0 ? (
-              <div>⚠️ 已逾期 {shotStatus.overdueDays} 天，可按下方「今天補打」重設基準</div>
-            ) : null}
-            {isELCDDay ? <div>🔥 今日 ELCD 啟動中：AI 分數 {elcdStatus.score}</div> : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="grid gap-3 grid-cols-2">
-        <Card>
-          <CardContent className="p-4 space-y-1">
-            <div className="flex items-center gap-2 text-sm">
-              <Scale className="w-4 h-4" />
-              目前體重
-            </div>
-            <div className="text-2xl font-semibold">{latestWeight || "-"}</div>
-            <div className="text-xs text-slate-500">kg</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 space-y-1">
-            <div className="flex items-center gap-2 text-sm">
-              <HeartPulse className="w-4 h-4" />
-              BMI
-            </div>
-            <div className="text-2xl font-semibold">{bmi || "-"}</div>
-            <div className="text-xs text-slate-500">{bmiLabel}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 space-y-1">
-            <div className="flex items-center gap-2 text-sm">
-              <Flame className="w-4 h-4" />
-              BMR
-            </div>
-            <div className="text-2xl font-semibold">{bmr || "-"}</div>
-            <div className="text-xs text-slate-500">
-              kcal｜{settings.bmrMethod === "katch" ? "體脂器公式" : "一般公式"}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 space-y-1">
-            <div className="flex items-center gap-2 text-sm">
-              <Bell className="w-4 h-4" />
-              下次施打
-              {nextShot.shouldNotify ? (
-                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-              ) : null}
-            </div>
-            <div className="text-lg font-semibold">{nextShot.text}</div>
-            <div className="text-xs text-slate-500">
-              {nextShot.date !== "-" ? nextShot.date : "尚未建立"}
-            </div>
-            <div className="text-[11px] text-slate-400">
-              基準：{nextShot.source}（{nextShot.baseDate}）
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-3 grid-cols-1">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Syringe className="w-4 h-4" />
-              本週施打狀態
-            </div>
-            <div className="text-lg font-semibold">{shotStatus.status}</div>
-            <div className="text-sm text-slate-500">{shotStatus.text}</div>
-            {shotCycleDay ? <div className="text-sm mt-2">目前為施打後第 {shotCycleDay} 天</div> : null}
-            <div className="flex gap-2 mt-3">
-              <Button size="sm" variant="outline" onClick={catchUpShotToday}>
-                <RotateCcw className="w-4 h-4 mr-1" />
-                今天補打
+          <div className="rounded-2xl bg-white/90 backdrop-blur border p-4 shadow-sm space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-xl font-bold">猛健樂個人版 Pro</h1>
+                <p className="text-xs text-slate-500 mt-1">
+                  手機 App 版介面｜體重、施打、AI 分析一次看
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={toggleTheme}
+              >
+                {isDark ? (
+                  <Sun className="w-4 h-4 mr-1" />
+                ) : (
+                  <Moon className="w-4 h-4 mr-1" />
+                )}
+                {isDark ? "淺色" : "深色"}
               </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Flame className="w-4 h-4" />
-              ELCD 狀態
-            </div>
-            <div className="text-lg font-semibold">
-              {settings.elcdMode ? (isELCDDay ? "今天啟動" : "今天不啟動") : "未開啟"}
-            </div>
-            <div className="text-sm text-slate-500">AI 分數：{elcdStatus.score}</div>
-            <div className="text-sm mt-2 space-y-1">
-              {elcdStatus.reasons.slice(0, 2).map((r) => (
-                <div key={r}>• {r}</div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <CalendarClock className="w-4 h-4" />
-              達標預測
-            </div>
-            <div className="text-sm">{eta.text}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingDown className="w-4 h-4" />
-              每週減重分析
-            </div>
-            <div className="text-xl font-semibold">約 {weeklyLoss || 0} kg/週</div>
-            <div className="text-sm text-slate-500 mt-1">近 7 天變化 {recent7Delta} kg</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <Droplets className="w-4 h-4" />
-              水分/脂肪判斷
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">{waterVsFat.tag}</Badge>
-              <Badge
-                variant={
-                  waterVsFat.confidence === "高"
-                    ? "default"
-                    : waterVsFat.confidence === "中"
-                      ? "secondary"
-                      : "outline"
-                }
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-slate-500">
+                通知：
+                {notificationPermission === "granted"
+                  ? "已啟用"
+                  : notificationPermission === "denied"
+                    ? "已封鎖"
+                    : notificationPermission === "unsupported"
+                      ? "不支援"
+                      : "未授權"}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={requestNotificationPermission}
               >
-                信心 {waterVsFat.confidence}
-              </Badge>
+                開啟通知
+              </Button>
             </div>
-            <div className="text-sm font-medium">{waterVsFat.title}</div>
-            <div className="text-sm text-slate-500">{waterVsFat.detail}</div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="w-4 h-4" />
-              暴食風險
-            </div>
-            <div className="text-xl font-semibold">{bingeRisk.level}</div>
-            <div className="text-sm text-slate-500">{bingeRisk.text}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <CompositeMetricsCard
-        title="各項指標綜合曲線圖"
-        data={chartData}
-        activeKeys={activeCompositeMetrics}
-        onToggleKey={toggleCompositeMetric}
-        onExpand={() => setExpandedChart({ type: "composite", title: "各項指標綜合曲線圖" })}
-      />
-
-
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Target className="w-4 h-4" />
-              目標進度
-            </span>
-            <span className="font-semibold">{progress}%</span>
-          </div>
-
-          <div className="relative h-5 w-full overflow-hidden rounded-full border border-slate-300 bg-slate-200 shadow-inner">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-600 transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-            <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-slate-700">
-              {progress}%
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 text-sm">
-            <div className="rounded-lg border bg-white p-2">
-              <div className="text-slate-500 text-xs">起始</div>
-              <div className="font-semibold">
-                {sortedEntries.length ? sortedEntries[0].weight : "-"} kg
+            {(settings.remindOneDayBefore && nextShot.text === "1 天後") ||
+            (settings.remindOnShotDay && nextShot.text === "今天") ||
+            isELCDDay ||
+            shotStatus.overdueDays > 0 ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm space-y-1">
+                {(settings.remindOneDayBefore && nextShot.text === "1 天後") ||
+                (settings.remindOnShotDay && nextShot.text === "今天") ? (
+                  <div>
+                    🔔 施打提醒：{nextShot.text}（{nextShot.date}）
+                  </div>
+                ) : null}
+                {shotStatus.overdueDays > 0 ? (
+                  <div>
+                    ⚠️ 已逾期 {shotStatus.overdueDays}{" "}
+                    天，可按下方「今天補打」重設基準
+                  </div>
+                ) : null}
+                {isELCDDay ? (
+                  <div>🔥 今日 ELCD 啟動中：AI 分數 {elcdStatus.score}</div>
+                ) : null}
               </div>
-            </div>
-
-            <div className="rounded-lg border bg-white p-2">
-              <div className="text-slate-500 text-xs">目前</div>
-              <div className="font-semibold">{latestWeight || "-"} kg</div>
-            </div>
-
-            <div className="rounded-lg border bg-white p-2">
-              <div className="text-slate-500 text-xs">目標</div>
-              <div className="font-semibold">{settings.goal || "-"} kg</div>
-            </div>
+            ) : null}
           </div>
 
-          <div className="text-sm text-slate-500">
-            理想體重區間：約 {idealRange.low || "-"} ~ {idealRange.high || "-"} kg
-          </div>
-        </CardContent>
-      </Card>
-
-      <Tabs defaultValue="add" className="space-y-4">
-        <div className="-mx-1 overflow-x-auto pb-1">
-          <TabsList className="inline-flex h-auto w-max min-w-full gap-1 rounded-2xl bg-white p-1 shadow-sm">
-            <TabsTrigger value="settings" className="rounded-xl shrink-0 px-4">
-              設定
-            </TabsTrigger>
-            <TabsTrigger value="add" className="rounded-xl shrink-0 px-4">
-              新增
-            </TabsTrigger>
-            <TabsTrigger value="chart" className="rounded-xl shrink-0 px-4">
-              趨勢
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="rounded-xl shrink-0 px-4">
-              菜單
-            </TabsTrigger>
-            <TabsTrigger value="strategy" className="rounded-xl shrink-0 px-4">
-              策略
-            </TabsTrigger>
-            <TabsTrigger value="shots" className="rounded-xl shrink-0 px-4">
-              施打
-            </TabsTrigger>
-            <TabsTrigger value="tools" className="rounded-xl shrink-0 px-4">
-              工具
-            </TabsTrigger>
-            <TabsTrigger value="cheat" className="rounded-xl shrink-0 px-4">
-              放鬆
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="add">
           <Card>
-            <CardHeader>
-              <CardTitle>{editingId ? "編輯紀錄" : "新增紀錄"}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 gap-3">
-                <div className="space-y-2">
-                  <Label>日期</Label>
-                  <Input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  />
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold">首頁儀表板</div>
+                <Badge variant="secondary">一打開先看這裡</Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {dashboardSummary.map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-xl border bg-slate-50 p-3"
+                  >
+                    <div className="text-slate-500 text-xs">{item.label}</div>
+                    <div className="mt-1 font-semibold">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-3 grid-cols-2">
+            <Card>
+              <CardContent className="p-4 space-y-1">
+                <div className="flex items-center gap-2 text-sm">
+                  <Scale className="w-4 h-4" />
+                  目前體重
                 </div>
-                <div className="space-y-2">
-                  <Label>體重 (kg)</Label>
-                  <Input
-                    placeholder="體重"
-                    value={form.weight}
-                    onChange={(e) => setForm({ ...form, weight: e.target.value })}
-                  />
+                <div className="text-2xl font-semibold">
+                  {latestWeight || "-"}
+                </div>
+                <div className="text-xs text-slate-500">kg</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 space-y-1">
+                <div className="flex items-center gap-2 text-sm">
+                  <HeartPulse className="w-4 h-4" />
+                  BMI
+                </div>
+                <div className="text-2xl font-semibold">{bmi || "-"}</div>
+                <div className="text-xs text-slate-500">{bmiLabel}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 space-y-1">
+                <div className="flex items-center gap-2 text-sm">
+                  <Flame className="w-4 h-4" />
+                  BMR
+                </div>
+                <div className="text-2xl font-semibold">{bmr || "-"}</div>
+                <div className="text-xs text-slate-500">
+                  kcal｜
+                  {settings.bmrMethod === "katch" ? "體脂器公式" : "一般公式"}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 space-y-1">
+                <div className="flex items-center gap-2 text-sm">
+                  <Bell className="w-4 h-4" />
+                  下次施打
+                  {nextShot.shouldNotify ? (
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                  ) : null}
+                </div>
+                <div className="text-lg font-semibold">{nextShot.text}</div>
+                <div className="text-xs text-slate-500">
+                  {nextShot.date !== "-" ? nextShot.date : "尚未建立"}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  基準：{nextShot.source}（{nextShot.baseDate}）
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 grid-cols-1">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Syringe className="w-4 h-4" />
+                  本週施打狀態
+                </div>
+                <div className="text-lg font-semibold">{shotStatus.status}</div>
+                <div className="text-sm text-slate-500">{shotStatus.text}</div>
+                {shotCycleDay ? (
+                  <div className="text-sm mt-2">
+                    目前為施打後第 {shotCycleDay} 天
+                  </div>
+                ) : null}
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={catchUpShotToday}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-1" />
+                    今天補打
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Flame className="w-4 h-4" />
+                  ELCD 狀態
+                </div>
+                <div className="text-lg font-semibold">
+                  {settings.elcdMode
+                    ? isELCDDay
+                      ? "今天啟動"
+                      : "今天不啟動"
+                    : "未開啟"}
+                </div>
+                <div className="text-sm text-slate-500">
+                  AI 分數：{elcdStatus.score}
+                </div>
+                <div className="text-sm mt-2 space-y-1">
+                  {elcdStatus.reasons.slice(0, 2).map((r) => (
+                    <div key={r}>• {r}</div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CalendarClock className="w-4 h-4" />
+                  達標預測
+                </div>
+                <div className="text-sm">{eta.text}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingDown className="w-4 h-4" />
+                  每週減重分析
+                </div>
+                <div className="text-xl font-semibold">
+                  約 {weeklyLoss || 0} kg/週
+                </div>
+                <div className="text-sm text-slate-500 mt-1">
+                  近 7 天變化 {recent7Delta} kg
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Droplets className="w-4 h-4" />
+                  水分/脂肪判斷
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">{waterVsFat.tag}</Badge>
+                  <Badge
+                    variant={
+                      waterVsFat.confidence === "高"
+                        ? "default"
+                        : waterVsFat.confidence === "中"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    信心 {waterVsFat.confidence}
+                  </Badge>
+                </div>
+                <div className="text-sm font-medium">{waterVsFat.title}</div>
+                <div className="text-sm text-slate-500">
+                  {waterVsFat.detail}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  暴食風險
+                </div>
+                <div className="text-xl font-semibold">{bingeRisk.level}</div>
+                <div className="text-sm text-slate-500">{bingeRisk.text}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <CompositeMetricsCard
+            title="各項指標綜合曲線圖"
+            data={chartData}
+            activeKeys={activeCompositeMetrics}
+            onToggleKey={toggleCompositeMetric}
+            onExpand={() =>
+              setExpandedChart({
+                type: "composite",
+                title: "各項指標綜合曲線圖",
+              })
+            }
+          />
+
+          <div className="grid gap-4 grid-cols-1">
+            <Card>
+              <CardHeader>
+                <CardTitle>本週摘要</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="text-lg font-semibold">
+                  {weeklySummary.title}
+                </div>
+                <div className="text-slate-500">{weeklySummary.summary}</div>
+                {weeklySummary.bullets.map((item) => (
+                  <div key={item}>• {item}</div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>里程碑提醒</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {milestones.map((item) => (
+                  <div key={item.title} className="rounded-xl border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-medium">{item.title}</div>
+                      <Badge variant={item.reached ? "default" : "outline"}>
+                        {item.reached ? "已達成" : "未達成"}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 text-slate-500">{item.detail}</div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>異常提醒</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {anomalyAlerts.length ? (
+                  anomalyAlerts.map((alert) => (
+                    <div
+                      key={`${alert.title}-${alert.detail}`}
+                      className={`rounded-xl border p-3 ${alert.level === "高" ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium">{alert.title}</div>
+                        <Badge
+                          variant={
+                            alert.level === "高" ? "destructive" : "secondary"
+                          }
+                        >
+                          {alert.level}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 text-slate-600">{alert.detail}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-slate-500">目前沒有明顯異常提醒。</div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  目標進度
+                </span>
+                <span className="font-semibold">{progress}%</span>
+              </div>
+
+              <div className="relative h-5 w-full overflow-hidden rounded-full border border-slate-300 bg-slate-200 shadow-inner">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-600 transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-slate-700">
+                  {progress}%
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>體脂率 (%)</Label>
-                  <Input
-                    placeholder="例如 32.5"
-                    value={form.bodyFatPct}
-                    onChange={(e) => setForm({ ...form, bodyFatPct: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>脂肪重 (kg)</Label>
-                  <Input
-                    placeholder="例如 15.7"
-                    value={form.fatMass}
-                    onChange={(e) => setForm({ ...form, fatMass: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>肌肉率 (%)</Label>
-                  <Input
-                    placeholder="例如 52.1"
-                    value={form.muscleRate}
-                    onChange={(e) => setForm({ ...form, muscleRate: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>肌肉量 (kg)</Label>
-                  <Input
-                    placeholder="例如 54.2"
-                    value={form.muscleMass}
-                    onChange={(e) => setForm({ ...form, muscleMass: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>內臟脂肪</Label>
-                  <Input
-                    placeholder="例如 12"
-                    value={form.visceralFat}
-                    onChange={(e) => setForm({ ...form, visceralFat: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>水分 (%)</Label>
-                  <Input
-                    placeholder="例如 46.8"
-                    value={form.bodyWater}
-                    onChange={(e) => setForm({ ...form, bodyWater: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                <div className="space-y-2">
-                  <Label>劑量</Label>
-                  <Select value={form.dose} onValueChange={(v) => setForm({ ...form, dose: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2.5">2.5 mg</SelectItem>
-                      <SelectItem value="5">5 mg</SelectItem>
-                      <SelectItem value="7.5">7.5 mg</SelectItem>
-                      <SelectItem value="10">10 mg</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>運動分鐘數</Label>
-                  <Input
-                    placeholder="例如 30"
-                    value={form.exerciseMin}
-                    onChange={(e) => setForm({ ...form, exerciseMin: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between border rounded-xl p-3">
-                <div>
-                  <div className="font-medium">本次為施打日</div>
-                  <div className="text-xs text-slate-500">
-                    勾選後，這筆紀錄才會被拿來計算下次施打日
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="rounded-lg border bg-white p-2">
+                  <div className="text-slate-500 text-xs">起始</div>
+                  <div className="font-semibold">
+                    {sortedEntries.length ? sortedEntries[0].weight : "-"} kg
                   </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={form.isShotDay}
-                  onChange={(e) => setForm({ ...form, isShotDay: e.target.checked })}
-                />
+
+                <div className="rounded-lg border bg-white p-2">
+                  <div className="text-slate-500 text-xs">目前</div>
+                  <div className="font-semibold">{latestWeight || "-"} kg</div>
+                </div>
+
+                <div className="rounded-lg border bg-white p-2">
+                  <div className="text-slate-500 text-xs">目標</div>
+                  <div className="font-semibold">{settings.goal || "-"} kg</div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
-                <div className="space-y-2">
-                  <Label>食慾</Label>
-                  <Select
-                    value={form.appetite}
-                    onValueChange={(v: Appetite) => setForm({ ...form, appetite: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="下降">下降</SelectItem>
-                      <SelectItem value="正常">正常</SelectItem>
-                      <SelectItem value="偏餓">偏餓</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="text-sm text-slate-500">
+                理想體重區間：約 {idealRange.low || "-"} ~{" "}
+                {idealRange.high || "-"} kg
+              </div>
+            </CardContent>
+          </Card>
 
-                <div className="space-y-2">
-                  <Label>嘴饞程度</Label>
-                  <Select
-                    value={form.cravingLevel}
-                    onValueChange={(v: CravingLevel) => setForm({ ...form, cravingLevel: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="低">低</SelectItem>
-                      <SelectItem value="中">中</SelectItem>
-                      <SelectItem value="高">高</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+          <Tabs defaultValue="add" className="space-y-4">
+            <div className="-mx-1 overflow-x-auto pb-1">
+              <TabsList className="inline-flex h-auto w-max min-w-full gap-1 rounded-2xl bg-white p-1 shadow-sm">
+                <TabsTrigger
+                  value="settings"
+                  className="rounded-xl shrink-0 px-4"
+                >
+                  設定
+                </TabsTrigger>
+                <TabsTrigger value="add" className="rounded-xl shrink-0 px-4">
+                  新增
+                </TabsTrigger>
+                <TabsTrigger value="chart" className="rounded-xl shrink-0 px-4">
+                  趨勢
+                </TabsTrigger>
+                <TabsTrigger value="ai" className="rounded-xl shrink-0 px-4">
+                  菜單
+                </TabsTrigger>
+                <TabsTrigger
+                  value="strategy"
+                  className="rounded-xl shrink-0 px-4"
+                >
+                  策略
+                </TabsTrigger>
+                <TabsTrigger value="shots" className="rounded-xl shrink-0 px-4">
+                  施打
+                </TabsTrigger>
+                <TabsTrigger value="tools" className="rounded-xl shrink-0 px-4">
+                  工具
+                </TabsTrigger>
+                <TabsTrigger value="cheat" className="rounded-xl shrink-0 px-4">
+                  放鬆
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>副作用</Label>
-                    <Button type="button" size="sm" onClick={addSideEffectField}>
+            <TabsContent value="add">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{editingId ? "編輯紀錄" : "新增紀錄"}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-2">
+                      <Label>日期</Label>
+                      <Input
+                        type="date"
+                        value={form.date}
+                        onChange={(e) =>
+                          setForm({ ...form, date: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>體重 (kg)</Label>
+                      <Input
+                        placeholder="體重"
+                        value={form.weight}
+                        onChange={(e) =>
+                          setForm({ ...form, weight: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>體脂率 (%)</Label>
+                      <Input
+                        placeholder="例如 32.5"
+                        value={form.bodyFatPct}
+                        onChange={(e) =>
+                          setForm({ ...form, bodyFatPct: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>脂肪重 (kg)</Label>
+                      <Input
+                        placeholder="例如 15.7"
+                        value={form.fatMass}
+                        onChange={(e) =>
+                          setForm({ ...form, fatMass: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>肌肉率 (%)</Label>
+                      <Input
+                        placeholder="例如 52.1"
+                        value={form.muscleRate}
+                        onChange={(e) =>
+                          setForm({ ...form, muscleRate: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>肌肉量 (kg)</Label>
+                      <Input
+                        placeholder="例如 54.2"
+                        value={form.muscleMass}
+                        onChange={(e) =>
+                          setForm({ ...form, muscleMass: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>內臟脂肪</Label>
+                      <Input
+                        placeholder="例如 12"
+                        value={form.visceralFat}
+                        onChange={(e) =>
+                          setForm({ ...form, visceralFat: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>水分 (%)</Label>
+                      <Input
+                        placeholder="例如 46.8"
+                        value={form.bodyWater}
+                        onChange={(e) =>
+                          setForm({ ...form, bodyWater: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-2">
+                      <Label>劑量</Label>
+                      <Select
+                        value={form.dose}
+                        onValueChange={(v) => setForm({ ...form, dose: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2.5">2.5 mg</SelectItem>
+                          <SelectItem value="5">5 mg</SelectItem>
+                          <SelectItem value="7.5">7.5 mg</SelectItem>
+                          <SelectItem value="10">10 mg</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>運動分鐘數</Label>
+                      <Input
+                        placeholder="例如 30"
+                        value={form.exerciseMin}
+                        onChange={(e) =>
+                          setForm({ ...form, exerciseMin: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border rounded-xl p-3">
+                    <div>
+                      <div className="font-medium">本次為施打日</div>
+                      <div className="text-xs text-slate-500">
+                        勾選後，這筆紀錄才會被拿來計算下次施打日
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={form.isShotDay}
+                      onChange={(e) =>
+                        setForm({ ...form, isShotDay: e.target.checked })
+                      }
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-2">
+                      <Label>食慾</Label>
+                      <Select
+                        value={form.appetite}
+                        onValueChange={(v: Appetite) =>
+                          setForm({ ...form, appetite: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="下降">下降</SelectItem>
+                          <SelectItem value="正常">正常</SelectItem>
+                          <SelectItem value="偏餓">偏餓</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>嘴饞程度</Label>
+                      <Select
+                        value={form.cravingLevel}
+                        onValueChange={(v: CravingLevel) =>
+                          setForm({ ...form, cravingLevel: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="低">低</SelectItem>
+                          <SelectItem value="中">中</SelectItem>
+                          <SelectItem value="高">高</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label>副作用</Label>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={addSideEffectField}
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          新增
+                        </Button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {form.sideEffects.map((item, index) => (
+                          <div
+                            key={index}
+                            className="rounded-xl border border-slate-200 bg-white p-3 space-y-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-medium text-slate-600">
+                                副作用 {index + 1}
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => removeSideEffectField(index)}
+                              >
+                                刪除
+                              </Button>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>副作用項目</Label>
+                              <Select
+                                value={item.effect}
+                                onValueChange={(v: SideEffect) =>
+                                  updateSideEffectField(index, "effect", v)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="無">無</SelectItem>
+                                  <SelectItem value="噁心">噁心</SelectItem>
+                                  <SelectItem value="便秘">便秘</SelectItem>
+                                  <SelectItem value="腹脹">腹脹</SelectItem>
+                                  <SelectItem value="腹瀉">腹瀉</SelectItem>
+                                  <SelectItem value="胃食道逆流">
+                                    胃食道逆流
+                                  </SelectItem>
+                                  <SelectItem value="頭暈">頭暈</SelectItem>
+                                  <SelectItem value="疲倦">疲倦</SelectItem>
+                                  <SelectItem value="注射部位不適">
+                                    注射部位不適
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>不適程度（0~5）</Label>
+                              <Input
+                                placeholder="0~5"
+                                value={item.severity}
+                                onChange={(e) =>
+                                  updateSideEffectField(
+                                    index,
+                                    "severity",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button onClick={add} className="w-full">
                       <Plus className="w-4 h-4 mr-1" />
-                      新增
+                      {editingId ? "更新紀錄" : "新增紀錄"}
+                    </Button>
+                    {editingId ? (
+                      <Button variant="outline" onClick={resetForm}>
+                        取消
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <div className="border-t pt-4 space-y-3">
+                    <div className="text-sm font-medium">歷史紀錄</div>
+                    {sortedEntries.length === 0 ? (
+                      <div className="text-sm text-slate-500">
+                        目前還沒有紀錄
+                      </div>
+                    ) : (
+                      [...sortedEntries].reverse().map((item) => (
+                        <div
+                          key={item.id}
+                          className="rounded-xl border p-3 space-y-2"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="text-sm space-y-1">
+                              <div className="font-medium">
+                                {item.date} ・ {item.dose} mg{" "}
+                                {item.isShotDay ? "・ 施打日" : ""}
+                              </div>
+                              <div>體重：{item.weight} kg</div>
+                              <div>
+                                體脂：{item.bodyFatPct || "-"}%｜脂肪重：
+                                {item.fatMass || "-"} kg｜肌肉率：
+                                {getMuscleRateFromEntry(item) || "-"}%｜肌肉量：
+                                {item.muscleMass || "-"} kg
+                              </div>
+                              <div>
+                                內臟脂肪：{item.visceralFat || "-"}｜水分：
+                                {item.bodyWater || "-"}%
+                              </div>
+                              <div>
+                                食慾：{item.appetite}｜嘴饞：{item.cravingLevel}
+                              </div>
+                              <div>
+                                副作用：
+                                {item.sideEffects && item.sideEffects.length
+                                  ? item.sideEffects
+                                      .map(
+                                        (se) =>
+                                          `${se.effect}（${se.severity || 0}/5）`,
+                                      )
+                                      .join("、")
+                                  : `${item.sideEffect}（${item.sideEffectSeverity || 0}/5）`}
+                                ｜ 運動：{item.exerciseMin || 0} 分鐘
+                              </div>
+                              {item.isShotDay ? (
+                                <div className="text-emerald-600">
+                                  💉 施打日
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => handleEdit(item)}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => handleDelete(item.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="chart">
+              <div className="grid gap-4 grid-cols-1">
+                <MetricLineCard
+                  title="體重趨勢"
+                  data={chartData}
+                  dataKey="weight"
+                  unit="kg"
+                  strokeColor={METRIC_COLORS.weight}
+                  goalValue={num(settings.goal) || null}
+                  onExpand={() =>
+                    setExpandedChart({
+                      type: "metric",
+                      key: "weight",
+                      title: "體重趨勢",
+                      unit: "kg",
+                      goalValue: num(settings.goal) || null,
+                    })
+                  }
+                  height={260}
+                />
+
+                <CompositeMetricsCard
+                  title="各項指標綜合曲線圖"
+                  data={chartData}
+                  activeKeys={activeCompositeMetrics}
+                  onToggleKey={toggleCompositeMetric}
+                  onExpand={() =>
+                    setExpandedChart({
+                      type: "composite",
+                      title: "各項指標綜合曲線圖",
+                    })
+                  }
+                />
+
+                {[
+                  {
+                    key: "bodyFatPct",
+                    title: "體脂率趨勢",
+                    unit: "%",
+                    color: METRIC_COLORS.bodyFatPct,
+                  },
+                  {
+                    key: "fatMass",
+                    title: "脂肪重趨勢",
+                    unit: "kg",
+                    color: METRIC_COLORS.fatMass,
+                  },
+                  {
+                    key: "muscleRate",
+                    title: "肌肉率趨勢",
+                    unit: "%",
+                    color: METRIC_COLORS.muscleRate,
+                  },
+                  {
+                    key: "muscleMass",
+                    title: "肌肉量趨勢",
+                    unit: "kg",
+                    color: METRIC_COLORS.muscleMass,
+                  },
+                  {
+                    key: "visceralFat",
+                    title: "內臟脂肪趨勢",
+                    unit: "",
+                    color: METRIC_COLORS.visceralFat,
+                  },
+                  {
+                    key: "bodyWater",
+                    title: "水分趨勢",
+                    unit: "%",
+                    color: METRIC_COLORS.bodyWater,
+                  },
+                ].map((metric) => (
+                  <MetricLineCard
+                    key={metric.key}
+                    title={metric.title}
+                    data={chartData}
+                    dataKey={metric.key}
+                    unit={metric.unit}
+                    strokeColor={metric.color}
+                    onExpand={() =>
+                      setExpandedChart({
+                        type: "metric",
+                        key: metric.key,
+                        title: metric.title,
+                        unit: metric.unit,
+                      })
+                    }
+                  />
+                ))}
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>分析摘要</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div>
+                      停滯期：
+                      <Badge
+                        variant={
+                          plateau.isPlateau ? "destructive" : "secondary"
+                        }
+                      >
+                        {plateau.isPlateau ? "可能停滯" : "正常"}
+                      </Badge>
+                    </div>
+                    <div>{plateau.text}</div>
+                    <div>估算體脂：{bodyFat || "-"}%</div>
+                    <div>最新肌肉率：{latestMuscleRate || "-"}%</div>
+                    <div>
+                      7日移動平均：
+                      {chartData.length
+                        ? chartData[chartData.length - 1].avg7
+                        : "-"}{" "}
+                      kg
+                    </div>
+                    <div>
+                      BMR：{bmr || "-"} kcal（
+                      {settings.bmrMethod === "katch"
+                        ? "體脂器公式"
+                        : "一般公式"}
+                      ）
+                    </div>
+                    <div>TDEE：{tdee || "-"} kcal</div>
+                    <div>建議減脂熱量：{cutCalories || "-"} kcal</div>
+                    <div>
+                      性別版型：
+                      {settings.sex === "female" ? "女性建議" : "男性建議"}
+                    </div>
+                    <div>
+                      水分/脂肪判斷：{waterVsFat.title}（信心{" "}
+                      {waterVsFat.confidence}）
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="ai">
+              <div className="grid gap-4 grid-cols-1">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Utensils className="w-4 h-4" />
+                      更精準菜單
+                    </CardTitle>
+                  </CardHeader>
+                  <div className="px-6 pb-2 text-sm text-slate-600 space-y-1">
+                    <div>{calorieAdvice.base}</div>
+                    <div>{calorieAdvice.target}</div>
+                    <div className="text-slate-500">{calorieAdvice.note}</div>
+                    <div className="text-slate-500">
+                      目前算法：
+                      {settings.bmrMethod === "katch"
+                        ? "體脂器公式（瘦體重導向）"
+                        : "一般公式（體重 / 身高 / 年齡 / 性別）"}
+                    </div>
+                    <div className="text-emerald-700">
+                      {settings.bmrMethod === "katch"
+                        ? "飲食指南會更重視保肌：每餐優先蛋白質、避免熱量降太低。"
+                        : "飲食指南以一般減脂熱量控制為主，適合沒有穩定體脂器資料時使用。"}
+                    </div>
+                    <div className="text-emerald-700">
+                      {bodyCompositionMenuHint}
+                    </div>
+                  </div>
+                  <CardContent className="space-y-4">
+                    {mealPlans.map((plan) => (
+                      <div
+                        key={plan.title}
+                        className="border rounded-xl p-3 space-y-2"
+                      >
+                        <div className="font-medium">{plan.title}</div>
+                        {plan.meals.map((meal) => (
+                          <div key={meal.name}>
+                            <div className="text-sm font-medium">
+                              {meal.name}
+                            </div>
+                            <div className="text-sm text-slate-600 space-y-1">
+                              {meal.items.map((item) => (
+                                <div key={item}>• {item}</div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>嘴饞控制建議</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    {cravingTips.map((tip) => (
+                      <div key={tip}>• {tip}</div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="strategy">
+              <div className="grid gap-4 grid-cols-1">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Activity className="w-4 h-4" />
+                      猛健樂專用減脂策略
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    {strategyMode.map((tip) => (
+                      <div key={tip}>• {tip}</div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarClock className="w-4 h-4" />
+                      可再觀察的項目
+                    </CardTitle>
+                  </CardHeader>
+                  <div className="mt-4 border-t pt-3 px-6">
+                    <div className="text-sm font-medium mb-1">
+                      💉 劑量AI判斷
+                    </div>
+                    <div className="text-lg font-semibold">{doseAI.level}</div>
+                    <div className="text-sm text-slate-500">
+                      {doseAI.reason}
+                    </div>
+                    <div className="text-sm">👉 {doseAI.action}</div>
+                  </div>
+                  <CardContent className="space-y-2 text-sm">
+                    <div>• 施打後第 2~3 天食慾是否最低</div>
+                    <div>• 哪幾天最容易嘴饞</div>
+                    <div>• 外食日後體重波動是否偏大</div>
+                    <div>• 運動分鐘數增加後，體重是否更穩定下降</div>
+                    <div>• 若連續 2 週停滯，再檢查熱量與零食</div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>🧠 個人化 AI 學習</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="font-medium">{personalAI.summary}</div>
+                    <div className="text-sm text-slate-600">
+                      最容易成功的時段／狀態：{personalAI.bestWindow}
+                    </div>
+                    <div className="text-sm text-slate-600">
+                      最容易失守的時段／狀態：{personalAI.riskWindow}
+                    </div>
+                    <div className="text-sm text-slate-600">
+                      目前看起來最有效的模式：{personalAI.effectivePattern}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>AI 學到的重點</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    {personalAI.learningTips.map((tip) => (
+                      <div key={tip}>• {tip}</div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="shots">
+              <div className="grid gap-4 grid-cols-1">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>施打紀錄專區</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div>最近施打日：{latestShotDate || "-"}</div>
+                    <div>下次施打日：{nextShot.date}</div>
+                    <div>目前：施打後第 {shotPattern.currentDay || 0} 天</div>
+                    {shotEntries.length === 0 ? (
+                      <div className="text-slate-500">尚無施打紀錄</div>
+                    ) : (
+                      shotEntries.map((item, index) => (
+                        <div key={item.id} className="rounded-xl border p-3">
+                          <div className="font-medium">
+                            第 {shotEntries.length - index} 針｜{item.date}｜
+                            {item.dose} mg
+                          </div>
+                          {index < shotEntries.length - 1 ? (
+                            <div className="text-slate-500">
+                              距離前一針{" "}
+                              {daysBetween(
+                                shotEntries[index + 1].date,
+                                item.date,
+                              )}{" "}
+                              天
+                            </div>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>施打後第幾天分析</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div>食慾最低：{shotPattern.appetiteText}</div>
+                    <div>最容易嘴饞：{shotPattern.cravingText}</div>
+                    <div>最容易出現副作用：{shotPattern.sideEffectText}</div>
+                    <div>副作用總結：{sideEffectInsight.text}</div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="settings">
+              <Card>
+                <CardHeader>
+                  <CardTitle>設定</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-2">
+                      <Label>身高 (cm)</Label>
+                      <Input
+                        value={tempSettings.height}
+                        onChange={(e) =>
+                          setTempSettings({
+                            ...tempSettings,
+                            height: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>年齡</Label>
+                      <Input
+                        value={tempSettings.age}
+                        onChange={(e) =>
+                          setTempSettings({
+                            ...tempSettings,
+                            age: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-2">
+                      <Label>目標體重 (kg)</Label>
+                      <Input
+                        value={tempSettings.goal}
+                        onChange={(e) =>
+                          setTempSettings({
+                            ...tempSettings,
+                            goal: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>首次施打日期</Label>
+                      <Input
+                        type="date"
+                        value={tempSettings.firstShotDate}
+                        onChange={(e) =>
+                          setTempSettings({
+                            ...tempSettings,
+                            firstShotDate: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>施打間隔（天）</Label>
+                      <Input
+                        value={tempSettings.shotInterval}
+                        onChange={(e) =>
+                          setTempSettings({
+                            ...tempSettings,
+                            shotInterval: e.target.value,
+                          })
+                        }
+                      />
+                      <div className="text-xs text-slate-500">
+                        猛健樂每週一次請填 7，不要用 8。
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-slate-50 p-3 text-sm space-y-1">
+                    <div className="font-medium">下次施打預覽</div>
+                    <div>日期：{previewNextShot.date}</div>
+                    <div>狀態：{previewNextShot.text}</div>
+                    <div>
+                      基準：{previewNextShot.source}（{previewNextShot.baseDate}
+                      ）
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      規則：本次施打日 + 間隔天數 = 下次施打日。若每週一次，請填
+                      7，這週三打就是下週三打。
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-2">
+                      <Label>性別</Label>
+                      <Select
+                        value={tempSettings.sex}
+                        onValueChange={(v: Sex) =>
+                          setTempSettings({ ...tempSettings, sex: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">男性</SelectItem>
+                          <SelectItem value="female">女性</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>活動量</Label>
+                      <Select
+                        value={tempSettings.activity}
+                        onValueChange={(v) =>
+                          setTempSettings({ ...tempSettings, activity: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1.2">久坐少動</SelectItem>
+                          <SelectItem value="1.375">輕度活動</SelectItem>
+                          <SelectItem value="1.55">中度活動</SelectItem>
+                          <SelectItem value="1.725">高度活動</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>基礎代謝率算法</Label>
+                      <Select
+                        value={tempSettings.bmrMethod}
+                        onValueChange={(v: BmrMethod) =>
+                          setTempSettings({ ...tempSettings, bmrMethod: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="mifflin">
+                            一般公式（體重 / 身高 / 年齡 / 性別）
+                          </SelectItem>
+                          <SelectItem value="katch">
+                            體脂器公式（依最新體脂 / 脂肪重）
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="text-xs text-slate-500">
+                        {tempSettings.bmrMethod === "katch"
+                          ? "優先使用最新脂肪重；若未填脂肪重則改用體脂率推估瘦體重。"
+                          : "適合一般情況，依最新體重與基本資料計算。"}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border rounded-xl p-3">
+                      <div>
+                        <div className="font-medium">通知總開關</div>
+                        <div className="text-xs text-slate-500">
+                          瀏覽器提醒與頁面提醒
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={tempSettings.notificationsOn}
+                        onChange={(e) =>
+                          setTempSettings({
+                            ...tempSettings,
+                            notificationsOn: e.target.checked,
+                          })
+                        }
+                      />
+                    </div>
+
+                    {[
+                      ["前一天提醒", "remindOneDayBefore"],
+                      ["施打當天提醒", "remindOnShotDay"],
+                      ["晚上未記錄提醒", "remindIfNoLogByNight"],
+                      ["便秘補水提醒", "waterReminder"],
+                      ["低食慾/高嘴饞蛋白質提醒", "proteinReminder"],
+                    ].map(([label, key]) => (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between border rounded-xl p-3"
+                      >
+                        <div className="font-medium">{label}</div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(tempSettings[key as keyof Settings])}
+                          onChange={(e) =>
+                            setTempSettings({
+                              ...tempSettings,
+                              [key]: e.target.checked,
+                            } as Settings)
+                          }
+                        />
+                      </div>
+                    ))}
+
+                    <div className="flex items-center justify-between border rounded-xl p-3">
+                      <div>
+                        <div className="font-medium">極低熱量模式</div>
+                        <div className="text-xs text-slate-500">
+                          AI 自動判斷是否啟用 ELCD
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={tempSettings.elcdMode}
+                        onChange={(e) =>
+                          setTempSettings({
+                            ...tempSettings,
+                            elcdMode: e.target.checked,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setSettings(tempSettings);
+                        localStorage.setItem(
+                          SETTINGS_KEY,
+                          JSON.stringify(tempSettings),
+                        );
+                      }}
+                    >
+                      儲存設定
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => setTempSettings(settings)}
+                    >
+                      取消
                     </Button>
                   </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-                  <div className="space-y-3">
-                    {form.sideEffects.map((item, index) => (
-                      <div
-                        key={index}
-                        className="rounded-xl border border-slate-200 bg-white p-3 space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm font-medium text-slate-600">副作用 {index + 1}</div>
+            <TabsContent value="tools">
+              <div className="grid gap-4 grid-cols-1">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>藥筆藥量計算機</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
+                    <div className="rounded-xl border bg-slate-50 p-3 text-slate-600">
+                      本計算機以{" "}
+                      <span className="font-medium text-slate-900">
+                        轉一圈共 60 格
+                      </span>{" "}
+                      為基準。
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>快速按鈕</Label>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {penQuickPresets.map((preset) => (
                           <Button
+                            key={preset.label}
                             type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => removeSideEffectField(index)}
-                          >
-                            刪除
-                          </Button>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>副作用項目</Label>
-                          <Select
-                            value={item.effect}
-                            onValueChange={(v: SideEffect) =>
-                              updateSideEffectField(index, "effect", v)
+                            variant={
+                              penStrength === preset.strength &&
+                              targetDose === preset.dose
+                                ? "default"
+                                : "outline"
                             }
+                            className="h-auto whitespace-normal px-3 py-2 text-xs"
+                            onClick={() => {
+                              setPenStrength(preset.strength);
+                              setTargetDose(preset.dose);
+                            }}
+                          >
+                            {preset.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>藥筆總劑量（mg）</Label>
+                        <Select
+                          value={penStrength}
+                          onValueChange={setPenStrength}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="2.5">2.5 mg</SelectItem>
+                            <SelectItem value="5">5 mg</SelectItem>
+                            <SelectItem value="7.5">7.5 mg</SelectItem>
+                            <SelectItem value="10">10 mg</SelectItem>
+                            <SelectItem value="12.5">12.5 mg</SelectItem>
+                            <SelectItem value="15">15 mg</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>想注射的劑量（mg）</Label>
+                        <Input
+                          value={targetDose}
+                          onChange={(e) => setTargetDose(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="rounded-xl border bg-slate-50 p-3">
+                        <div className="text-slate-500">換算比例</div>
+                        <div className="text-lg font-semibold">
+                          {penCalc.ratio}%
+                        </div>
+                      </div>
+                      <div className="rounded-xl border bg-emerald-50 p-3 border-emerald-200">
+                        <div className="text-emerald-700">本次需轉</div>
+                        <div className="text-2xl font-bold text-emerald-700">
+                          {penCalc.clicks} 格
+                        </div>
+                      </div>
+                      <div className="rounded-xl border bg-slate-50 p-3">
+                        <div className="text-slate-500">剩餘格數</div>
+                        <div className="text-lg font-semibold">
+                          {penCalc.remainClicks} 格
+                        </div>
+                      </div>
+                    </div>
+
+                    {!penCalc.valid ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                        目標劑量不可大於藥筆總劑量，請重新輸入。
+                      </div>
+                    ) : null}
+
+                    <div className="rounded-xl border p-3 space-y-2">
+                      <div className="font-medium">常用對照</div>
+                      <div className="text-sm text-slate-600">
+                        10 mg 筆打 2.5 mg：約 15 格
+                      </div>
+                      <div className="text-sm text-slate-600">
+                        10 mg 筆打 5 mg：約 30 格
+                      </div>
+                      <div className="text-sm text-slate-600">
+                        15 mg 筆打 10 mg：約 40 格
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-slate-500">
+                      計算方式：目標劑量 ÷ 藥筆總劑量 × 60
+                      格。使用前仍請以實際藥筆刻度與醫囑為準。
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>劑量提升提醒</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="text-lg font-semibold">
+                      {doseEscalationPlan.title}
+                    </div>
+                    <div className="text-slate-500">
+                      {doseEscalationPlan.subtitle}
+                    </div>
+                    <div>目前連續劑量：{currentDoseSeries.dose} mg</div>
+                    <div>同劑量累積針數：{currentDoseSeries.shotCount} 針</div>
+                    <div>下一步建議：{doseEscalationPlan.nextDose}</div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>藥筆庫存管理</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>目前正在施打的筆規格</Label>
+                        <Select
+                          value={penInventory.penStrength}
+                          onValueChange={(v) =>
+                            setPenInventory({ ...penInventory, penStrength: v })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="2.5">2.5 mg</SelectItem>
+                            <SelectItem value="5">5 mg</SelectItem>
+                            <SelectItem value="7.5">7.5 mg</SelectItem>
+                            <SelectItem value="10">10 mg</SelectItem>
+                            <SelectItem value="12.5">12.5 mg</SelectItem>
+                            <SelectItem value="15">15 mg</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>總可用格數</Label>
+                        <Input
+                          value={penInventory.totalGrids}
+                          onChange={(e) =>
+                            setPenInventory({
+                              ...penInventory,
+                              totalGrids: e.target.value,
+                            })
+                          }
+                        />
+                        <div className="text-xs text-slate-500">
+                          預設 240；若把殘劑算進去可改 300。
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>目前這支筆開始日</Label>
+                        <Input
+                          type="date"
+                          value={penInventory.penStartDate}
+                          onChange={(e) =>
+                            setPenInventory({
+                              ...penInventory,
+                              penStartDate: e.target.value,
+                            })
+                          }
+                        />
+                        <div className="text-xs text-slate-500">
+                          只會統計這個日期之後的施打日紀錄。
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>手動校正格數</Label>
+                        <Input
+                          value={penInventory.manualAdjustGrids}
+                          onChange={(e) =>
+                            setPenInventory({
+                              ...penInventory,
+                              manualAdjustGrids: e.target.value,
+                            })
+                          }
+                        />
+                        <div className="text-xs text-slate-500">
+                          可用來補殘劑、修正誤差或對齊實際剩餘量。
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={startNewPenToday}
+                    >
+                      開始新筆（從今天重新計算）
+                    </Button>
+
+                    <div className="rounded-xl border bg-slate-50 p-3 space-y-1">
+                      <div>每支藥筆都是轉滿 60 格 = 該支筆的標示劑量。</div>
+                      <div>
+                        目前規格：{penInventorySummary.strength || "-"} mg / 支
+                      </div>
+                      <div>
+                        每 1 格約 {penInventorySummary.mgPerGrid || 0} mg
+                      </div>
+                      <div>
+                        目前統計到{" "}
+                        {penInventorySummary.shotEntriesSinceStartCount}{" "}
+                        次施打日紀錄。
+                      </div>
+                      <div>4 次 ≈ 1 個月，可用來估算可打月數。</div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-xl border p-3">
+                        <div className="text-slate-500">總可用格數</div>
+                        <div className="text-lg font-semibold">
+                          {penInventorySummary.totalGrids}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border p-3">
+                        <div className="text-slate-500">紀錄自動抓取</div>
+                        <div className="text-lg font-semibold">
+                          {penInventorySummary.autoUsedGrids}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border p-3">
+                        <div className="text-slate-500">校正後已使用</div>
+                        <div className="text-lg font-semibold">
+                          {penInventorySummary.usedGrids}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border p-3">
+                        <div className="text-slate-500">剩餘格數</div>
+                        <div className="text-lg font-semibold">
+                          {penInventorySummary.remainGrids}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border p-3 space-y-1">
+                        <div className="text-slate-500">剩餘藥量</div>
+                        <div className="text-lg font-semibold">
+                          {penInventorySummary.remainMg} mg
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          依目前筆規格換算。
+                        </div>
+                      </div>
+
+                      {penInventorySummary.targetDosePlan &&
+                      penInventorySummary.targetDosePlan.dose > 0 ? (
+                        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-1">
+                          <div className="font-medium">
+                            依藥量計算機目標劑量試算
+                          </div>
+                          <div>
+                            目標劑量：{penInventorySummary.targetDosePlan.dose}{" "}
+                            mg
+                          </div>
+                          <div>
+                            每次需：
+                            {penInventorySummary.targetDosePlan.gridsNeeded} 格
+                          </div>
+                          <div>
+                            還可完整打{" "}
+                            {penInventorySummary.targetDosePlan.fullShots} 次
+                            （精算約{" "}
+                            {penInventorySummary.targetDosePlan.exactShots} 次）
+                          </div>
+                          <div>
+                            約可打 {penInventorySummary.targetDosePlan.months}{" "}
+                            個月
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border p-3 space-y-1">
+                          <div className="font-medium">
+                            依藥量計算機目標劑量試算
+                          </div>
+                          <div className="text-slate-500">
+                            先在上方藥量計算機輸入目標劑量。
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {penInventorySummary.latestDosePlan ? (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-1">
+                        <div className="font-medium">
+                          依最近一次施打劑量試算
+                        </div>
+                        <div>
+                          最近一次劑量：
+                          {penInventorySummary.latestDosePlan.dose} mg
+                        </div>
+                        <div>
+                          每次需：
+                          {penInventorySummary.latestDosePlan.gridsNeeded} 格
+                        </div>
+                        <div>
+                          還可完整打{" "}
+                          {penInventorySummary.latestDosePlan.fullShots} 次
+                          （精算約{" "}
+                          {penInventorySummary.latestDosePlan.exactShots} 次）
+                        </div>
+                        <div>
+                          約可打 {penInventorySummary.latestDosePlan.months}{" "}
+                          個月
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-2">
+                      <div className="font-medium">常用劑量剩餘可打次數</div>
+                      <div className="space-y-2">
+                        {penInventorySummary.supportedDoses.map((item) => (
+                          <div
+                            key={item.dose}
+                            className="rounded-xl border p-3 space-y-1"
+                          >
+                            <div className="font-medium">{item.dose} mg</div>
+                            <div className="text-slate-500">
+                              每次需 {item.gridsNeeded} 格
+                            </div>
+                            <div>
+                              還可完整打 {item.fullShots} 次（精算約{" "}
+                              {item.exactShots} 次）
+                            </div>
+                            <div className="text-slate-500">
+                              約 {item.months} 個月（4 次 = 1 個月）
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>照片記錄</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>照片日期</Label>
+                        <Input
+                          type="date"
+                          value={photoDate}
+                          onChange={(e) => setPhotoDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>備註</Label>
+                        <Input
+                          value={photoNote}
+                          onChange={(e) => setPhotoNote(e.target.value)}
+                          placeholder="例如：正面、腰圍比較、側面"
+                        />
+                      </div>
+                    </div>
+
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        await addPhotoRecord(file);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+
+                    <div className="text-xs text-slate-500">
+                      照片會跟著目前資料一起保留。
+                    </div>
+
+                    <div className="rounded-xl border p-3 space-y-3">
+                      <div className="font-medium">Before / After 對比</div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>比較圖 A</Label>
+                          <Select
+                            value={photoCompareA}
+                            onValueChange={setPhotoCompareA}
                           >
                             <SelectTrigger>
-                              <SelectValue />
+                              <SelectValue placeholder="選擇較早照片" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="無">無</SelectItem>
-                              <SelectItem value="噁心">噁心</SelectItem>
-                              <SelectItem value="便秘">便秘</SelectItem>
-                              <SelectItem value="腹脹">腹脹</SelectItem>
-                              <SelectItem value="腹瀉">腹瀉</SelectItem>
-                              <SelectItem value="胃食道逆流">胃食道逆流</SelectItem>
-                              <SelectItem value="頭暈">頭暈</SelectItem>
-                              <SelectItem value="疲倦">疲倦</SelectItem>
-                              <SelectItem value="注射部位不適">注射部位不適</SelectItem>
+                              {photoRecords.map((record) => (
+                                <SelectItem
+                                  key={`a-${record.id}`}
+                                  value={record.id}
+                                >
+                                  {record.date}｜{record.note || "未備註"}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>
-
                         <div className="space-y-2">
-                          <Label>不適程度（0~5）</Label>
-                          <Input
-                            placeholder="0~5"
-                            value={item.severity}
-                            onChange={(e) =>
-                              updateSideEffectField(index, "severity", e.target.value)
-                            }
-                          />
+                          <Label>比較圖 B</Label>
+                          <Select
+                            value={photoCompareB}
+                            onValueChange={setPhotoCompareB}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="選擇較晚照片" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {photoRecords.map((record) => (
+                                <SelectItem
+                                  key={`b-${record.id}`}
+                                  value={record.id}
+                                >
+                                  {record.date}｜{record.note || "未備註"}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
 
-              <div className="flex gap-2">
-                <Button onClick={add} className="w-full">
-                  <Plus className="w-4 h-4 mr-1" />
-                  {editingId ? "更新紀錄" : "新增紀錄"}
-                </Button>
-                {editingId ? (
-                  <Button variant="outline" onClick={resetForm}>
-                    取消
-                  </Button>
-                ) : null}
-              </div>
-
-              <div className="border-t pt-4 space-y-3">
-                <div className="text-sm font-medium">歷史紀錄</div>
-                {sortedEntries.length === 0 ? (
-                  <div className="text-sm text-slate-500">目前還沒有紀錄</div>
-                ) : (
-                  [...sortedEntries].reverse().map((item) => (
-                    <div key={item.id} className="rounded-xl border p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="text-sm space-y-1">
-                          <div className="font-medium">
-                            {item.date} ・ {item.dose} mg {item.isShotDay ? "・ 施打日" : ""}
-                          </div>
-                          <div>體重：{item.weight} kg</div>
-                          <div>
-                            體脂：{item.bodyFatPct || "-"}%｜脂肪重：{item.fatMass || "-"} kg｜肌肉率：{getMuscleRateFromEntry(item) || "-"}%｜肌肉量：{item.muscleMass || "-"} kg
-                          </div>
-                          <div>
-                            內臟脂肪：{item.visceralFat || "-"}｜水分：{item.bodyWater || "-"}%
-                          </div>
-                          <div>
-                            食慾：{item.appetite}｜嘴饞：{item.cravingLevel}
-                          </div>
-                          <div>
-                            副作用：
-                            {item.sideEffects && item.sideEffects.length
-                              ? item.sideEffects
-                                  .map((se) => `${se.effect}（${se.severity || 0}/5）`)
-                                  .join("、")
-                              : `${item.sideEffect}（${item.sideEffectSeverity || 0}/5）`}｜
-                            運動：{item.exerciseMin || 0} 分鐘
-                          </div>
-                          {item.isShotDay ? <div className="text-emerald-600">💉 施打日</div> : null}
-                        </div>
-
-                        <div className="flex gap-2">
-                          <Button size="icon" variant="outline" onClick={() => handleEdit(item)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button size="icon" variant="outline" onClick={() => handleDelete(item.id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                      <div className="text-sm text-slate-600">
+                        {photoComparison.summary}
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="chart">
-          <div className="grid gap-4 grid-cols-1">
-            <MetricLineCard
-              title="體重趨勢"
-              data={chartData}
-              dataKey="weight"
-              unit="kg"
-              strokeColor={METRIC_COLORS.weight}
-              goalValue={num(settings.goal) || null}
-              onExpand={() =>
-                setExpandedChart({
-                  type: "metric",
-                  key: "weight",
-                  title: "體重趨勢",
-                  unit: "kg",
-                  goalValue: num(settings.goal) || null,
-                })
-              }
-              height={260}
-            />
-
-            <CompositeMetricsCard
-              title="各項指標綜合曲線圖"
-              data={chartData}
-              activeKeys={activeCompositeMetrics}
-              onToggleKey={toggleCompositeMetric}
-              onExpand={() => setExpandedChart({ type: "composite", title: "各項指標綜合曲線圖" })}
-            />
-
-            {[
-              { key: "bodyFatPct", title: "體脂率趨勢", unit: "%", color: METRIC_COLORS.bodyFatPct },
-              { key: "fatMass", title: "脂肪重趨勢", unit: "kg", color: METRIC_COLORS.fatMass },
-              { key: "muscleRate", title: "肌肉率趨勢", unit: "%", color: METRIC_COLORS.muscleRate },
-              { key: "muscleMass", title: "肌肉量趨勢", unit: "kg", color: METRIC_COLORS.muscleMass },
-              { key: "visceralFat", title: "內臟脂肪趨勢", unit: "", color: METRIC_COLORS.visceralFat },
-              { key: "bodyWater", title: "水分趨勢", unit: "%", color: METRIC_COLORS.bodyWater },
-            ].map((metric) => (
-              <MetricLineCard
-                key={metric.key}
-                title={metric.title}
-                data={chartData}
-                dataKey={metric.key}
-                unit={metric.unit}
-                strokeColor={metric.color}
-                onExpand={() =>
-                  setExpandedChart({
-                    type: "metric",
-                    key: metric.key,
-                    title: metric.title,
-                    unit: metric.unit,
-                  })
-                }
-              />
-            ))}
-
-            <Card>
-              <CardHeader>
-                <CardTitle>分析摘要</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div>
-                  停滯期：
-                  <Badge variant={plateau.isPlateau ? "destructive" : "secondary"}>
-                    {plateau.isPlateau ? "可能停滯" : "正常"}
-                  </Badge>
-                </div>
-                <div>{plateau.text}</div>
-                <div>估算體脂：{bodyFat || "-"}%</div>
-                <div>最新肌肉率：{latestMuscleRate || "-"}%</div>
-                <div>7日移動平均：{chartData.length ? chartData[chartData.length - 1].avg7 : "-"} kg</div>
-                <div>
-                  BMR：{bmr || "-"} kcal（{settings.bmrMethod === "katch" ? "體脂器公式" : "一般公式"}）
-                </div>
-                <div>TDEE：{tdee || "-"} kcal</div>
-                <div>建議減脂熱量：{cutCalories || "-"} kcal</div>
-                <div>性別版型：{settings.sex === "female" ? "女性建議" : "男性建議"}</div>
-                <div>水分/脂肪判斷：{waterVsFat.title}（信心 {waterVsFat.confidence}）</div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="ai">
-          <div className="grid gap-4 grid-cols-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Utensils className="w-4 h-4" />
-                  更精準菜單
-                </CardTitle>
-              </CardHeader>
-              <div className="px-6 pb-2 text-sm text-slate-600 space-y-1">
-                <div>{calorieAdvice.base}</div>
-                <div>{calorieAdvice.target}</div>
-                <div className="text-slate-500">{calorieAdvice.note}</div>
-                <div className="text-slate-500">
-                  目前算法：{settings.bmrMethod === "katch" ? "體脂器公式（瘦體重導向）" : "一般公式（體重 / 身高 / 年齡 / 性別）"}
-                </div>
-                <div className="text-emerald-700">
-                  {settings.bmrMethod === "katch"
-                    ? "飲食指南會更重視保肌：每餐優先蛋白質、避免熱量降太低。"
-                    : "飲食指南以一般減脂熱量控制為主，適合沒有穩定體脂器資料時使用。"}
-                </div>
-                <div className="text-emerald-700">{bodyCompositionMenuHint}</div>
-              </div>
-              <CardContent className="space-y-4">
-                {mealPlans.map((plan) => (
-                  <div key={plan.title} className="border rounded-xl p-3 space-y-2">
-                    <div className="font-medium">{plan.title}</div>
-                    {plan.meals.map((meal) => (
-                      <div key={meal.name}>
-                        <div className="text-sm font-medium">{meal.name}</div>
-                        <div className="text-sm text-slate-600 space-y-1">
-                          {meal.items.map((item) => (
-                            <div key={item}>• {item}</div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>嘴饞控制建議</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {cravingTips.map((tip) => (
-                  <div key={tip}>• {tip}</div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="strategy">
-          <div className="grid gap-4 grid-cols-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-4 h-4" />
-                  猛健樂專用減脂策略
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {strategyMode.map((tip) => (
-                  <div key={tip}>• {tip}</div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarClock className="w-4 h-4" />
-                  可再觀察的項目
-                </CardTitle>
-              </CardHeader>
-              <div className="mt-4 border-t pt-3 px-6">
-                <div className="text-sm font-medium mb-1">💉 劑量AI判斷</div>
-                <div className="text-lg font-semibold">{doseAI.level}</div>
-                <div className="text-sm text-slate-500">{doseAI.reason}</div>
-                <div className="text-sm">👉 {doseAI.action}</div>
-              </div>
-              <CardContent className="space-y-2 text-sm">
-                <div>• 施打後第 2~3 天食慾是否最低</div>
-                <div>• 哪幾天最容易嘴饞</div>
-                <div>• 外食日後體重波動是否偏大</div>
-                <div>• 運動分鐘數增加後，體重是否更穩定下降</div>
-                <div>• 若連續 2 週停滯，再檢查熱量與零食</div>
-              </CardContent>
-            </Card>
-
-
-            <Card>
-              <CardHeader>
-                <CardTitle>🧠 個人化 AI 學習</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="font-medium">{personalAI.summary}</div>
-                <div className="text-sm text-slate-600">
-                  最容易成功的時段／狀態：{personalAI.bestWindow}
-                </div>
-                <div className="text-sm text-slate-600">
-                  最容易失守的時段／狀態：{personalAI.riskWindow}
-                </div>
-                <div className="text-sm text-slate-600">
-                  目前看起來最有效的模式：{personalAI.effectivePattern}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>AI 學到的重點</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {personalAI.learningTips.map((tip) => (
-                  <div key={tip}>• {tip}</div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="shots">
-          <div className="grid gap-4 grid-cols-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>施打紀錄專區</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div>最近施打日：{latestShotDate || "-"}</div>
-                <div>下次施打日：{nextShot.date}</div>
-                <div>目前：施打後第 {shotPattern.currentDay || 0} 天</div>
-                {shotEntries.length === 0 ? (
-                  <div className="text-slate-500">尚無施打紀錄</div>
-                ) : (
-                  shotEntries.map((item, index) => (
-                    <div key={item.id} className="rounded-xl border p-3">
-                      <div className="font-medium">
-                        第 {shotEntries.length - index} 針｜{item.date}｜{item.dose} mg
-                      </div>
-                      {index < shotEntries.length - 1 ? (
-                        <div className="text-slate-500">
-                          距離前一針 {daysBetween(shotEntries[index + 1].date, item.date)} 天
+                      {photoComparison.before && photoComparison.after ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium">
+                              Before｜{photoComparison.before.date}
+                            </div>
+                            <img
+                              src={photoComparison.before.imageData}
+                              alt={
+                                photoComparison.before.note ||
+                                photoComparison.before.date
+                              }
+                              className="h-48 w-full rounded-lg object-cover"
+                            />
+                            <div className="text-xs text-slate-500">
+                              {photoComparison.before.note || "-"}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium">
+                              After｜{photoComparison.after.date}
+                            </div>
+                            <img
+                              src={photoComparison.after.imageData}
+                              alt={
+                                photoComparison.after.note ||
+                                photoComparison.after.date
+                              }
+                              className="h-48 w-full rounded-lg object-cover"
+                            />
+                            <div className="text-xs text-slate-500">
+                              {photoComparison.after.note || "-"}
+                            </div>
+                          </div>
                         </div>
                       ) : null}
                     </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>施打後第幾天分析</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div>食慾最低：{shotPattern.appetiteText}</div>
-                <div>最容易嘴饞：{shotPattern.cravingText}</div>
-                <div>最容易出現副作用：{shotPattern.sideEffectText}</div>
-                <div>副作用總結：{sideEffectInsight.text}</div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="settings">
-          <Card>
-            <CardHeader>
-              <CardTitle>設定</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 gap-3">
-                <div className="space-y-2">
-                  <Label>身高 (cm)</Label>
-                  <Input
-                    value={tempSettings.height}
-                    onChange={(e) => setTempSettings({ ...tempSettings, height: e.target.value })}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>年齡</Label>
-                  <Input
-                    value={tempSettings.age}
-                    onChange={(e) => setTempSettings({ ...tempSettings, age: e.target.value })}
-                  />
-                </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {photoRecords.length === 0 ? (
+                        <div className="text-slate-500">尚無照片紀錄</div>
+                      ) : (
+                        photoRecords.map((record) => (
+                          <div
+                            key={record.id}
+                            className="rounded-xl border p-2 space-y-2"
+                          >
+                            <img
+                              src={record.imageData}
+                              alt={record.note || record.date}
+                              className="h-40 w-full rounded-lg object-cover"
+                            />
+                            <div className="text-xs font-medium">
+                              {record.date}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {record.note || "-"}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => deletePhotoRecord(record.id)}
+                            >
+                              刪除
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
+            </TabsContent>
 
-              <div className="grid grid-cols-1 gap-3">
-                <div className="space-y-2">
-                  <Label>目標體重 (kg)</Label>
-                  <Input
-                    value={tempSettings.goal}
-                    onChange={(e) => setTempSettings({ ...tempSettings, goal: e.target.value })}
-                  />
-                </div>
+            <TabsContent value="cheat">
+              <div className="grid gap-4 grid-cols-1">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>🤖 智能放鬆餐判斷</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="text-xl font-semibold">
+                      {cheatDecision.level}
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      原因：{cheatDecision.reason}
+                    </div>
+                    <div className="rounded-xl border bg-slate-50 p-3 text-sm">
+                      原則：{cheatDecision.rule}
+                    </div>
+                  </CardContent>
+                </Card>
 
-                <div className="space-y-2">
-                  <Label>首次施打日期</Label>
-                  <Input
-                    type="date"
-                    value={tempSettings.firstShotDate}
-                    onChange={(e) =>
-                      setTempSettings({ ...tempSettings, firstShotDate: e.target.value })
-                    }
-                  />
-                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>建議吃法</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    {cheatDecision.plan.map((p) => (
+                      <div key={p}>• {p}</div>
+                    ))}
+                  </CardContent>
+                </Card>
 
-                <div className="space-y-2">
-                  <Label>施打間隔（天）</Label>
-                  <Input
-                    value={tempSettings.shotInterval}
-                    onChange={(e) =>
-                      setTempSettings({ ...tempSettings, shotInterval: e.target.value })
-                    }
-                  />
-                  <div className="text-xs text-slate-500">猛健樂每週一次請填 7，不要用 8。</div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border bg-slate-50 p-3 text-sm space-y-1">
-                <div className="font-medium">下次施打預覽</div>
-                <div>日期：{previewNextShot.date}</div>
-                <div>狀態：{previewNextShot.text}</div>
-                <div>基準：{previewNextShot.source}（{previewNextShot.baseDate}）</div>
-                <div className="text-xs text-slate-500">
-                  規則：本次施打日 + 間隔天數 = 下次施打日。若每週一次，請填 7，這週三打就是下週三打。
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                <div className="space-y-2">
-                  <Label>性別</Label>
-                  <Select
-                    value={tempSettings.sex}
-                    onValueChange={(v: Sex) => setTempSettings({ ...tempSettings, sex: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">男性</SelectItem>
-                      <SelectItem value="female">女性</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>活動量</Label>
-                  <Select
-                    value={tempSettings.activity}
-                    onValueChange={(v) => setTempSettings({ ...tempSettings, activity: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1.2">久坐少動</SelectItem>
-                      <SelectItem value="1.375">輕度活動</SelectItem>
-                      <SelectItem value="1.55">中度活動</SelectItem>
-                      <SelectItem value="1.725">高度活動</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>基礎代謝率算法</Label>
-                  <Select
-                    value={tempSettings.bmrMethod}
-                    onValueChange={(v: BmrMethod) => setTempSettings({ ...tempSettings, bmrMethod: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="mifflin">一般公式（體重 / 身高 / 年齡 / 性別）</SelectItem>
-                      <SelectItem value="katch">體脂器公式（依最新體脂 / 脂肪重）</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <div className="text-xs text-slate-500">
-                    {tempSettings.bmrMethod === "katch"
-                      ? "優先使用最新脂肪重；若未填脂肪重則改用體脂率推估瘦體重。"
-                      : "適合一般情況，依最新體重與基本資料計算。"}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between border rounded-xl p-3">
-                  <div>
-                    <div className="font-medium">通知總開關</div>
-                    <div className="text-xs text-slate-500">瀏覽器提醒與頁面提醒</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={tempSettings.notificationsOn}
-                    onChange={(e) =>
-                      setTempSettings({ ...tempSettings, notificationsOn: e.target.checked })
-                    }
-                  />
-                </div>
-
-                {[
-                  ["前一天提醒", "remindOneDayBefore"],
-                  ["施打當天提醒", "remindOnShotDay"],
-                  ["晚上未記錄提醒", "remindIfNoLogByNight"],
-                  ["便秘補水提醒", "waterReminder"],
-                  ["低食慾/高嘴饞蛋白質提醒", "proteinReminder"],
-                ].map(([label, key]) => (
-                  <div key={key} className="flex items-center justify-between border rounded-xl p-3">
-                    <div className="font-medium">{label}</div>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(tempSettings[key as keyof Settings])}
-                      onChange={(e) =>
-                        setTempSettings({
-                          ...tempSettings,
-                          [key]: e.target.checked,
-                        } as Settings)
-                      }
-                    />
-                  </div>
-                ))}
-
-                <div className="flex items-center justify-between border rounded-xl p-3">
-                  <div>
-                    <div className="font-medium">極低熱量模式</div>
-                    <div className="text-xs text-slate-500">AI 自動判斷是否啟用 ELCD</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={tempSettings.elcdMode}
-                    onChange={(e) =>
-                      setTempSettings({ ...tempSettings, elcdMode: e.target.checked })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    setSettings(tempSettings);
-                    localStorage.setItem(SETTINGS_KEY, JSON.stringify(tempSettings));
-                  }}
-                >
-                  儲存設定
-                </Button>
-
-                <Button variant="outline" onClick={() => setTempSettings(settings)}>
-                  取消
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="tools">
-          <div className="grid gap-4 grid-cols-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>藥筆藥量計算機</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm">
-                <div className="rounded-xl border bg-slate-50 p-3 text-slate-600">
-                  本計算機以 <span className="font-medium text-slate-900">轉一圈共 60 格</span> 為基準。
-                </div>
-
-                <div className="space-y-2">
-                  <Label>快速按鈕</Label>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {penQuickPresets.map((preset) => (
-                      <Button
-                        key={preset.label}
-                        type="button"
-                        variant={
-                          penStrength === preset.strength && targetDose === preset.dose
-                            ? "default"
-                            : "outline"
-                        }
-                        className="h-auto whitespace-normal px-3 py-2 text-xs"
-                        onClick={() => {
-                          setPenStrength(preset.strength);
-                          setTargetDose(preset.dose);
-                        }}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>外食放鬆餐範例</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {cheatRestaurantOptions.map((option) => (
+                      <div
+                        key={option.brand}
+                        className="rounded-xl border p-3 space-y-2"
                       >
-                        {preset.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>藥筆總劑量（mg）</Label>
-                    <Select value={penStrength} onValueChange={setPenStrength}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="2.5">2.5 mg</SelectItem>
-                        <SelectItem value="5">5 mg</SelectItem>
-                        <SelectItem value="7.5">7.5 mg</SelectItem>
-                        <SelectItem value="10">10 mg</SelectItem>
-                        <SelectItem value="12.5">12.5 mg</SelectItem>
-                        <SelectItem value="15">15 mg</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>想注射的劑量（mg）</Label>
-                    <Input value={targetDose} onChange={(e) => setTargetDose(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="rounded-xl border bg-slate-50 p-3">
-                    <div className="text-slate-500">換算比例</div>
-                    <div className="text-lg font-semibold">{penCalc.ratio}%</div>
-                  </div>
-                  <div className="rounded-xl border bg-emerald-50 p-3 border-emerald-200">
-                    <div className="text-emerald-700">本次需轉</div>
-                    <div className="text-2xl font-bold text-emerald-700">{penCalc.clicks} 格</div>
-                  </div>
-                  <div className="rounded-xl border bg-slate-50 p-3">
-                    <div className="text-slate-500">剩餘格數</div>
-                    <div className="text-lg font-semibold">{penCalc.remainClicks} 格</div>
-                  </div>
-                </div>
-
-                {!penCalc.valid ? (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-800">
-                    目標劑量不可大於藥筆總劑量，請重新輸入。
-                  </div>
-                ) : null}
-
-                <div className="rounded-xl border p-3 space-y-2">
-                  <div className="font-medium">常用對照</div>
-                  <div className="text-sm text-slate-600">10 mg 筆打 2.5 mg：約 15 格</div>
-                  <div className="text-sm text-slate-600">10 mg 筆打 5 mg：約 30 格</div>
-                  <div className="text-sm text-slate-600">15 mg 筆打 10 mg：約 40 格</div>
-                </div>
-
-                <div className="text-xs text-slate-500">
-                  計算方式：目標劑量 ÷ 藥筆總劑量 × 60 格。使用前仍請以實際藥筆刻度與醫囑為準。
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>劑量提升提醒</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="text-lg font-semibold">{doseEscalationPlan.title}</div>
-                <div className="text-slate-500">{doseEscalationPlan.subtitle}</div>
-                <div>目前連續劑量：{currentDoseSeries.dose} mg</div>
-                <div>同劑量累積針數：{currentDoseSeries.shotCount} 針</div>
-                <div>下一步建議：{doseEscalationPlan.nextDose}</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>藥筆庫存管理</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>目前正在施打的筆規格</Label>
-                    <Select
-                      value={penInventory.penStrength}
-                      onValueChange={(v) => setPenInventory({ ...penInventory, penStrength: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="2.5">2.5 mg</SelectItem>
-                        <SelectItem value="5">5 mg</SelectItem>
-                        <SelectItem value="7.5">7.5 mg</SelectItem>
-                        <SelectItem value="10">10 mg</SelectItem>
-                        <SelectItem value="12.5">12.5 mg</SelectItem>
-                        <SelectItem value="15">15 mg</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>總可用格數</Label>
-                    <Input
-                      value={penInventory.totalGrids}
-                      onChange={(e) =>
-                        setPenInventory({ ...penInventory, totalGrids: e.target.value })
-                      }
-                    />
-                    <div className="text-xs text-slate-500">預設 240；若把殘劑算進去可改 300。</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>目前這支筆開始日</Label>
-                    <Input
-                      type="date"
-                      value={penInventory.penStartDate}
-                      onChange={(e) =>
-                        setPenInventory({ ...penInventory, penStartDate: e.target.value })
-                      }
-                    />
-                    <div className="text-xs text-slate-500">只會統計這個日期之後的施打日紀錄。</div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>手動校正格數</Label>
-                    <Input
-                      value={penInventory.manualAdjustGrids}
-                      onChange={(e) =>
-                        setPenInventory({ ...penInventory, manualAdjustGrids: e.target.value })
-                      }
-                    />
-                    <div className="text-xs text-slate-500">可用來補殘劑、修正誤差或對齊實際剩餘量。</div>
-                  </div>
-                </div>
-
-                <Button type="button" variant="outline" className="w-full" onClick={startNewPenToday}>
-                  開始新筆（從今天重新計算）
-                </Button>
-
-                <div className="rounded-xl border bg-slate-50 p-3 space-y-1">
-                  <div>每支藥筆都是轉滿 60 格 = 該支筆的標示劑量。</div>
-                  <div>目前規格：{penInventorySummary.strength || "-"} mg / 支</div>
-                  <div>每 1 格約 {penInventorySummary.mgPerGrid || 0} mg</div>
-                  <div>目前統計到 {penInventorySummary.shotEntriesSinceStartCount} 次施打日紀錄。</div>
-                  <div>4 次 ≈ 1 個月，可用來估算可打月數。</div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <div className="rounded-xl border p-3">
-                    <div className="text-slate-500">總可用格數</div>
-                    <div className="text-lg font-semibold">{penInventorySummary.totalGrids}</div>
-                  </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-slate-500">紀錄自動抓取</div>
-                    <div className="text-lg font-semibold">{penInventorySummary.autoUsedGrids}</div>
-                  </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-slate-500">校正後已使用</div>
-                    <div className="text-lg font-semibold">{penInventorySummary.usedGrids}</div>
-                  </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-slate-500">剩餘格數</div>
-                    <div className="text-lg font-semibold">{penInventorySummary.remainGrids}</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border p-3 space-y-1">
-                    <div className="text-slate-500">剩餘藥量</div>
-                    <div className="text-lg font-semibold">{penInventorySummary.remainMg} mg</div>
-                    <div className="text-xs text-slate-500">依目前筆規格換算。</div>
-                  </div>
-
-                  {penInventorySummary.targetDosePlan && penInventorySummary.targetDosePlan.dose > 0 ? (
-                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-1">
-                      <div className="font-medium">依藥量計算機目標劑量試算</div>
-                      <div>目標劑量：{penInventorySummary.targetDosePlan.dose} mg</div>
-                      <div>每次需：{penInventorySummary.targetDosePlan.gridsNeeded} 格</div>
-                      <div>
-                        還可完整打 {penInventorySummary.targetDosePlan.fullShots} 次
-                        （精算約 {penInventorySummary.targetDosePlan.exactShots} 次）
-                      </div>
-                      <div>約可打 {penInventorySummary.targetDosePlan.months} 個月</div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border p-3 space-y-1">
-                      <div className="font-medium">依藥量計算機目標劑量試算</div>
-                      <div className="text-slate-500">先在上方藥量計算機輸入目標劑量。</div>
-                    </div>
-                  )}
-                </div>
-
-                {penInventorySummary.latestDosePlan ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-1">
-                    <div className="font-medium">依最近一次施打劑量試算</div>
-                    <div>最近一次劑量：{penInventorySummary.latestDosePlan.dose} mg</div>
-                    <div>每次需：{penInventorySummary.latestDosePlan.gridsNeeded} 格</div>
-                    <div>
-                      還可完整打 {penInventorySummary.latestDosePlan.fullShots} 次
-                      （精算約 {penInventorySummary.latestDosePlan.exactShots} 次）
-                    </div>
-                    <div>約可打 {penInventorySummary.latestDosePlan.months} 個月</div>
-                  </div>
-                ) : null}
-
-                <div className="space-y-2">
-                  <div className="font-medium">常用劑量剩餘可打次數</div>
-                  <div className="space-y-2">
-                    {penInventorySummary.supportedDoses.map((item) => (
-                      <div key={item.dose} className="rounded-xl border p-3 space-y-1">
-                        <div className="font-medium">{item.dose} mg</div>
-                        <div className="text-slate-500">每次需 {item.gridsNeeded} 格</div>
-                        <div>
-                          還可完整打 {item.fullShots} 次（精算約 {item.exactShots} 次）
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-medium">{option.brand}</div>
+                          <Badge variant="outline">{option.title}</Badge>
                         </div>
-                        <div className="text-slate-500">約 {item.months} 個月（4 次 = 1 個月）</div>
+                        <div className="space-y-1 text-sm text-slate-700">
+                          {option.combos.map((combo) => (
+                            <div key={combo}>• {combo}</div>
+                          ))}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {option.note}
+                        </div>
                       </div>
                     ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>照片記錄</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>照片日期</Label>
-                    <Input
-                      type="date"
-                      value={photoDate}
-                      onChange={(e) => setPhotoDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>備註</Label>
-                    <Input
-                      value={photoNote}
-                      onChange={(e) => setPhotoNote(e.target.value)}
-                      placeholder="例如：正面、腰圍比較、側面"
-                    />
-                  </div>
-                </div>
-
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    await addPhotoRecord(file);
-                    e.currentTarget.value = "";
-                  }}
-                />
-
-                <div className="text-xs text-slate-500">
-                  照片會跟著目前資料一起保留。
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {photoRecords.length === 0 ? (
-                    <div className="text-slate-500">尚無照片紀錄</div>
-                  ) : (
-                    photoRecords.map((record) => (
-                      <div key={record.id} className="rounded-xl border p-2 space-y-2">
-                        <img
-                          src={record.imageData}
-                          alt={record.note || record.date}
-                          className="h-40 w-full rounded-lg object-cover"
-                        />
-                        <div className="text-xs font-medium">{record.date}</div>
-                        <div className="text-xs text-slate-500">{record.note || "-"}</div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => deletePhotoRecord(record.id)}
-                        >
-                          刪除
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="cheat">
-          <div className="grid gap-4 grid-cols-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>🤖 智能放鬆餐判斷</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-xl font-semibold">{cheatDecision.level}</div>
-                <div className="text-sm text-slate-500">原因：{cheatDecision.reason}</div>
-                <div className="rounded-xl border bg-slate-50 p-3 text-sm">
-                  原則：{cheatDecision.rule}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>建議吃法</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {cheatDecision.plan.map((p) => (
-                  <div key={p}>• {p}</div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>外食放鬆餐範例</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {cheatRestaurantOptions.map((option) => (
-                  <div key={option.brand} className="rounded-xl border p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-medium">{option.brand}</div>
-                      <Badge variant="outline">{option.title}</Badge>
-                    </div>
-                    <div className="space-y-1 text-sm text-slate-700">
-                      {option.combos.map((combo) => (
-                        <div key={combo}>• {combo}</div>
-                      ))}
-                    </div>
-                    <div className="text-xs text-slate-500">{option.note}</div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
-      {expandedChart ? (
-        <div className="fixed inset-0 z-50 bg-black/80 p-3">
-          <div className="flex h-full w-full items-center justify-center">
-            <div className="relative h-full w-full overflow-hidden rounded-2xl bg-white shadow-2xl">
-              <div className="flex items-center justify-between border-b px-4 py-3">
-                <div>
-                  <div className="text-base font-semibold">{expandedChart.title}</div>
-                  <div className="text-xs text-slate-500">建議將手機橫向檢視，趨勢會更清楚。</div>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => setExpandedChart(null)}>
-                  <X className="h-4 w-4" />
-                </Button>
+                  </CardContent>
+                </Card>
               </div>
-              <div className="h-[calc(100%-64px)] overflow-auto p-3">
-                <div className="mx-auto h-full w-full max-w-6xl landscape:max-w-none">
-                  {expandedChart.type === "composite" ? (
-                    <CompositeMetricsCard
-                      title={expandedChart.title}
-                      data={chartData}
-                      activeKeys={activeCompositeMetrics}
-                      onToggleKey={toggleCompositeMetric}
-                      fullscreen
-                    />
-                  ) : expandedChart.key ? (
-                    <MetricLineCard
-                      title={expandedChart.title}
-                      data={chartData}
-                      dataKey={expandedChart.key}
-                      unit={expandedChart.unit || ""}
-                      strokeColor={METRIC_COLORS[expandedChart.key] || "#0f172a"}
-                      goalValue={expandedChart.goalValue || null}
-                      height={420}
-                    />
-                  ) : null}
+            </TabsContent>
+          </Tabs>
+          {expandedChart ? (
+            <div className="fixed inset-0 z-50 bg-black/80 p-3">
+              <div className="flex h-full w-full items-center justify-center">
+                <div className="relative h-full w-full overflow-hidden rounded-2xl bg-white shadow-2xl">
+                  <div className="flex items-center justify-between border-b px-4 py-3">
+                    <div>
+                      <div className="text-base font-semibold">
+                        {expandedChart.title}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        建議將手機橫向檢視，趨勢會更清楚。
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setExpandedChart(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="h-[calc(100%-64px)] overflow-auto p-3">
+                    <div className="mx-auto h-full w-full max-w-6xl landscape:max-w-none">
+                      {expandedChart.type === "composite" ? (
+                        <CompositeMetricsCard
+                          title={expandedChart.title}
+                          data={chartData}
+                          activeKeys={activeCompositeMetrics}
+                          onToggleKey={toggleCompositeMetric}
+                          fullscreen
+                        />
+                      ) : expandedChart.key ? (
+                        <MetricLineCard
+                          title={expandedChart.title}
+                          data={chartData}
+                          dataKey={expandedChart.key}
+                          unit={expandedChart.unit || ""}
+                          strokeColor={
+                            METRIC_COLORS[expandedChart.key] || "#0f172a"
+                          }
+                          goalValue={expandedChart.goalValue || null}
+                          height={420}
+                        />
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      ) : null}
-
+          ) : null}
         </div>
       </div>
     </InlineAuthGate>
