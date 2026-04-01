@@ -34,6 +34,8 @@ import {
   RotateCcw,
   Expand,
   X,
+  Moon,
+  Sun,
 } from "lucide-react";
 import {
   LineChart,
@@ -1586,6 +1588,7 @@ export default function SimpleTracker() {
 
   const [mounted, setMounted] = useState(false);
   const [today, setToday] = useState("");
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [notificationPermission, setNotificationPermission] = useState<
     NotificationPermission | "default" | "unsupported"
   >("default");
@@ -1671,6 +1674,15 @@ export default function SimpleTracker() {
     setMounted(true);
     const localToday = getTodayLocalDate();
     setToday(localToday);
+
+    if (typeof window !== "undefined") {
+      const savedTheme = window.localStorage.getItem("mounjaro-theme-mode");
+      if (savedTheme === "dark" || savedTheme === "light") {
+        setThemeMode(savedTheme);
+      } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        setThemeMode("dark");
+      }
+    }
 
     if (typeof window !== "undefined" && "Notification" in window) {
       setNotificationPermission(Notification.permission);
@@ -3259,16 +3271,101 @@ export default function SimpleTracker() {
 
   if (!mounted || !today) return null;
 
+  const isDark = themeMode === "dark";
+  const toggleTheme = () => {
+    const nextTheme = isDark ? "light" : "dark";
+    setThemeMode(nextTheme);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("mounjaro-theme-mode", nextTheme);
+    }
+  };
+
   return (
     <InlineAuthGate>
-      <div className="touch-feedback w-full max-w-md mx-auto min-h-screen bg-slate-50 p-3 space-y-4 pb-24">
-        <TouchFeedbackStyles />
+      <div className={isDark ? "dark-ui" : ""}>
+        <style jsx global>{`
+          .dark-ui { color-scheme: dark; }
+          .dark-ui .bg-white,
+          .dark-ui .bg-white\/90,
+          .dark-ui [data-radix-popper-content-wrapper] .bg-white {
+            background-color: rgb(15 23 42) !important;
+          }
+          .dark-ui .bg-slate-50,
+          .dark-ui .bg-slate-100,
+          .dark-ui .bg-slate-200,
+          .dark-ui .bg-emerald-50,
+          .dark-ui .bg-amber-50,
+          .dark-ui .bg-sky-50 {
+            background-color: rgb(30 41 59) !important;
+          }
+          .dark-ui .border,
+          .dark-ui .border-b,
+          .dark-ui .border-t,
+          .dark-ui .border-slate-200,
+          .dark-ui .border-slate-300,
+          .dark-ui .border-emerald-200,
+          .dark-ui .border-amber-200,
+          .dark-ui .border-sky-200,
+          .dark-ui .border-rose-200 {
+            border-color: rgb(51 65 85) !important;
+          }
+          .dark-ui .text-slate-900,
+          .dark-ui .text-slate-800,
+          .dark-ui .text-slate-700,
+          .dark-ui .text-slate-600,
+          .dark-ui .text-slate-500,
+          .dark-ui .text-slate-400,
+          .dark-ui .text-black {
+            color: rgb(226 232 240) !important;
+          }
+          .dark-ui .text-emerald-700 { color: rgb(110 231 183) !important; }
+          .dark-ui .text-emerald-600 { color: rgb(52 211 153) !important; }
+          .dark-ui .text-amber-800 { color: rgb(253 230 138) !important; }
+          .dark-ui input,
+          .dark-ui select,
+          .dark-ui textarea,
+          .dark-ui button[variant="outline"],
+          .dark-ui [role="combobox"],
+          .dark-ui [data-slot="input"] {
+            background-color: rgb(15 23 42) !important;
+            color: rgb(226 232 240) !important;
+            border-color: rgb(71 85 105) !important;
+          }
+          .dark-ui [data-state="active"] {
+            background-color: rgb(51 65 85) !important;
+            color: rgb(255 255 255) !important;
+          }
+          .dark-ui .recharts-cartesian-grid line,
+          .dark-ui .recharts-reference-line line {
+            stroke: rgb(71 85 105) !important;
+          }
+          .dark-ui .recharts-text,
+          .dark-ui .recharts-legend-item-text {
+            fill: rgb(226 232 240) !important;
+          }
+          .dark-ui .recharts-default-tooltip {
+            background-color: rgb(15 23 42) !important;
+            border-color: rgb(71 85 105) !important;
+          }
+          .dark-ui .recharts-tooltip-label,
+          .dark-ui .recharts-tooltip-item {
+            color: rgb(226 232 240) !important;
+          }
+        `}</style>
+        <div className={`touch-feedback w-full max-w-md mx-auto min-h-screen p-3 space-y-4 pb-24 ${isDark ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"}`}>
+          <TouchFeedbackStyles />
       <div className="rounded-2xl bg-white/90 backdrop-blur border p-4 shadow-sm space-y-3">
-        <div>
-          <h1 className="text-xl font-bold">猛健樂個人版 Pro</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            手機 App 版介面｜體重、施打、AI 分析一次看
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold">猛健樂個人版 Pro</h1>
+            <p className="text-xs text-slate-500 mt-1">
+              手機 App 版介面｜體重、施打、AI 分析一次看
+            </p>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={toggleTheme}>
+            {isDark ? <Sun className="w-4 h-4 mr-1" /> : <Moon className="w-4 h-4 mr-1" />}
+            {isDark ? "淺色" : "深色"}
+          </Button>
         </div>
 
         <div className="flex items-center justify-between gap-2">
@@ -4684,6 +4781,7 @@ export default function SimpleTracker() {
         </div>
       ) : null}
 
+        </div>
       </div>
     </InlineAuthGate>
   );
