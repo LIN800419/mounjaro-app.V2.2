@@ -241,6 +241,85 @@ function getIdealWeightRange(heightCm: string) {
   };
 }
 
+type MealAdjustment = "-0.5" | "0" | "+0.5" | "+1";
+type MealTierKey = "1200" | "1400" | "1600" | "1800" | "2000";
+
+function getMealAdjustmentLabel(adjust: MealAdjustment) {
+  if (adjust === "+1") return "加量 1 單位（約 100 kcal）";
+  if (adjust === "+0.5") return "加量 0.5 單位（約 50 kcal）";
+  if (adjust === "-0.5") return "減量 0.5 單位（約 50 kcal）";
+  return "標準份量";
+}
+
+function resolveMealTier(targetCalories: number) {
+  if (targetCalories <= 1250) return { tier: "1200" as MealTierKey, adjust: "0" as MealAdjustment, label: "1200 kcal 基礎版" };
+  if (targetCalories <= 1350) return { tier: "1200" as MealTierKey, adjust: "+1" as MealAdjustment, label: "1200 kcal 基礎版 + 微加量" };
+  if (targetCalories <= 1450) return { tier: "1400" as MealTierKey, adjust: "0" as MealAdjustment, label: "1400 kcal 基礎版" };
+  if (targetCalories <= 1550) return { tier: "1400" as MealTierKey, adjust: "+1" as MealAdjustment, label: "1400 kcal 基礎版 + 微加量" };
+  if (targetCalories <= 1650) return { tier: "1600" as MealTierKey, adjust: "0" as MealAdjustment, label: "1600 kcal 基礎版" };
+  if (targetCalories <= 1750) return { tier: "1600" as MealTierKey, adjust: "+1" as MealAdjustment, label: "1600 kcal 基礎版 + 微加量" };
+  if (targetCalories <= 1850) return { tier: "1800" as MealTierKey, adjust: "0" as MealAdjustment, label: "1800 kcal 基礎版" };
+  if (targetCalories <= 1950) return { tier: "1800" as MealTierKey, adjust: "+1" as MealAdjustment, label: "1800 kcal 基礎版 + 微加量" };
+  return { tier: "2000" as MealTierKey, adjust: "0" as MealAdjustment, label: "2000 kcal 基礎版" };
+}
+
+function getMealAdjustmentGuide(
+  adjust: MealAdjustment,
+  mealMoment: "早餐" | "午餐" | "晚餐" | "加餐",
+  isFemale: boolean,
+) {
+  if (adjust === "0") return [];
+  if (adjust === "-0.5") {
+    return [
+      mealMoment === "午餐" || mealMoment === "晚餐"
+        ? "主食減少 1/4 份"
+        : "本餐少 1 小份主食或水果",
+    ];
+  }
+
+  const femaleChoice =
+    mealMoment === "早餐"
+      ? ["全麥吐司 +1 片", "或 無糖豆漿 +150ml"]
+      : mealMoment === "午餐"
+        ? ["飯 +50g", "或 地瓜 +60g"]
+        : mealMoment === "晚餐"
+          ? ["地瓜 +60g", "或 豆腐 +1/3 盒"]
+          : ["無糖優格 1/2~1 份", "或 茶葉蛋 +1 顆"];
+
+  const maleChoice =
+    mealMoment === "早餐"
+      ? ["全麥吐司 +1~2 片", "或 無糖豆漿 +250ml"]
+      : mealMoment === "午餐"
+        ? ["飯 +70~100g", "或 地瓜 +80~100g"]
+        : mealMoment === "晚餐"
+          ? ["地瓜 +80~100g", "或 豆腐 +1/2 盒"]
+          : ["無糖優格 1 份", "或 茶葉蛋 +1 顆 + 小水果"];
+
+  const base = isFemale ? femaleChoice : maleChoice;
+
+  if (adjust === "+0.5") {
+    return [`本餐微加量：${base[0]}`];
+  }
+
+  return [`本餐可擇一加量：${base[0]}`, base[1] ? `或 ${base[1]}` : ""].filter(Boolean);
+}
+
+function getDailyMenuSeed() {
+  const now = new Date();
+  return now.getDay();
+}
+
+function buildFlexibleMealItems(
+  baseItems: string[],
+  mealMoment: "早餐" | "午餐" | "晚餐" | "加餐",
+  adjust: MealAdjustment,
+  isFemale: boolean,
+  note?: string,
+) {
+  const adjustItems = getMealAdjustmentGuide(adjust, mealMoment, isFemale);
+  return [...baseItems, ...adjustItems, ...(note ? [note] : [])];
+}
+
 function buildMealPlans(
   targetCalories: number,
   appetite?: Appetite,
@@ -254,6 +333,8 @@ function buildMealPlans(
   const nausea = sideEffect === "噁心";
   const constipation = sideEffect === "便秘";
   const isFemale = sex === "female";
+  const tier = resolveMealTier(targetCalories);
+  const daySeed = getDailyMenuSeed();
 
   if (isELCD) {
     return [
@@ -308,161 +389,390 @@ function buildMealPlans(
     ];
   }
 
-  const calorieTier =
-    targetCalories <= 1300
-      ? "vlow"
-      : targetCalories <= 1500
-        ? "low"
-        : targetCalories <= 1800
-          ? "mid"
-          : "high";
-
-  const breakfastMap = {
-    vlow: nausea
-      ? ["無糖豆漿 250ml", "蘇打餅 2 片", "水煮蛋 1 顆"]
-      : ["無糖優格 1 碗", "水煮蛋 2 顆"],
-    low: nausea
-      ? ["無糖豆漿 250ml", "蘇打餅 2~3 片", "水煮蛋 1 顆"]
-      : ["無糖優格 1 碗", "水煮蛋 2 顆", "小香蕉 1 根"],
-    mid: nausea
-      ? ["無糖豆漿 300ml", "蘇打餅 3~4 片", "水煮蛋 1 顆"]
-      : ["無糖優格 1 碗", "水煮蛋 2 顆", "香蕉 1 根", "燕麥半碗"],
-    high: nausea
-      ? ["無糖豆漿 350ml", "蘇打餅 4 片", "水煮蛋 2 顆"]
-      : ["無糖優格 1 碗", "水煮蛋 2 顆", "香蕉 1 根", "燕麥 1 碗"],
-  } as const;
-
-  const lunchMap = {
-    vlow: severeCraving
-      ? ["雞胸肉便當 1 份", "白飯 1/3 碗", "青菜加量", "清湯 1 碗"]
-      : ["雞胸/魚肉 1.5 掌心", "糙米飯 1/3 碗", "青菜 2 碗"],
-    low: severeCraving
-      ? ["雞胸肉便當 1 份", "白飯 1/3~1/2 碗", "青菜加量", "清湯 1 碗"]
-      : ["雞胸/魚肉 1.5 掌心", "糙米飯半碗", "青菜 2 碗"],
-    mid: severeCraving
-      ? ["雞胸肉便當 1 份", "白飯半碗", "青菜加量", "湯 1 碗"]
-      : ["雞胸/魚肉 1.5 掌心", "糙米飯半碗到 3/4 碗", "青菜 2 碗"],
-    high: severeCraving
-      ? ["雞胸肉便當 1 份", "白飯 1 碗", "青菜加量", "湯 1 碗"]
-      : ["雞胸/魚肉 2 掌心", "糙米飯 1 碗", "青菜 2 碗"],
-  } as const;
-
-  const dinnerMap = {
-    vlow: lowAppetite
-      ? ["蒸蛋 1 份", "嫩豆腐 1 盒", "青菜 2 碗"]
-      : ["瘦肉/魚肉 1 掌心", "菇類與青菜 2 碗", "地瓜半條"],
-    low: lowAppetite
-      ? ["蒸蛋 1 份", "嫩豆腐 1 盒", "青菜 2 碗", "地瓜半條"]
-      : ["瘦肉/魚肉 1 掌心", "菇類與青菜 2 碗", "地瓜半條到 1 小條"],
-    mid: lowAppetite
-      ? ["蒸蛋 1 份", "嫩豆腐 1 盒", "青菜 2 碗", "地瓜半條"]
-      : ["瘦肉/魚肉 1 掌心", "菇類與青菜 2 碗", "地瓜 1 小條"],
-    high: lowAppetite
-      ? ["蒸蛋 1 份", "嫩豆腐 1 盒", "青菜 2 碗", "地瓜 1 條"]
-      : ["瘦肉/魚肉 1.5 掌心", "菇類與青菜 2 碗", "地瓜 1 條"],
-  } as const;
-
-  const snackMap = {
-    vlow: constipation
-      ? ["奇異果 1 顆", "水 500ml"]
-      : severeCraving
-        ? ["茶葉蛋 1 顆"]
-        : ["無糖優格或毛豆 1 份"],
-    low: constipation
-      ? ["奇異果 1 顆", "毛豆 1 份", "水 500ml"]
-      : severeCraving
-        ? ["茶葉蛋 1 顆", "無糖豆漿 1 瓶"]
-        : ["茶葉蛋 1 顆", "無糖優格或毛豆 1 份"],
-    mid: constipation
-      ? ["奇異果 1 顆", "毛豆 1 份", "水 500ml"]
-      : severeCraving
-        ? ["茶葉蛋 2 顆", "無糖豆漿 1 瓶", "堅果 1 小把"]
-        : ["茶葉蛋 1 顆", "無糖優格或毛豆 1 份"],
-    high: constipation
-      ? ["奇異果 2 顆", "毛豆 1 份", "水 500ml"]
-      : severeCraving
-        ? ["茶葉蛋 2 顆", "無糖豆漿 1 瓶", "堅果 1 小把", "水果 1 份"]
-        : ["茶葉蛋 2 顆", "無糖優格 1 份", "毛豆 1 份"],
-  } as const;
-
-  const sexAdjust = (items: readonly string[]) => {
-    if (isFemale) return [...items, "份量以女性版為準：主食與加餐較精簡"];
-    return [...items, "份量以男性版為準：蛋白質與主食較足"];
+  const mealTemplates: Record<MealTierKey, MealPlan[]> = {
+    "1200": [
+      {
+        title: "第 1 天｜清爽高蛋白版",
+        meals: [
+          { name: "早餐", items: nausea ? ["無糖豆漿 250ml", "蘇打餅 2 片", "水煮蛋 1 顆"] : ["無糖豆漿", "茶葉蛋 2 顆", "全麥吐司 1 片"] },
+          { name: "午餐", items: severeCraving ? ["雞胸便當 1 份", "飯 1/3 碗", "青菜加量"] : ["雞胸肉 100g", "糙米飯 1/3 碗", "青菜 2 份", "豆腐 1/2 盒"] },
+          { name: "晚餐", items: lowAppetite ? ["蒸蛋 1 份", "嫩豆腐 1 盒", "青菜 2 份"] : ["鯛魚 / 白肉魚 100g", "地瓜 80g", "青菜 2 份"] },
+          { name: "加餐", items: constipation ? ["奇異果 1 顆", "水 500ml"] : ["無糖優格 1 份"] },
+        ],
+      },
+      {
+        title: "第 2 天｜超商方便版",
+        meals: [
+          { name: "早餐", items: ["茶葉蛋 2 顆", "無糖豆漿 1 瓶"] },
+          { name: "午餐", items: ["舒肥雞胸 1 份", "沙拉 1 盒", "飯糰半個到 1 個"] },
+          { name: "晚餐", items: ["關東煮：白蘿蔔、豆腐、蛋", "再加雞胸或豆干 1 份"] },
+          { name: "加餐", items: severeCraving ? ["茶葉蛋 1 顆"] : ["毛豆 1 份"] },
+        ],
+      },
+      {
+        title: "第 3 天｜家常台式版",
+        meals: [
+          { name: "早餐", items: ["地瓜 1 小條", "水煮蛋 2 顆"] },
+          { name: "午餐", items: ["滷雞腿去皮", "飯 1/3 碗", "燙青菜 2 份"] },
+          { name: "晚餐", items: ["豆腐炒瘦肉", "高麗菜 / 菇類 2 份"] },
+          { name: "加餐", items: ["無糖優格或小番茄"] },
+        ],
+      },
+      {
+        title: "第 4 天｜食慾差友善版",
+        meals: [
+          { name: "早餐", items: ["無糖優格 1 碗", "香蕉半根"] },
+          { name: "午餐", items: ["蒸蛋", "嫩豆腐", "清湯", "少量飯 1/4~1/3 碗"] },
+          { name: "晚餐", items: ["魚片湯", "青菜 2 份", "地瓜半條"] },
+          { name: "加餐", items: ["豆漿 200~250ml"] },
+        ],
+      },
+      {
+        title: "第 5 天｜日式輕盈版",
+        meals: [
+          { name: "早餐", items: ["味噌湯", "水煮蛋 2 顆"] },
+          { name: "午餐", items: ["鮭魚 100g", "飯 1/3 碗", "燙青菜 2 份"] },
+          { name: "晚餐", items: ["豆腐 / 蒟蒻 / 菇類鍋", "瘦肉 1 份"] },
+          { name: "加餐", items: ["毛豆 1 份"] },
+        ],
+      },
+      {
+        title: "第 6 天｜低碳平衡版",
+        meals: [
+          { name: "早餐", items: ["無糖豆漿", "茶葉蛋 2 顆"] },
+          { name: "午餐", items: ["雞胸肉 100g", "酪梨少量", "青菜 2 份"] },
+          { name: "晚餐", items: ["蝦仁 / 魚肉", "豆腐 1 盒", "青菜 2 份"] },
+          { name: "加餐", items: ["堅果小把"] },
+        ],
+      },
+      {
+        title: "第 7 天｜聚餐收斂版",
+        meals: [
+          { name: "早餐", items: ["茶葉蛋 2 顆", "黑咖啡 / 無糖茶"] },
+          { name: "午餐", items: ["外食正常吃，但主食先抓半份以下", "先吃蛋白質與青菜"] },
+          { name: "晚餐", items: ["回歸清淡：豆腐、魚肉、蔬菜"] },
+          { name: "加餐", items: ["真的餓再吃優格或毛豆"] },
+        ],
+      },
+    ],
+    "1400": [
+      {
+        title: "第 1 天｜標準減脂版",
+        meals: [
+          { name: "早餐", items: nausea ? ["無糖豆漿 250ml", "蘇打餅 2~3 片", "水煮蛋 1 顆"] : ["無糖豆漿", "茶葉蛋 2 顆", "全麥吐司 2 片"] },
+          { name: "午餐", items: ["雞胸肉 120g", "糙米飯半碗", "青菜 2 份"] },
+          { name: "晚餐", items: lowAppetite ? ["蒸蛋", "嫩豆腐 1 盒", "地瓜半條"] : ["魚肉 120g", "地瓜 100g", "青菜 2 份"] },
+          { name: "加餐", items: severeCraving ? ["茶葉蛋 1 顆", "無糖豆漿 1 瓶"] : ["無糖優格 1 份"] },
+        ],
+      },
+      {
+        title: "第 2 天｜三明治外食版",
+        meals: [
+          { name: "早餐", items: ["雞胸三明治 1 份", "無糖咖啡"] },
+          { name: "午餐", items: ["便當選烤雞 / 滷牛", "飯半碗", "青菜加量"] },
+          { name: "晚餐", items: ["小火鍋：肉 + 豆腐 + 菜", "主食 1/3~1/2 份"] },
+          { name: "加餐", items: ["毛豆或茶葉蛋"] },
+        ],
+      },
+      {
+        title: "第 3 天｜台式家常版",
+        meals: [
+          { name: "早餐", items: ["地瓜", "水煮蛋 2 顆", "無糖豆漿"] },
+          { name: "午餐", items: ["滷牛腱", "飯半碗", "青菜 2 份"] },
+          { name: "晚餐", items: ["豬里肌 / 雞腿排去皮", "青菜 2 份", "菇類"] },
+          { name: "加餐", items: ["無糖優格 / 小水果 擇一"] },
+        ],
+      },
+      {
+        title: "第 4 天｜日式清爽版",
+        meals: [
+          { name: "早餐", items: ["希臘優格", "香蕉 1 根"] },
+          { name: "午餐", items: ["鮭魚", "飯半碗", "味噌湯", "青菜"] },
+          { name: "晚餐", items: ["壽喜燒風牛肉", "大量青菜", "主食少量"] },
+          { name: "加餐", items: ["毛豆"] },
+        ],
+      },
+      {
+        title: "第 5 天｜超商實用版",
+        meals: [
+          { name: "早餐", items: ["茶葉蛋 2 顆", "烤地瓜", "無糖拿鐵"] },
+          { name: "午餐", items: ["雞胸肉 1 份", "沙拉 1 盒", "飯糰 1 個"] },
+          { name: "晚餐", items: ["關東煮 + 豆腐 + 蛋", "再補雞胸或豆干"] },
+          { name: "加餐", items: ["高蛋白飲 / 無糖優格 擇一"] },
+        ],
+      },
+      {
+        title: "第 6 天｜低食慾少量多餐版",
+        meals: [
+          { name: "早餐", items: ["無糖豆漿 250ml", "水煮蛋 2 顆"] },
+          { name: "午餐", items: ["蒸蛋", "嫩豆腐", "地瓜半條"] },
+          { name: "晚餐", items: ["魚湯", "青菜 2 份", "飯 1/3 碗"] },
+          { name: "加餐", items: ["優格 1 份", "或 毛豆 1 份"] },
+        ],
+      },
+      {
+        title: "第 7 天｜假日彈性版",
+        meals: [
+          { name: "早餐", items: ["鮪魚蛋吐司", "無糖茶"] },
+          { name: "午餐", items: ["聚餐可正常吃 1 餐，但主食別超 1 碗"] },
+          { name: "晚餐", items: ["回歸清淡：雞胸 / 豆腐 / 蔬菜"] },
+          { name: "加餐", items: ["真的餓再吃茶葉蛋"] },
+        ],
+      },
+    ],
+    "1600": [
+      {
+        title: "第 1 天｜高蛋白標準版",
+        meals: [
+          { name: "早餐", items: ["無糖豆漿", "茶葉蛋 2 顆", "全麥吐司 2 片"] },
+          { name: "午餐", items: ["雞胸肉 120~150g", "飯半碗到 3/4 碗", "青菜 2 份"] },
+          { name: "晚餐", items: ["魚肉 / 瘦牛 120g", "地瓜 100g", "青菜 2 份"] },
+          { name: "加餐", items: ["無糖優格 1 份", "或 毛豆 1 份"] },
+        ],
+      },
+      {
+        title: "第 2 天｜日常外食版",
+        meals: [
+          { name: "早餐", items: ["雞胸三明治", "黑咖啡"] },
+          { name: "午餐", items: ["便當選烤雞 / 滷排", "飯半碗到 3/4 碗", "青菜加量"] },
+          { name: "晚餐", items: ["小火鍋：肉片 + 豆腐 + 菜", "主食半份"] },
+          { name: "加餐", items: ["茶葉蛋 1 顆", "水果 1 份"] },
+        ],
+      },
+      {
+        title: "第 3 天｜家常飽足版",
+        meals: [
+          { name: "早餐", items: ["地瓜", "蛋 2 顆", "無糖豆漿"] },
+          { name: "午餐", items: ["滷牛腱 / 雞腿排", "飯 3/4 碗", "青菜 2 份"] },
+          { name: "晚餐", items: ["豬里肌 / 魚肉", "菇類", "地瓜 100g"] },
+          { name: "加餐", items: ["優格 / 毛豆"] },
+        ],
+      },
+      {
+        title: "第 4 天｜訓練日支援版",
+        meals: [
+          { name: "早餐", items: ["燕麥半碗", "水煮蛋 2 顆", "無糖優格"] },
+          { name: "午餐", items: ["雞胸肉 150g", "飯 3/4 碗", "青菜 2 份"] },
+          { name: "晚餐", items: ["鮭魚 120g", "地瓜 100~120g", "青菜"] },
+          { name: "加餐", items: ["高蛋白飲 1 份"] },
+        ],
+      },
+      {
+        title: "第 5 天｜台式便當版",
+        meals: [
+          { name: "早餐", items: ["鮪魚蛋吐司", "無糖拿鐵"] },
+          { name: "午餐", items: ["便當：雞腿去皮 / 滷牛", "飯半碗到 3/4 碗", "青菜多"] },
+          { name: "晚餐", items: ["燙青菜", "豆腐", "瘦肉湯"] },
+          { name: "加餐", items: ["茶葉蛋 1 顆", "水果 1 份"] },
+        ],
+      },
+      {
+        title: "第 6 天｜超商進階版",
+        meals: [
+          { name: "早餐", items: ["茶葉蛋 2 顆", "烤地瓜", "無糖豆漿"] },
+          { name: "午餐", items: ["雞胸 1 份", "沙拉 1 盒", "飯糰 1 個"] },
+          { name: "晚餐", items: ["關東煮 + 豆腐 + 蛋", "再補一份雞胸"] },
+          { name: "加餐", items: ["無糖優格", "堅果小把"] },
+        ],
+      },
+      {
+        title: "第 7 天｜聚餐可控版",
+        meals: [
+          { name: "早餐", items: ["蛋 2 顆", "無糖咖啡", "吐司 2 片"] },
+          { name: "午餐", items: ["聚餐正常吃，但先蛋白質、再主食"] },
+          { name: "晚餐", items: ["回歸清淡：魚肉 / 豆腐 / 菜"] },
+          { name: "加餐", items: ["若聚餐較油，晚上不再補零食"] },
+        ],
+      },
+    ],
+    "1800": [
+      {
+        title: "第 1 天｜男性常用減脂版",
+        meals: [
+          { name: "早餐", items: ["無糖豆漿 375ml", "蛋 2 顆", "全麥吐司 3 片"] },
+          { name: "午餐", items: ["雞胸肉 150g", "飯 3/4 碗到 1 碗", "青菜 2~3 份"] },
+          { name: "晚餐", items: ["魚 / 牛 / 豬里肌 150g", "地瓜 150g", "青菜 2 份"] },
+          { name: "加餐", items: ["優格 1 份", "水果 1 份"] },
+        ],
+      },
+      {
+        title: "第 2 天｜外食工作版",
+        meals: [
+          { name: "早餐", items: ["三明治 1 份", "無糖咖啡"] },
+          { name: "午餐", items: ["便當選烤雞 / 滷牛", "飯 3/4~1 碗", "青菜加量"] },
+          { name: "晚餐", items: ["小火鍋 + 主食半份到 1 份"] },
+          { name: "加餐", items: ["茶葉蛋 + 無糖豆漿"] },
+        ],
+      },
+      {
+        title: "第 3 天｜訓練支援版",
+        meals: [
+          { name: "早餐", items: ["燕麥 1 碗", "蛋 2 顆", "無糖優格"] },
+          { name: "午餐", items: ["雞胸肉 150g", "飯 1 碗", "青菜 2 份"] },
+          { name: "晚餐", items: ["鮭魚 / 牛肉 150g", "地瓜 150g", "青菜"] },
+          { name: "加餐", items: ["高蛋白飲 1 份", "水果 1 份"] },
+        ],
+      },
+      {
+        title: "第 4 天｜台式飽足版",
+        meals: [
+          { name: "早餐", items: ["地瓜", "蛋 2 顆", "豆漿"] },
+          { name: "午餐", items: ["雞腿排去皮", "飯 1 碗", "青菜 2 份"] },
+          { name: "晚餐", items: ["豬里肌 / 豆腐", "菇類", "地瓜 100g"] },
+          { name: "加餐", items: ["毛豆", "或 優格"] },
+        ],
+      },
+      {
+        title: "第 5 天｜超商大份量版",
+        meals: [
+          { name: "早餐", items: ["茶葉蛋 2 顆", "烤地瓜", "無糖拿鐵"] },
+          { name: "午餐", items: ["雞胸 1 份", "沙拉", "飯糰 1 個", "豆漿"] },
+          { name: "晚餐", items: ["關東煮 + 豆腐 + 蛋 + 雞胸"] },
+          { name: "加餐", items: ["堅果小把", "水果 1 份"] },
+        ],
+      },
+      {
+        title: "第 6 天｜日式定食版",
+        meals: [
+          { name: "早餐", items: ["優格", "香蕉", "吐司 2 片"] },
+          { name: "午餐", items: ["鮭魚定食，飯 3/4 碗", "味噌湯"] },
+          { name: "晚餐", items: ["壽喜燒風牛肉", "豆腐", "青菜"] },
+          { name: "加餐", items: ["茶葉蛋 1 顆"] },
+        ],
+      },
+      {
+        title: "第 7 天｜假日彈性版",
+        meals: [
+          { name: "早餐", items: ["鮪魚蛋吐司", "黑咖啡"] },
+          { name: "午餐", items: ["聚餐正常吃 1 餐，但炸物與甜點擇一"] },
+          { name: "晚餐", items: ["回歸乾淨：魚肉 / 雞胸 / 豆腐 / 青菜"] },
+          { name: "加餐", items: ["依飢餓度補優格或水果"] },
+        ],
+      },
+    ],
+    "2000": [
+      {
+        title: "第 1 天｜高活動量減脂版",
+        meals: [
+          { name: "早餐", items: ["無糖豆漿", "蛋 2 顆", "全麥吐司 3 片", "香蕉 1 根"] },
+          { name: "午餐", items: ["雞胸 / 牛肉 150~180g", "飯 1 碗", "青菜 2~3 份"] },
+          { name: "晚餐", items: ["魚肉 150g", "地瓜 150~200g", "青菜 2 份"] },
+          { name: "加餐", items: ["優格 1 份", "水果 1 份", "堅果少量"] },
+        ],
+      },
+      {
+        title: "第 2 天｜訓練恢復版",
+        meals: [
+          { name: "早餐", items: ["燕麥 1 碗", "蛋 2 顆", "優格"] },
+          { name: "午餐", items: ["雞胸肉 180g", "飯 1 碗", "青菜 2 份"] },
+          { name: "晚餐", items: ["鮭魚 150g", "地瓜 180g", "青菜"] },
+          { name: "加餐", items: ["高蛋白飲", "水果"] },
+        ],
+      },
+      {
+        title: "第 3 天｜外食穩定版",
+        meals: [
+          { name: "早餐", items: ["三明治 1 份", "無糖咖啡", "茶葉蛋 1 顆"] },
+          { name: "午餐", items: ["便當選烤雞 / 滷牛", "飯 1 碗", "青菜多"] },
+          { name: "晚餐", items: ["小火鍋：肉 + 豆腐 + 菜", "主食半份到 1 份"] },
+          { name: "加餐", items: ["無糖豆漿", "水果 1 份"] },
+        ],
+      },
+      {
+        title: "第 4 天｜家常大份量版",
+        meals: [
+          { name: "早餐", items: ["地瓜", "蛋 2 顆", "豆漿", "吐司 2 片"] },
+          { name: "午餐", items: ["雞腿排去皮", "飯 1 碗", "青菜 2 份"] },
+          { name: "晚餐", items: ["豬里肌 / 魚肉 150g", "菇類", "地瓜 150g"] },
+          { name: "加餐", items: ["毛豆", "優格"] },
+        ],
+      },
+      {
+        title: "第 5 天｜超商組合版",
+        meals: [
+          { name: "早餐", items: ["茶葉蛋 2 顆", "烤地瓜", "無糖拿鐵", "香蕉"] },
+          { name: "午餐", items: ["雞胸 1 份", "沙拉 1 盒", "飯糰 1 個", "豆漿"] },
+          { name: "晚餐", items: ["關東煮 + 雞胸 + 豆腐 + 蛋"] },
+          { name: "加餐", items: ["優格", "堅果", "水果"] },
+        ],
+      },
+      {
+        title: "第 6 天｜日式定食進階版",
+        meals: [
+          { name: "早餐", items: ["優格", "香蕉", "吐司 3 片"] },
+          { name: "午餐", items: ["鮭魚定食，飯 1 碗", "味噌湯"] },
+          { name: "晚餐", items: ["壽喜燒風牛肉", "豆腐", "蔬菜", "主食少量"] },
+          { name: "加餐", items: ["茶葉蛋", "水果"] },
+        ],
+      },
+      {
+        title: "第 7 天｜聚餐緩衝版",
+        meals: [
+          { name: "早餐", items: ["蛋 2 顆", "吐司 2 片", "無糖茶"] },
+          { name: "午餐", items: ["聚餐正常吃，但甜點與炸物不要雙選"] },
+          { name: "晚餐", items: ["回歸清淡高蛋白：雞胸 / 魚 / 豆腐 / 青菜"] },
+          { name: "加餐", items: ["依需要補優格或水果"] },
+        ],
+      },
+    ],
   };
 
-  return [
-    {
-      title: `精準菜單 A（${Math.max(
-        isFemale ? 1000 : 1200,
-        targetCalories - 100,
-      )}~${targetCalories + 100} kcal｜${isFemale ? "女性版" : "男性版"}）`,
-      meals: [
-        { name: "早餐", items: sexAdjust(breakfastMap[calorieTier]) },
-        { name: "午餐", items: sexAdjust(lunchMap[calorieTier]) },
-        { name: "晚餐", items: sexAdjust(dinnerMap[calorieTier]) },
-        { name: "加餐", items: sexAdjust(snackMap[calorieTier]) },
-      ],
-    },
-    {
-      title: `外食版菜單 B（${isFemale ? "女性版" : "男性版"}）`,
-      meals: [
-        {
-          name: "早餐",
-          items:
-            calorieTier === "high"
-              ? isFemale
-                ? ["茶葉蛋 2 顆", "無糖豆漿 1 瓶"]
-                : ["茶葉蛋 2 顆", "無糖豆漿 1 瓶", "地瓜 1 條"]
-              : isFemale
-                ? ["茶葉蛋 1~2 顆", "無糖豆漿 1 瓶"]
-                : ["茶葉蛋 2 顆", "無糖豆漿 1 瓶"],
-        },
-        {
-          name: "午餐",
-          items:
-            calorieTier === "vlow"
-              ? isFemale
-                ? ["便當選烤雞/滷雞腿", "飯 1/3 碗", "青菜加量"]
-                : ["便當選烤雞/滷雞腿", "飯半碗以下", "青菜加量"]
-              : calorieTier === "low"
-                ? isFemale
-                  ? ["便當選烤雞/滷雞腿", "飯 1/3~1/2 碗", "青菜加量"]
-                  : ["便當選烤雞/滷雞腿", "飯半碗以下", "青菜加量"]
-                : calorieTier === "mid"
-                  ? isFemale
-                    ? ["便當選烤雞/滷雞腿", "飯半碗", "青菜加量"]
-                    : ["便當選烤雞/滷雞腿", "飯半碗到 3/4 碗", "青菜加量"]
-                  : isFemale
-                    ? ["便當選烤雞/滷雞腿", "飯 1/2~3/4 碗", "青菜加量"]
-                    : ["便當選烤雞/滷雞腿", "飯 3/4~1 碗", "青菜加量"],
-        },
-        {
-          name: "晚餐",
-          items:
-            calorieTier === "high"
-              ? isFemale
-                ? ["小火鍋選肉片+豆腐+青菜", "主食半份"]
-                : ["小火鍋選肉片+豆腐+青菜", "主食半份到 1 份"]
-              : [
-                  "小火鍋選肉片+豆腐+青菜",
-                  isFemale ? "主食 1/3~1/2 份" : "主食半份",
-                ],
-        },
-        {
-          name: "加餐",
-          items:
-            calorieTier === "high"
-              ? isFemale
-                ? ["毛豆/優格/蛋白飲 擇一"]
-                : ["毛豆/優格/蛋白飲 二選一"]
-              : isFemale
-                ? ["毛豆/優格/蛋白飲 擇一"]
-                : ["毛豆/優格/蛋白飲 三選一"],
-        },
-      ],
-    },
-  ];
+  const selectedPlans = mealTemplates[tier.tier];
+  const todayPlan = selectedPlans[daySeed % selectedPlans.length];
+  const altPlan = selectedPlans[(daySeed + 2) % selectedPlans.length];
+  const recoveryPlan = selectedPlans[(daySeed + 4) % selectedPlans.length];
+
+  const enrichPlan = (plan: MealPlan, label: string): MealPlan => ({
+    title: `${label}｜${plan.title}｜${tier.label}｜${getMealAdjustmentLabel(tier.adjust)}｜${isFemale ? "女性版" : "男性版"}`,
+    meals: plan.meals.map((meal) => ({
+      name: meal.name,
+      items: buildFlexibleMealItems(
+        meal.items,
+        meal.name as "早餐" | "午餐" | "晚餐" | "加餐",
+        meal.name === "加餐" ? (tier.adjust === "+1" ? "+0.5" : tier.adjust) : tier.adjust,
+        isFemale,
+        meal.name === "加餐" && constipation ? "便秘時今天至少補水 500ml" : undefined,
+      ),
+    })),
+  });
+
+  const symptomPlan: MealPlan = {
+    title: `症狀修正版｜${nausea ? "噁心友善" : lowAppetite ? "低食慾少量多餐" : severeCraving ? "高嘴饞控量版" : "平衡修正"}｜${tier.label}`,
+    meals: [
+      {
+        name: "早餐",
+        items: nausea
+          ? ["無糖豆漿 200~250ml", "蘇打餅 2~4 片", "蛋 1 顆"]
+          : lowAppetite
+            ? ["優格 / 豆漿 擇一", "蛋 2 顆"]
+            : ["蛋白質優先", "主食按今日份量吃"],
+      },
+      {
+        name: "午餐",
+        items: severeCraving
+          ? ["先吃雞胸 / 豆腐 / 滷蛋", "主食照份量，不要額外加炸物"]
+          : ["正常吃正餐，先蛋白質與蔬菜"],
+      },
+      {
+        name: "晚餐",
+        items: nausea
+          ? ["清湯、蒸蛋、豆腐、魚肉為主", "避免油炸與太甜"]
+          : constipation
+            ? ["蔬菜 2 份 + 水 500ml", "奇異果 / 毛豆擇一"]
+            : ["主食控制在今日份量內", "避免宵夜延伸"],
+      },
+      {
+        name: "加餐",
+        items: severeCraving
+          ? ["茶葉蛋、毛豆、無糖優格先備好", "真的想吃零食時先吃蛋白質"]
+          : ["依飢餓度補 1 小份高蛋白點心"],
+      },
+    ],
+  };
+
+  return [enrichPlan(todayPlan, "今日推薦"), enrichPlan(altPlan, "替代菜單"), enrichPlan(recoveryPlan, "換口味菜單"), symptomPlan];
 }
+
 
 function getShotCycleDay(latestShotDate: string, currentDate: string) {
   if (!latestShotDate) return 0;
