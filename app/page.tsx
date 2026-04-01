@@ -4273,13 +4273,46 @@ export default function SimpleTracker() {
                 </Card>
 
                 <Card>
-                  <CardContent className="p-4 space-y-1">
+                  <CardContent className="p-4 space-y-3">
                     <div className="flex items-center gap-2 text-sm">
                       <Syringe className="w-4 h-4" />
                       剩餘藥量
                     </div>
-                    <div className="text-2xl font-semibold">{penInventorySummary.remainGrids}</div>
-                    <div className="text-xs text-slate-500">格</div>
+
+                    <div className="flex items-end gap-3">
+                      <div className="text-2xl font-semibold leading-none">
+                        {penInventorySummary.remainGrids} 格
+                      </div>
+                      <div className="text-sm text-slate-500 leading-none">
+                        {penInventorySummary.remainMg} mg
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-400">
+                      當前藥筆劑量：{penInventorySummary.strength || "-"} mg
+                    </div>
+
+                    <div className="space-y-1 rounded-xl border bg-slate-50 p-2">
+                      {penInventorySummary.supportedDoses.length ? (
+                        penInventorySummary.supportedDoses.map((item) => (
+                          <div
+                            key={item.dose}
+                            className="flex items-center justify-between text-[11px]"
+                          >
+                            <span className="text-slate-500">
+                              {item.dose}mg 還可以打
+                            </span>
+                            <span className="font-medium text-slate-700">
+                              {item.fullShots} 針
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-[11px] text-slate-500">
+                          請先設定目前藥筆劑量
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
