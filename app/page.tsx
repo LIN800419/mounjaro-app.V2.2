@@ -30,7 +30,6 @@ import {
   CalendarClock,
   Pencil,
   Trash2,
-  Download,
   Syringe,
   RotateCcw,
   Expand,
@@ -786,17 +785,6 @@ function getSevenDayAverage(entries: Entry[], index: number) {
   const values = slice.map((e) => num(e.weight)).filter((v) => v > 0);
   if (!values.length) return 0;
   return +(values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(1);
-}
-
-function downloadTextFile(filename: string, content: string) {
-  if (typeof window === "undefined") return;
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 function fileToDataUrl(file: File) {
@@ -1603,13 +1591,13 @@ export default function SimpleTracker() {
   >("default");
 
   const defaultSettings: Settings = {
-    firstShotDate: today || "2026-01-01",
+    firstShotDate: "",
     notificationsOn: true,
     elcdMode: false,
     bmrMethod: "mifflin",
-    height: "173",
-    age: "35",
-    goal: "90",
+    height: "",
+    age: "",
+    goal: "",
     sex: "male",
     activity: "1.2",
     shotInterval: "7",
@@ -3199,53 +3187,6 @@ export default function SimpleTracker() {
     setPhotoRecords((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const exportCSV = () => {
-    const header = [
-      "date",
-      "weight",
-      "bodyFatPct",
-      "fatMass",
-      "muscleMass",
-      "visceralFat",
-      "bodyWater",
-      "dose",
-      "appetite",
-      "cravingLevel",
-      "sideEffect",
-      "sideEffectSeverity",
-      "sideEffects",
-      "exerciseMin",
-      "isShotDay",
-    ];
-    const rows = sortedEntries.map((e) => [
-      e.date,
-      e.weight,
-      e.bodyFatPct,
-      e.fatMass,
-      e.muscleMass,
-      e.visceralFat,
-      e.bodyWater,
-      e.dose,
-      e.appetite,
-      e.cravingLevel,
-      e.sideEffect,
-      e.sideEffectSeverity,
-      (e.sideEffects || []).map((se) => `${se.effect}(${se.severity})`).join(" / "),
-      e.exerciseMin,
-      e.isShotDay ? "Y" : "N",
-    ]);
-    downloadTextFile(
-      `mounjaro-records-${today}.csv`,
-      [header, ...rows].map((r) => r.join(",")).join("\n"),
-    );
-  };
-
-  const exportJSON = () => {
-    downloadTextFile(
-      `mounjaro-records-${today}.json`,
-      JSON.stringify({ settings, entries: sortedEntries, penInventory, photoRecords }, null, 2),
-    );
-  };
 
   const requestNotificationPermission = async () => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -3585,7 +3526,7 @@ export default function SimpleTracker() {
               趨勢
             </TabsTrigger>
             <TabsTrigger value="ai" className="rounded-xl shrink-0 px-4">
-              AI
+              菜單
             </TabsTrigger>
             <TabsTrigger value="strategy" className="rounded-xl shrink-0 px-4">
               策略
@@ -3598,9 +3539,6 @@ export default function SimpleTracker() {
             </TabsTrigger>
             <TabsTrigger value="cheat" className="rounded-xl shrink-0 px-4">
               放鬆
-            </TabsTrigger>
-            <TabsTrigger value="learn" className="rounded-xl shrink-0 px-4">
-              學習
             </TabsTrigger>
           </TabsList>
         </div>
@@ -4059,6 +3997,36 @@ export default function SimpleTracker() {
                 <div>• 外食日後體重波動是否偏大</div>
                 <div>• 運動分鐘數增加後，體重是否更穩定下降</div>
                 <div>• 若連續 2 週停滯，再檢查熱量與零食</div>
+              </CardContent>
+            </Card>
+
+
+            <Card>
+              <CardHeader>
+                <CardTitle>🧠 個人化 AI 學習</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="font-medium">{personalAI.summary}</div>
+                <div className="text-sm text-slate-600">
+                  最容易成功的時段／狀態：{personalAI.bestWindow}
+                </div>
+                <div className="text-sm text-slate-600">
+                  最容易失守的時段／狀態：{personalAI.riskWindow}
+                </div>
+                <div className="text-sm text-slate-600">
+                  目前看起來最有效的模式：{personalAI.effectivePattern}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>AI 學到的重點</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {personalAI.learningTips.map((tip) => (
+                  <div key={tip}>• {tip}</div>
+                ))}
               </CardContent>
             </Card>
           </div>
@@ -4591,7 +4559,7 @@ export default function SimpleTracker() {
                 />
 
                 <div className="text-xs text-slate-500">
-                  照片會存於本機瀏覽器。若照片很多，建議定期匯出備份。
+                  照片會跟著目前資料一起保留。
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -4620,22 +4588,6 @@ export default function SimpleTracker() {
                     ))
                   )}
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>資料匯出</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button className="w-full" variant="outline" onClick={exportCSV}>
-                  <Download className="w-4 h-4 mr-1" />
-                  匯出 CSV
-                </Button>
-                <Button className="w-full" variant="outline" onClick={exportJSON}>
-                  <Download className="w-4 h-4 mr-1" />
-                  匯出 JSON
-                </Button>
               </CardContent>
             </Card>
           </div>
@@ -4685,39 +4637,6 @@ export default function SimpleTracker() {
                     </div>
                     <div className="text-xs text-slate-500">{option.note}</div>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="learn">
-          <div className="grid gap-4 grid-cols-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>🧠 個人化 AI 學習</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="font-medium">{personalAI.summary}</div>
-                <div className="text-sm text-slate-600">
-                  最容易成功的時段／狀態：{personalAI.bestWindow}
-                </div>
-                <div className="text-sm text-slate-600">
-                  最容易失守的時段／狀態：{personalAI.riskWindow}
-                </div>
-                <div className="text-sm text-slate-600">
-                  目前看起來最有效的模式：{personalAI.effectivePattern}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>AI 學到的重點</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {personalAI.learningTips.map((tip) => (
-                  <div key={tip}>• {tip}</div>
                 ))}
               </CardContent>
             </Card>
