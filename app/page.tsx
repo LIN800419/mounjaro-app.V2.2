@@ -178,6 +178,14 @@ function formatLocalDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function getWeekStart(dateStr: string) {
+  const d = parseLocalDate(dateStr);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return formatLocalDate(d);
+}
+
 function getTodayLocalDate() {
   return formatLocalDate(new Date());
 }
@@ -1035,12 +1043,12 @@ const COMPOSITE_METRICS = [
 ] as const;
 
 const METRIC_COLORS: Record<string, string> = {
-  weight: "#0f172a",
+  weight: "#e2e8f0",
   bodyFatPct: "#7c3aed",
   fatMass: "#dc2626",
   muscleRate: "#059669",
   muscleMass: "#ea580c",
-  visceralFat: "#334155",
+  visceralFat: "#cbd5e1",
   bodyWater: "#0284c7",
 };
 
@@ -2453,16 +2461,43 @@ export default function SimpleTracker() {
   }, [latestShotDate, today]);
 
   const shotStatus = useMemo(() => {
+    if (!today) {
+      return { status: "尚未建立", text: "請先建立施打日", overdueDays: 0 };
+    }
+
+    const interval = Math.max(1, num(settings.shotInterval || 7));
+    const recentShotEntries = sortedEntries.filter(
+      (entry) => entry.isShotDay && daysBetween(entry.date, today) >= 0,
+    );
+    const latestRecordedShot = recentShotEntries.length
+      ? recentShotEntries[recentShotEntries.length - 1]
+      : null;
+
+    if (latestRecordedShot) {
+      const sinceLatestShot = daysBetween(latestRecordedShot.date, today);
+      if (sinceLatestShot === 0) {
+        return {
+          status: "今天已施打",
+          text: `已記錄今日施打，下次約在 ${nextShot.date}`,
+          overdueDays: 0,
+        };
+      }
+      if (sinceLatestShot < interval) {
+        return {
+          status: "本週已施打",
+          text: `距離下次施打還有 ${Math.max(0, interval - sinceLatestShot)} 天`,
+          overdueDays: 0,
+        };
+      }
+    }
+
     if (!nextShot.date || nextShot.date === "-") {
       return { status: "尚未建立", text: "請先建立施打日", overdueDays: 0 };
     }
-    const diff = today ? daysBetween(today, nextShot.date) : 0;
+
+    const diff = daysBetween(today, nextShot.date);
     if (diff > 0) {
-      return {
-        status: "本週尚未施打",
-        text: `距離下次施打還有 ${diff} 天`,
-        overdueDays: 0,
-      };
+      return { status: "本週尚未施打", text: `距離下次施打還有 ${diff} 天`, overdueDays: 0 };
     }
     if (diff === 0) {
       return { status: "今天該施打", text: "今天是施打日", overdueDays: 0 };
@@ -2472,7 +2507,7 @@ export default function SimpleTracker() {
       text: `已超過 ${Math.abs(diff)} 天，可補打後重設基準`,
       overdueDays: Math.abs(diff),
     };
-  }, [nextShot.date, today]);
+  }, [nextShot.date, settings.shotInterval, sortedEntries, today]);
 
   const progress = useMemo(() => {
     const goal = num(settings.goal);
@@ -3495,22 +3530,34 @@ export default function SimpleTracker() {
     }
 
     const latestEntry = sortedEntries[sortedEntries.length - 1];
+    const weekStart = getWeekStart(latestEntry.date);
     const windowEntries = sortedEntries.filter((entry) => {
-      const diff = daysBetween(entry.date, latestEntry.date);
-      return diff >= 0 && diff <= 6;
+      return daysBetween(weekStart, entry.date) >= 0 && daysBetween(entry.date, latestEntry.date) >= 0;
     });
 
-    const firstEntry = windowEntries[0];
-    const lastEntry = windowEntries[windowEntries.length - 1];
-    const weightDelta = +(
-      num(lastEntry?.weight) - num(firstEntry?.weight)
-    ).toFixed(1);
-    const bodyFatDelta = +(
-      num(lastEntry?.bodyFatPct) - num(firstEntry?.bodyFatPct)
-    ).toFixed(1);
-    const muscleDelta = +(
-      num(lastEntry?.muscleMass) - num(firstEntry?.muscleMass)
-    ).toFixed(1);
+    if (!windowEntries.length) {
+      return {
+        title: "本週尚無資料",
+        summary: "先建立本週紀錄後，這裡會自動整理變化。",
+        bullets: ["至少記錄體重與是否施打"],
+      };
+    }
+
+    const findFirstValue = (key: keyof Entry) =>
+      windowEntries.find((entry) => num(entry[key]) > 0) || windowEntries[0];
+    const findLastValue = (key: keyof Entry) =>
+      [...windowEntries].reverse().find((entry) => num(entry[key]) > 0) || windowEntries[windowEntries.length - 1];
+
+    const weightFirst = findFirstValue("weight");
+    const weightLast = findLastValue("weight");
+    const bodyFatFirst = findFirstValue("bodyFatPct");
+    const bodyFatLast = findLastValue("bodyFatPct");
+    const muscleFirst = findFirstValue("muscleMass");
+    const muscleLast = findLastValue("muscleMass");
+
+    const weightDelta = +(num(weightLast?.weight) - num(weightFirst?.weight)).toFixed(1);
+    const bodyFatDelta = +(num(bodyFatLast?.bodyFatPct) - num(bodyFatFirst?.bodyFatPct)).toFixed(1);
+    const muscleDelta = +(num(muscleLast?.muscleMass) - num(muscleFirst?.muscleMass)).toFixed(1);
     const shotDone = windowEntries.some((entry) => entry.isShotDay);
     const stableDays = windowEntries.filter(
       (entry) => entry.appetite === "下降" || entry.cravingLevel !== "高",
@@ -3533,10 +3580,17 @@ export default function SimpleTracker() {
       summary = `體重上升 ${weightDelta} kg，先檢查聚餐、放鬆餐與水分波動。`;
     }
 
+    const bodyFatText = num(bodyFatFirst?.bodyFatPct) > 0 && num(bodyFatLast?.bodyFatPct) > 0
+      ? `${bodyFatDelta > 0 ? "+" : ""}${bodyFatDelta}%`
+      : "本週資料不足";
+    const muscleText = num(muscleFirst?.muscleMass) > 0 && num(muscleLast?.muscleMass) > 0
+      ? `${muscleDelta > 0 ? "+" : ""}${muscleDelta} kg`
+      : "本週資料不足";
+
     const bullets = [
       `體重變化：${weightDelta > 0 ? "+" : ""}${weightDelta} kg`,
-      `體脂率變化：${bodyFatDelta > 0 ? "+" : ""}${bodyFatDelta}%`,
-      `肌肉量變化：${muscleDelta > 0 ? "+" : ""}${muscleDelta} kg`,
+      `體脂率變化：${bodyFatText}`,
+      `肌肉量變化：${muscleText}`,
       `本週施打：${shotDone ? "有紀錄" : "未記錄"}`,
       `相對穩定日數：${stableDays}/${windowEntries.length} 天`,
     ];
@@ -3544,61 +3598,6 @@ export default function SimpleTracker() {
     return { title, summary, bullets };
   }, [sortedEntries]);
 
-  const milestones = useMemo(() => {
-    if (!sortedEntries.length) return [];
-    const items: Array<{ title: string; detail: string; reached: boolean }> =
-      [];
-    const startWeight = num(sortedEntries[0].weight);
-    const lostWeight = +(startWeight - latestWeight).toFixed(1);
-    const uniqueDates: string[] = [
-      ...new Set(sortedEntries.map((entry) => entry.date)),
-    ].sort();
-    let logStreak = 0;
-
-    if (uniqueDates.length) {
-      logStreak = 1;
-      for (let i = uniqueDates.length - 1; i > 0; i -= 1) {
-        if (daysBetween(uniqueDates[i - 1], uniqueDates[i]) === 1)
-          logStreak += 1;
-        else break;
-      }
-    }
-
-    let shotStreak = 0;
-    const interval = Math.max(1, num(settings.shotInterval || 7));
-    const orderedShots = [...shotEntries].reverse();
-    if (orderedShots.length) {
-      shotStreak = 1;
-      for (let i = orderedShots.length - 1; i > 0; i -= 1) {
-        const gap = daysBetween(orderedShots[i - 1].date, orderedShots[i].date);
-        if (Math.abs(gap - interval) <= 1) shotStreak += 1;
-        else break;
-      }
-    }
-
-    items.push({
-      title: "累計減重 5 kg",
-      detail: lostWeight > 0 ? `目前已減 ${lostWeight} kg` : "尚未開始累計",
-      reached: lostWeight >= 5,
-    });
-    items.push({
-      title: "累計減重 10 kg",
-      detail: lostWeight > 0 ? `目前已減 ${lostWeight} kg` : "尚未開始累計",
-      reached: lostWeight >= 10,
-    });
-    items.push({
-      title: "連續紀錄 7 天",
-      detail: `目前連續 ${logStreak} 天`,
-      reached: logStreak >= 7,
-    });
-    items.push({
-      title: "連續按時施打 4 週",
-      detail: `目前連續 ${shotStreak} 針`,
-      reached: shotStreak >= 4,
-    });
-
-    return items;
-  }, [sortedEntries, latestWeight, shotEntries, settings.shotInterval]);
 
   const anomalyAlerts = useMemo(() => {
     const alerts: Array<{ level: "高" | "中"; title: string; detail: string }> =
@@ -3678,32 +3677,34 @@ export default function SimpleTracker() {
   }, [sortedEntries, latest, today, shotStatus.overdueDays]);
 
   const dashboardSummary = useMemo(() => {
-    const cards = [
+    return [
       { label: "今日體重", value: latestWeight ? `${latestWeight} kg` : "-" },
+      { label: "BMI", value: bmi ? `${bmi}・${bmiLabel}` : "-" },
       {
         label: "下次施打",
-        value: nextShot.text === "-" ? "未設定" : `${nextShot.text}`,
+        value:
+          nextShot.text === "-"
+            ? "未設定"
+            : `${nextShot.text}${nextShot.date !== "-" ? `・${nextShot.date}` : ""}`,
       },
       {
         label: "本週變化",
         value: `${recent7Delta > 0 ? "+" : ""}${recent7Delta} kg`,
       },
       { label: "建議熱量", value: cutCalories ? `${cutCalories} kcal` : "-" },
-      { label: "BMR", value: bmr ? `${bmr} kcal` : "-" },
       {
         label: "剩餘藥量",
-        value: penInventorySummary.remainGrids
-          ? `${penInventorySummary.remainGrids} 格`
-          : "0 格",
+        value: `${penInventorySummary.remainGrids || 0} 格`,
       },
     ];
-    return cards;
   }, [
     latestWeight,
+    bmi,
+    bmiLabel,
     nextShot.text,
+    nextShot.date,
     recent7Delta,
     cutCalories,
-    bmr,
     penInventorySummary.remainGrids,
   ]);
 
@@ -4416,24 +4417,6 @@ export default function SimpleTracker() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>里程碑提醒</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {milestones.map((item) => (
-                  <div key={item.title} className="rounded-xl border p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-medium">{item.title}</div>
-                      <Badge variant={item.reached ? "default" : "outline"}>
-                        {item.reached ? "已達成" : "未達成"}
-                      </Badge>
-                    </div>
-                    <div className="mt-1 text-slate-500">{item.detail}</div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
 
             <Card>
               <CardHeader>
