@@ -4195,83 +4195,95 @@ export default function SimpleTracker() {
           </div>
 
           <Card>
-            <CardContent className="p-4 space-y-3">
+            <CardContent className="p-4 space-y-4">
               <div className="flex items-center justify-between gap-2">
-                <div className="font-semibold">首頁儀表板</div>
-                <Badge variant="secondary">一打開先看這裡</Badge>
+                <div className="text-xl font-bold">首頁儀表板</div>
+                <div className="text-sm text-slate-500">一打開先看這裡</div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                {dashboardSummary.map((item) => (
-                  <div
-                    key={item.label}
-                    className="rounded-xl border bg-slate-50 p-3"
-                  >
-                    <div className="text-slate-500 text-xs">{item.label}</div>
-                    <div className="mt-1 font-semibold">{item.value}</div>
-                  </div>
-                ))}
+
+              <div className="grid gap-3 grid-cols-2">
+                <Card>
+                  <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Scale className="w-4 h-4" />
+                      今日體重
+                    </div>
+                    <div className="text-2xl font-semibold">
+                      {latestWeight || "-"}
+                    </div>
+                    <div className="text-xs text-slate-500">kg</div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2 text-sm">
+                      <HeartPulse className="w-4 h-4" />
+                      BMI
+                    </div>
+                    <div className="text-2xl font-semibold">
+                      {bmi || "-"}
+                    </div>
+                    <div className="text-xs text-slate-500">{bmiLabel}</div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Bell className="w-4 h-4" />
+                      下次施打
+                      {nextShot.shouldNotify ? (
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                      ) : null}
+                    </div>
+                    <div className="text-lg font-semibold">{nextShot.text}</div>
+                    <div className="text-xs text-slate-500">
+                      {nextShot.date !== "-" ? nextShot.date : "尚未建立"}
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      基準：{nextShot.source}（{nextShot.baseDate}）
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2 text-sm">
+                      <TrendingDown className="w-4 h-4" />
+                      本週變化
+                    </div>
+                    <div className="text-2xl font-semibold">
+                      {recent7Delta > 0 ? "+" : ""}{recent7Delta || 0}
+                    </div>
+                    <div className="text-xs text-slate-500">kg</div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Flame className="w-4 h-4" />
+                      建議熱量
+                    </div>
+                    <div className="text-2xl font-semibold">{cutCalories || "-"}</div>
+                    <div className="text-xs text-slate-500">kcal</div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Syringe className="w-4 h-4" />
+                      剩餘藥量
+                    </div>
+                    <div className="text-2xl font-semibold">{penInventorySummary.remainGrids}</div>
+                    <div className="text-xs text-slate-500">格</div>
+                  </CardContent>
+                </Card>
               </div>
             </CardContent>
           </Card>
-
-          <div className="grid gap-3 grid-cols-2">
-            <Card>
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <Scale className="w-4 h-4" />
-                  目前體重
-                </div>
-                <div className="text-2xl font-semibold">
-                  {latestWeight || "-"}
-                </div>
-                <div className="text-xs text-slate-500">kg</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <HeartPulse className="w-4 h-4" />
-                  BMI
-                </div>
-                <div className="text-2xl font-semibold">{bmi || "-"}</div>
-                <div className="text-xs text-slate-500">{bmiLabel}</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <Flame className="w-4 h-4" />
-                  BMR
-                </div>
-                <div className="text-2xl font-semibold">{bmr || "-"}</div>
-                <div className="text-xs text-slate-500">
-                  kcal｜
-                  {settings.bmrMethod === "katch" ? "體脂器公式" : "一般公式"}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <Bell className="w-4 h-4" />
-                  下次施打
-                  {nextShot.shouldNotify ? (
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-                  ) : null}
-                </div>
-                <div className="text-lg font-semibold">{nextShot.text}</div>
-                <div className="text-xs text-slate-500">
-                  {nextShot.date !== "-" ? nextShot.date : "尚未建立"}
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  基準：{nextShot.source}（{nextShot.baseDate}）
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
           <div className="grid gap-3 grid-cols-1">
             <Card>
