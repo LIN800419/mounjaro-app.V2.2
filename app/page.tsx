@@ -186,6 +186,12 @@ function getWeekStart(dateStr: string) {
   return formatLocalDate(d);
 }
 
+function getMonthStart(dateStr: string) {
+  const d = parseLocalDate(dateStr);
+  d.setDate(1);
+  return formatLocalDate(d);
+}
+
 function getTodayLocalDate() {
   return formatLocalDate(new Date());
 }
@@ -3520,25 +3526,14 @@ export default function SimpleTracker() {
     return estimateETA(latestWeight, num(settings.goal), weeklyLoss);
   }, [latestWeight, settings.goal, weeklyLoss]);
 
-  const weeklySummary = useMemo(() => {
-    if (!sortedEntries.length) {
-      return {
-        title: "本週尚無資料",
-        summary: "先建立本週紀錄後，這裡會自動整理變化。",
-        bullets: ["至少記錄體重與是否施打"],
-      };
-    }
-
-    const latestEntry = sortedEntries[sortedEntries.length - 1];
-    const weekStart = getWeekStart(latestEntry.date);
-    const windowEntries = sortedEntries.filter((entry) => {
-      return daysBetween(weekStart, entry.date) >= 0 && daysBetween(entry.date, latestEntry.date) >= 0;
-    });
-
+  const buildPeriodSummary = (
+    periodLabel: string,
+    windowEntries: Entry[],
+  ) => {
     if (!windowEntries.length) {
       return {
-        title: "本週尚無資料",
-        summary: "先建立本週紀錄後，這裡會自動整理變化。",
+        title: `${periodLabel}尚無資料`,
+        summary: `先建立${periodLabel}紀錄後，這裡會自動整理變化。`,
         bullets: ["至少記錄體重與是否施打"],
       };
     }
@@ -3546,7 +3541,8 @@ export default function SimpleTracker() {
     const findFirstValue = (key: keyof Entry) =>
       windowEntries.find((entry) => num(entry[key]) > 0) || windowEntries[0];
     const findLastValue = (key: keyof Entry) =>
-      [...windowEntries].reverse().find((entry) => num(entry[key]) > 0) || windowEntries[windowEntries.length - 1];
+      [...windowEntries].reverse().find((entry) => num(entry[key]) > 0) ||
+      windowEntries[windowEntries.length - 1];
 
     const weightFirst = findFirstValue("weight");
     const weightLast = findLastValue("weight");
@@ -3555,47 +3551,91 @@ export default function SimpleTracker() {
     const muscleFirst = findFirstValue("muscleMass");
     const muscleLast = findLastValue("muscleMass");
 
-    const weightDelta = +(num(weightLast?.weight) - num(weightFirst?.weight)).toFixed(1);
-    const bodyFatDelta = +(num(bodyFatLast?.bodyFatPct) - num(bodyFatFirst?.bodyFatPct)).toFixed(1);
-    const muscleDelta = +(num(muscleLast?.muscleMass) - num(muscleFirst?.muscleMass)).toFixed(1);
+    const weightDelta = +(
+      num(weightLast?.weight) - num(weightFirst?.weight)
+    ).toFixed(1);
+    const bodyFatDelta = +(
+      num(bodyFatLast?.bodyFatPct) - num(bodyFatFirst?.bodyFatPct)
+    ).toFixed(1);
+    const muscleDelta = +(
+      num(muscleLast?.muscleMass) - num(muscleFirst?.muscleMass)
+    ).toFixed(1);
     const shotDone = windowEntries.some((entry) => entry.isShotDay);
     const stableDays = windowEntries.filter(
       (entry) => entry.appetite === "下降" || entry.cravingLevel !== "高",
     ).length;
 
-    let title = "本週持續中";
-    let summary = "本週節奏大致穩定，建議繼續維持。";
+    let title = `${periodLabel}持續中`;
+    let summary = `${periodLabel}節奏大致穩定，建議繼續維持。`;
 
     if (weightDelta <= -0.5 && muscleDelta >= -0.2) {
-      title = "本週減脂表現不錯";
+      title = `${periodLabel}減脂表現不錯`;
       summary = `體重下降 ${Math.abs(weightDelta)} kg，肌肉量大致守住，方向不錯。`;
     } else if (weightDelta <= -0.3 && muscleDelta < -0.3) {
-      title = "本週有下降，但要注意保肌";
+      title = `${periodLabel}有下降，但要注意保肌`;
       summary = `體重下降 ${Math.abs(weightDelta)} kg，但肌肉量也掉了 ${Math.abs(muscleDelta)} kg。`;
     } else if (Math.abs(weightDelta) < 0.3) {
-      title = "本週接近持平";
+      title = `${periodLabel}接近持平`;
       summary = "體重變化不大，可再看外食、零食與步數。";
     } else if (weightDelta > 0.3) {
-      title = "本週有回升";
+      title = `${periodLabel}有回升`;
       summary = `體重上升 ${weightDelta} kg，先檢查聚餐、放鬆餐與水分波動。`;
     }
 
-    const bodyFatText = num(bodyFatFirst?.bodyFatPct) > 0 && num(bodyFatLast?.bodyFatPct) > 0
-      ? `${bodyFatDelta > 0 ? "+" : ""}${bodyFatDelta}%`
-      : "本週資料不足";
-    const muscleText = num(muscleFirst?.muscleMass) > 0 && num(muscleLast?.muscleMass) > 0
-      ? `${muscleDelta > 0 ? "+" : ""}${muscleDelta} kg`
-      : "本週資料不足";
+    const bodyFatText =
+      num(bodyFatFirst?.bodyFatPct) > 0 && num(bodyFatLast?.bodyFatPct) > 0
+        ? `${bodyFatDelta > 0 ? "+" : ""}${bodyFatDelta}%`
+        : `${periodLabel}資料不足`;
+    const muscleText =
+      num(muscleFirst?.muscleMass) > 0 && num(muscleLast?.muscleMass) > 0
+        ? `${muscleDelta > 0 ? "+" : ""}${muscleDelta} kg`
+        : `${periodLabel}資料不足`;
 
     const bullets = [
       `體重變化：${weightDelta > 0 ? "+" : ""}${weightDelta} kg`,
       `體脂率變化：${bodyFatText}`,
       `肌肉量變化：${muscleText}`,
-      `本週施打：${shotDone ? "有紀錄" : "未記錄"}`,
+      `${periodLabel}施打：${shotDone ? "有紀錄" : "未記錄"}`,
       `相對穩定日數：${stableDays}/${windowEntries.length} 天`,
     ];
 
     return { title, summary, bullets };
+  };
+
+  const weeklySummary = useMemo(() => {
+    if (!sortedEntries.length) {
+      return buildPeriodSummary("本週", []);
+    }
+
+    const latestEntry = sortedEntries[sortedEntries.length - 1];
+    const weekStart = getWeekStart(latestEntry.date);
+    const windowEntries = sortedEntries.filter(
+      (entry) =>
+        daysBetween(weekStart, entry.date) >= 0 &&
+        daysBetween(entry.date, latestEntry.date) >= 0,
+    );
+
+    return buildPeriodSummary("本週", windowEntries);
+  }, [sortedEntries]);
+
+  const monthlySummary = useMemo(() => {
+    if (!sortedEntries.length) {
+      return buildPeriodSummary("本月", []);
+    }
+
+    const latestEntry = sortedEntries[sortedEntries.length - 1];
+    const monthStart = getMonthStart(latestEntry.date);
+    const windowEntries = sortedEntries.filter(
+      (entry) =>
+        daysBetween(monthStart, entry.date) >= 0 &&
+        daysBetween(entry.date, latestEntry.date) >= 0,
+    );
+
+    return buildPeriodSummary("本月", windowEntries);
+  }, [sortedEntries]);
+
+  const overallSummary = useMemo(() => {
+    return buildPeriodSummary("整體", sortedEntries);
   }, [sortedEntries]);
 
 
@@ -4448,21 +4488,26 @@ export default function SimpleTracker() {
           />
 
           <div className="grid gap-4 grid-cols-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>本週摘要</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="text-lg font-semibold">
-                  {weeklySummary.title}
-                </div>
-                <div className="text-slate-500">{weeklySummary.summary}</div>
-                {weeklySummary.bullets.map((item) => (
-                  <div key={item}>• {item}</div>
-                ))}
-              </CardContent>
-            </Card>
-
+            {[
+              { label: "本週摘要", data: weeklySummary },
+              { label: "本月摘要", data: monthlySummary },
+              { label: "整體摘要", data: overallSummary },
+            ].map((section) => (
+              <Card key={section.label}>
+                <CardHeader>
+                  <CardTitle>{section.label}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="text-lg font-semibold">
+                    {section.data.title}
+                  </div>
+                  <div className="text-slate-500">{section.data.summary}</div>
+                  {section.data.bullets.map((item) => (
+                    <div key={item}>• {item}</div>
+                  ))}
+                </CardContent>
+              </Card>
+            ))}
 
             <Card>
               <CardHeader>
