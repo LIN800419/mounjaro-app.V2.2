@@ -1950,6 +1950,9 @@ export default function SimpleTracker() {
     "bodyWaterTrend",
   ]);
 
+  const [selectedSummaryYear, setSelectedSummaryYear] = useState("");
+  const [selectedSummaryMonth, setSelectedSummaryMonth] = useState("");
+
   const penQuickPresets = [
     { label: "10 → 2.5", strength: "10", dose: "2.5" },
     { label: "10 → 5", strength: "10", dose: "5" },
@@ -1987,6 +1990,12 @@ export default function SimpleTracker() {
 
   useEffect(() => {
     if (!today) return;
+
+    if (!selectedSummaryYear || !selectedSummaryMonth) {
+      const [year, month] = today.split("-");
+      setSelectedSummaryYear((prev) => prev || year || "");
+      setSelectedSummaryMonth((prev) => prev || month || "");
+    }
 
     const loadData = async () => {
       const data = localStorage.getItem(STORAGE_KEY);
@@ -2241,6 +2250,17 @@ export default function SimpleTracker() {
       }
 
       setEntries(finalEntries);
+      if (finalEntries.length) {
+        const latestEntryDate = finalEntries
+          .map((entry) => entry.date)
+          .sort()
+          .slice(-1)[0];
+        if (latestEntryDate) {
+          const [year, month] = latestEntryDate.split("-");
+          setSelectedSummaryYear((prev) => prev || year || "");
+          setSelectedSummaryMonth((prev) => prev || month || "");
+        }
+      }
       setSettings(finalSettings);
       setTempSettings(finalSettings);
       setPenInventory(finalPenInventory);
@@ -3634,6 +3654,35 @@ export default function SimpleTracker() {
     return buildPeriodSummary("本月", windowEntries);
   }, [sortedEntries]);
 
+  const summaryYearOptions = useMemo(() => {
+    const years = Array.from(
+      new Set(
+        sortedEntries
+          .map((entry) => entry.date.split("-")[0])
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => Number(b) - Number(a));
+
+    if (!years.length && selectedSummaryYear) return [selectedSummaryYear];
+    return years;
+  }, [sortedEntries, selectedSummaryYear]);
+
+  const otherMonthSummary = useMemo(() => {
+    if (!selectedSummaryYear || !selectedSummaryMonth) {
+      return buildPeriodSummary("其他月份", []);
+    }
+
+    const windowEntries = sortedEntries.filter((entry) => {
+      const [year, month] = entry.date.split("-");
+      return year === selectedSummaryYear && month === selectedSummaryMonth;
+    });
+
+    return buildPeriodSummary(
+      `${selectedSummaryYear} 年 ${Number(selectedSummaryMonth)} 月`,
+      windowEntries,
+    );
+  }, [sortedEntries, selectedSummaryYear, selectedSummaryMonth]);
+
   const overallSummary = useMemo(() => {
     return buildPeriodSummary("整體", sortedEntries);
   }, [sortedEntries]);
@@ -4508,6 +4557,70 @@ export default function SimpleTracker() {
                 </CardContent>
               </Card>
             ))}
+
+            <Card>
+              <CardHeader>
+                <CardTitle>其他月份摘要</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>年份</Label>
+                    <Select
+                      value={selectedSummaryYear}
+                      onValueChange={setSelectedSummaryYear}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="選擇年份" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {summaryYearOptions.length ? (
+                          summaryYearOptions.map((year) => (
+                            <SelectItem key={year} value={year}>
+                              {year} 年
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-year" disabled>
+                            無可選年份
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>月份</Label>
+                    <Select
+                      value={selectedSummaryMonth}
+                      onValueChange={setSelectedSummaryMonth}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="選擇月份" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 12 }, (_, index) => {
+                          const monthValue = String(index + 1).padStart(2, "0");
+                          return (
+                            <SelectItem key={monthValue} value={monthValue}>
+                              {index + 1} 月
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="text-lg font-semibold">
+                  {otherMonthSummary.title}
+                </div>
+                <div className="text-slate-500">{otherMonthSummary.summary}</div>
+                {otherMonthSummary.bullets.map((item) => (
+                  <div key={item}>• {item}</div>
+                ))}
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>
