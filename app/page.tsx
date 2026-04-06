@@ -125,6 +125,49 @@ type PhotoRecord = {
   imageData: string;
 };
 
+type WorkoutEquipment = "bike" | "treadmill" | "kettlebell";
+type WorkoutLevel = "low" | "mid" | "high";
+type WorkoutStyle = "easy" | "hard";
+type WorkoutCategory = "cardio" | "strength" | "core";
+type WorkoutPart = "上肢" | "下肢" | "核心" | "全身" | "有氧";
+
+type WorkoutDefinition = {
+  id: string;
+  name: string;
+  category: WorkoutCategory;
+  part: WorkoutPart;
+  equipment: WorkoutEquipment | "bodyweight";
+  steps: string[];
+  tips: string[];
+  mistakes: string[];
+  breathing: string;
+  caution: string[];
+  alternatives: string[];
+};
+
+type WorkoutCard = {
+  id: string;
+  name: string;
+  category: WorkoutCategory;
+  part: WorkoutPart;
+  equipment: WorkoutEquipment | "bodyweight";
+  setsText?: string;
+  repsText?: string;
+  durationText?: string;
+  restText?: string;
+  parameterText?: string[];
+  feeling?: string;
+  tutorial: Omit<WorkoutDefinition, "id" | "name" | "category" | "part" | "equipment">;
+};
+
+type WorkoutPlan = {
+  title: string;
+  subtitle: string;
+  estimatedMinutes: string;
+  focus: string;
+  cards: WorkoutCard[];
+};
+
 type CloudPayload = {
   entries: Entry[];
   settings: Settings;
@@ -132,10 +175,614 @@ type CloudPayload = {
   photoRecords: PhotoRecord[];
 };
 
+const WORKOUT_DEFINITIONS: WorkoutDefinition[] = [
+  {
+    id: "bike_ride",
+    name: "飛輪輕鬆騎",
+    category: "cardio",
+    part: "有氧",
+    equipment: "bike",
+    steps: [
+      "坐穩後先用輕阻力暖身 2~3 分鐘。",
+      "踩踏時身體穩定，不要左右亂晃。",
+      "維持可持續完成的節奏，到結束前再慢慢放鬆。",
+    ],
+    tips: ["腳掌平均出力", "肩膀放鬆", "阻力寧可保守也不要一開始太重"],
+    mistakes: ["聳肩", "身體前後亂晃", "阻力開太重導致一下就爆掉"],
+    breathing: "自然呼吸，維持微喘即可。",
+    caution: ["膝蓋不適時先把阻力降一點", "暈眩時先停下補水"],
+    alternatives: ["跑步機快走 20~30 分鐘", "原地踏步 10~15 分鐘"],
+  },
+  {
+    id: "treadmill_walk",
+    name: "跑步機快走",
+    category: "cardio",
+    part: "有氧",
+    equipment: "treadmill",
+    steps: [
+      "先用輕鬆速度走 2~3 分鐘熱身。",
+      "抬頭看前方，步伐自然，不要一直抓扶手。",
+      "維持可以講完整句但會微喘的節奏。",
+    ],
+    tips: ["步伐自然", "肩膀放鬆", "不要彎腰看腳"],
+    mistakes: ["一直抓扶手", "跨步過大", "速度太快導致姿勢跑掉"],
+    breathing: "自然呼吸，能穩定走完全程即可。",
+    caution: ["若膝蓋不舒服先降坡度", "暈眩時先停機再下來"],
+    alternatives: ["飛輪輕鬆騎 20~30 分鐘", "戶外平地快走"],
+  },
+  {
+    id: "treadmill_incline",
+    name: "跑步機坡度走",
+    category: "cardio",
+    part: "有氧",
+    equipment: "treadmill",
+    steps: [
+      "先平地走 2~3 分鐘再慢慢加坡度。",
+      "身體微微前傾即可，不要駝背。",
+      "維持可持續完成的穩定步伐。",
+    ],
+    tips: ["先穩定再加坡", "膝蓋朝腳尖方向", "腳跟腳掌自然滾動"],
+    mistakes: ["坡度一開始開太高", "身體往後坐", "一直抓扶手借力"],
+    breathing: "自然呼吸，保持微喘但能完成。",
+    caution: ["膝蓋不適時改平地快走", "小腿太緊時先降坡度"],
+    alternatives: ["飛輪輕鬆騎", "平地快走"],
+  },
+  {
+    id: "goblet_squat",
+    name: "杯式深蹲",
+    category: "strength",
+    part: "下肢",
+    equipment: "kettlebell",
+    steps: [
+      "雙腳略比肩寬，壺鈴抱在胸前。",
+      "屁股先往後坐，再往下蹲。",
+      "起身時腳跟踩穩，把身體推回站姿。",
+    ],
+    tips: ["胸口打開", "膝蓋跟腳尖同方向", "核心收穩"],
+    mistakes: ["駝背", "膝蓋內夾", "起身先抬屁股"],
+    breathing: "蹲下吸氣，起身出力時吐氣。",
+    caution: ["膝蓋不適可縮小幅度", "重量太重先改徒手"],
+    alternatives: ["徒手深蹲", "椅子坐站"],
+  },
+  {
+    id: "kb_deadlift",
+    name: "壺鈴硬舉",
+    category: "strength",
+    part: "下肢",
+    equipment: "kettlebell",
+    steps: [
+      "壺鈴放在雙腳中間，雙腳與肩同寬。",
+      "屁股往後推，背打平，雙手握住壺鈴。",
+      "用臀腿發力站起來，再控制放下。",
+    ],
+    tips: ["感受臀腿出力", "背部打平", "壺鈴靠近身體"],
+    mistakes: ["駝背拉起", "用手硬拉", "膝蓋過度前推"],
+    breathing: "下放吸氣，站起時吐氣。",
+    caution: ["下背不舒服時先減重", "動作慢一點比重量更重要"],
+    alternatives: ["徒手髖鉸鍊", "臀橋"],
+  },
+  {
+    id: "kb_row",
+    name: "單手划船",
+    category: "strength",
+    part: "上肢",
+    equipment: "kettlebell",
+    steps: [
+      "一手扶腿或桌邊固定身體。",
+      "另一手拉壺鈴往腰側靠近。",
+      "慢慢放下，不要用甩的。",
+    ],
+    tips: ["背打平", "手肘往後拉", "感受背部夾緊"],
+    mistakes: ["聳肩", "身體亂扭", "只用手臂拉"],
+    breathing: "拉起吐氣，放下吸氣。",
+    caution: ["肩膀不舒服時先減重", "下背不穩時先撐穩再做"],
+    alternatives: ["毛巾划船", "彈力帶划船（未來可加）"],
+  },
+  {
+    id: "kb_shoulder_press",
+    name: "肩推",
+    category: "strength",
+    part: "上肢",
+    equipment: "kettlebell",
+    steps: [
+      "壺鈴放在肩旁，手腕穩定。",
+      "核心收緊後往上推。",
+      "推到手臂接近伸直，再慢慢放回肩旁。",
+    ],
+    tips: ["肋骨別外翻", "核心收住", "先單手穩定再求重量"],
+    mistakes: ["腰過度後仰", "手腕折太多", "聳肩硬推"],
+    breathing: "推起吐氣，放下吸氣。",
+    caution: ["肩不舒服可先改輕重量", "暈眩時改坐姿或略過"],
+    alternatives: ["前平舉", "單手輕重量肩推"],
+  },
+  {
+    id: "kb_floor_press",
+    name: "地板胸推",
+    category: "strength",
+    part: "上肢",
+    equipment: "kettlebell",
+    steps: [
+      "仰躺，手肘自然放在身體兩側。",
+      "把壺鈴往上推直到手臂接近伸直。",
+      "慢慢放回，手肘輕觸地面即可。",
+    ],
+    tips: ["肩膀下沉", "核心收穩", "動作平順"],
+    mistakes: ["放太快", "手腕不穩", "肩膀聳起"],
+    breathing: "推起吐氣，回程吸氣。",
+    caution: ["肩前側不適時縮短幅度", "先從輕重量開始"],
+    alternatives: ["牆推", "跪姿伏地挺身"],
+  },
+  {
+    id: "sumo_squat",
+    name: "相撲深蹲",
+    category: "strength",
+    part: "下肢",
+    equipment: "kettlebell",
+    steps: [
+      "雙腳站更寬，腳尖微微朝外。",
+      "壺鈴放在身體中間，屁股往下坐。",
+      "站起時夾臀，把身體推回來。",
+    ],
+    tips: ["大腿內側與臀部出力", "膝蓋對腳尖", "胸口打開"],
+    mistakes: ["膝蓋內夾", "駝背", "靠腰硬撐"],
+    breathing: "蹲下吸氣，起身吐氣。",
+    caution: ["膝蓋不舒服時先減幅度", "重量不穩時先徒手"],
+    alternatives: ["徒手寬站深蹲", "臀橋"],
+  },
+  {
+    id: "split_squat",
+    name: "弓步蹲",
+    category: "strength",
+    part: "下肢",
+    equipment: "kettlebell",
+    steps: [
+      "前後站穩後，身體垂直下沉。",
+      "前腳踩穩，後腳輔助平衡。",
+      "回到站姿後再重複。",
+    ],
+    tips: ["前腳腳跟踩穩", "身體不要往前撲", "先徒手再加重"],
+    mistakes: ["膝蓋晃動太大", "步距太窄", "下去太快"],
+    breathing: "下去吸氣，起身吐氣。",
+    caution: ["平衡差時先扶牆", "膝蓋不適可改原地分腿蹲"],
+    alternatives: ["扶牆弓步蹲", "原地分腿蹲"],
+  },
+  {
+    id: "glute_bridge",
+    name: "臀橋",
+    category: "strength",
+    part: "下肢",
+    equipment: "bodyweight",
+    steps: [
+      "仰躺屈膝，雙腳踩穩地面。",
+      "臀部往上抬到身體接近一直線。",
+      "停一下再慢慢放下。",
+    ],
+    tips: ["感受臀部夾緊", "不要用腰硬頂", "腳跟踩穩"],
+    mistakes: ["腰過度拱起", "只用大腿前側出力", "放太快"],
+    breathing: "抬起吐氣，放下吸氣。",
+    caution: ["下背不適時先減少高度", "抽筋時把腳跟拉近一點"],
+    alternatives: ["短距離臀橋", "椅子坐站"],
+  },
+  {
+    id: "dead_bug",
+    name: "死蟲式",
+    category: "core",
+    part: "核心",
+    equipment: "bodyweight",
+    steps: [
+      "仰躺，雙手朝上，雙腿抬成 90 度。",
+      "收緊腹部，讓下背貼地。",
+      "慢慢伸出對側手腳，再回到中間換邊。",
+    ],
+    tips: ["下背貼地", "動作慢", "骨盆保持穩定"],
+    mistakes: ["腰拱起來", "腿放太低", "手腳亂甩"],
+    breathing: "手腳伸出去時吐氣，回中間吸氣。",
+    caution: ["下背不舒服時縮小幅度", "先只動手或只動腳也可以"],
+    alternatives: ["單邊死蟲式", "抱膝核心穩定"],
+  },
+  {
+    id: "plank",
+    name: "平板支撐",
+    category: "core",
+    part: "核心",
+    equipment: "bodyweight",
+    steps: [
+      "前臂撐地，肩膀在手肘正上方。",
+      "身體從頭到腳維持一直線。",
+      "收緊腹部與臀部，穩定撐住。",
+    ],
+    tips: ["屁股不要翹太高", "不要塌腰", "脖子自然延伸"],
+    mistakes: ["塌腰", "憋氣", "肩膀聳起"],
+    breathing: "穩定自然呼吸，不要憋氣。",
+    caution: ["太吃力可改膝蓋著地", "下背不舒服先縮短秒數"],
+    alternatives: ["膝蓋平板", "死蟲式"],
+  },
+  {
+    id: "side_plank",
+    name: "側棒式",
+    category: "core",
+    part: "核心",
+    equipment: "bodyweight",
+    steps: [
+      "側身以前臂撐地。",
+      "把臀部抬離地面，身體維持一直線。",
+      "穩定停留後再換邊。",
+    ],
+    tips: ["肩膀遠離耳朵", "骨盆別往前後轉", "先求穩定"],
+    mistakes: ["屁股掉下去", "聳肩", "只靠手撐"],
+    breathing: "自然呼吸，穩穩撐住即可。",
+    caution: ["太難可屈膝版本", "肩不舒服時改 Bird dog"],
+    alternatives: ["屈膝側棒式", "Bird dog"],
+  },
+  {
+    id: "bird_dog",
+    name: "Bird dog",
+    category: "core",
+    part: "核心",
+    equipment: "bodyweight",
+    steps: [
+      "四足跪姿，手在肩下、膝在髖下。",
+      "伸出對側手腳，身體保持穩定。",
+      "回中間後換邊。",
+    ],
+    tips: ["骨盆不要歪", "動作慢", "脖子放鬆"],
+    mistakes: ["腰亂晃", "抬太高", "做太快"],
+    breathing: "伸出去時吐氣，回來吸氣。",
+    caution: ["平衡不好時先只伸腳", "下背不舒服就縮小幅度"],
+    alternatives: ["只伸手", "只伸腳"],
+  },
+  {
+    id: "leg_raise",
+    name: "仰臥抬腿",
+    category: "core",
+    part: "核心",
+    equipment: "bodyweight",
+    steps: [
+      "仰躺，雙腿伸直。",
+      "收緊核心後慢慢抬腿。",
+      "控制放下，不要直接甩落。",
+    ],
+    tips: ["下背貼地", "腿放低前先確認核心還穩", "動作慢"],
+    mistakes: ["腰拱起來", "用甩的", "脖子太緊"],
+    breathing: "抬腿吐氣，放下吸氣。",
+    caution: ["下背不舒服可改屈膝版本", "先減少幅度"],
+    alternatives: ["屈膝抬腿", "死蟲式"],
+  },
+  {
+    id: "russian_twist",
+    name: "Russian twist",
+    category: "core",
+    part: "核心",
+    equipment: "bodyweight",
+    steps: [
+      "坐姿微微後傾，核心收緊。",
+      "雙手在身前左右轉動。",
+      "保持動作穩定，不要亂甩。",
+    ],
+    tips: ["轉體幅度適中", "先穩定再求快", "胸口打開"],
+    mistakes: ["身體整個亂晃", "只甩手不轉身", "下背圓太多"],
+    breathing: "左右轉動時自然吐吸，不要憋氣。",
+    caution: ["下背不舒服可腳跟踩地", "先徒手再抱輕重量"],
+    alternatives: ["腳跟踩地版本", "死蟲式"],
+  },
+];
+
 const STORAGE_KEY = "simple-mounjaro-tracker-v3";
 const SETTINGS_KEY = "simple-mounjaro-settings-v3";
 const PEN_INVENTORY_KEY = "simple-mounjaro-pen-inventory-v1";
 const PHOTO_RECORDS_KEY = "simple-mounjaro-photo-records-v1";
+
+const WORKOUT_LEVEL_LABEL: Record<WorkoutLevel, string> = {
+  low: "低階",
+  mid: "中階",
+  high: "高階",
+};
+
+const WORKOUT_STYLE_LABEL: Record<WorkoutStyle, string> = {
+  easy: "輕鬆做",
+  hard: "操爆版",
+};
+
+const WORKOUT_EQUIPMENT_LABEL: Record<WorkoutEquipment, string> = {
+  bike: "飛輪",
+  treadmill: "跑步機",
+  kettlebell: "壺鈴",
+};
+
+function getWorkoutFocusSeed(todayStr: string) {
+  if (!todayStr) return 0;
+  return parseLocalDate(todayStr).getDay() % 3;
+}
+
+function getWorkoutDefinition(id: string) {
+  return WORKOUT_DEFINITIONS.find((item) => item.id === id);
+}
+
+function getSexWorkoutLabel(sex: Sex) {
+  return sex === "female" ? "女性" : "男性";
+}
+
+function getWorkoutStrengthPrescription(
+  moveId: string,
+  sex: Sex,
+  level: WorkoutLevel,
+  style: WorkoutStyle,
+) {
+  const baseSets: Record<WorkoutLevel, number> = {
+    low: 2,
+    mid: 3,
+    high: 3,
+  };
+  const styleBonus = style === "hard" ? 1 : 0;
+  const sets = baseSets[level] + styleBonus;
+
+  const ranges: Record<string, Record<Sex, Record<WorkoutLevel, string>>> = {
+    goblet_squat: {
+      male: { low: "11.3–14.7 kg", mid: "14.7–18 kg", high: "18 kg" },
+      female: { low: "7.9–11.3 kg", mid: "11.3–14.7 kg", high: "14.7–18 kg" },
+    },
+    kb_deadlift: {
+      male: { low: "11.3–14.7 kg", mid: "14.7–18 kg", high: "18 kg" },
+      female: { low: "7.9–11.3 kg", mid: "11.3–14.7 kg", high: "14.7–18 kg" },
+    },
+    kb_row: {
+      male: { low: "7.9–11.3 kg", mid: "11.3–14.7 kg", high: "14.7–18 kg" },
+      female: { low: "4.5–7.9 kg", mid: "7.9–11.3 kg", high: "11.3–14.7 kg" },
+    },
+    kb_shoulder_press: {
+      male: { low: "7.9–11.3 kg", mid: "11.3–14.7 kg", high: "14.7 kg" },
+      female: { low: "4.5–7.9 kg", mid: "7.9–11.3 kg", high: "11.3–14.7 kg" },
+    },
+    kb_floor_press: {
+      male: { low: "7.9–11.3 kg", mid: "11.3–14.7 kg", high: "14.7–18 kg" },
+      female: { low: "4.5–7.9 kg", mid: "7.9–11.3 kg", high: "11.3–14.7 kg" },
+    },
+    sumo_squat: {
+      male: { low: "11.3–14.7 kg", mid: "14.7–18 kg", high: "18 kg" },
+      female: { low: "7.9–11.3 kg", mid: "11.3–14.7 kg", high: "14.7–18 kg" },
+    },
+    split_squat: {
+      male: { low: "徒手或 7.9 kg", mid: "7.9–11.3 kg", high: "11.3–14.7 kg" },
+      female: { low: "徒手或 4.5 kg", mid: "4.5–7.9 kg", high: "7.9–11.3 kg" },
+    },
+    glute_bridge: {
+      male: { low: "徒手", mid: "徒手或 7.9–11.3 kg", high: "7.9–14.7 kg" },
+      female: { low: "徒手", mid: "徒手或 4.5–7.9 kg", high: "7.9–11.3 kg" },
+    },
+  };
+
+  const repsMap: Record<string, Record<WorkoutLevel, string>> = {
+    goblet_squat: { low: "10 下", mid: "10 下", high: "10~12 下" },
+    kb_deadlift: { low: "12 下", mid: "10~12 下", high: "10 下" },
+    kb_row: { low: "10 / 邊", mid: "10 / 邊", high: "12 / 邊" },
+    kb_shoulder_press: { low: "8 下", mid: "8~10 下", high: "10 下" },
+    kb_floor_press: { low: "10 下", mid: "10 下", high: "10~12 下" },
+    sumo_squat: { low: "12 下", mid: "12 下", high: "12 下" },
+    split_squat: { low: "8 / 邊", mid: "8~10 / 邊", high: "10 / 邊" },
+    glute_bridge: { low: "12~15 下", mid: "15 下", high: "15~20 下" },
+    dead_bug: { low: "8~10 / 邊", mid: "10~12 / 邊", high: "12~15 / 邊" },
+    plank: { low: "20~30 秒", mid: "30~40 秒", high: "40~50 秒" },
+    side_plank: { low: "20 秒 / 邊", mid: "20~30 秒 / 邊", high: "30~40 秒 / 邊" },
+    bird_dog: { low: "10 / 邊", mid: "10~12 / 邊", high: "12~15 / 邊" },
+    leg_raise: { low: "10 下", mid: "10~12 下", high: "12~15 下" },
+    russian_twist: { low: "16 下", mid: "16~20 下", high: "20 下" },
+  };
+
+  const restMap: Record<string, Record<WorkoutLevel, string>> = {
+    goblet_squat: { low: "60–90 秒", mid: "60–90 秒", high: "45–75 秒" },
+    kb_deadlift: { low: "60–90 秒", mid: "60–90 秒", high: "45–75 秒" },
+    kb_row: { low: "45–60 秒", mid: "45–60 秒", high: "30–45 秒" },
+    kb_shoulder_press: { low: "45–60 秒", mid: "45–60 秒", high: "30–45 秒" },
+    kb_floor_press: { low: "45–60 秒", mid: "45–60 秒", high: "30–45 秒" },
+    sumo_squat: { low: "60–90 秒", mid: "60–90 秒", high: "45–75 秒" },
+    split_squat: { low: "45–60 秒", mid: "45–60 秒", high: "30–45 秒" },
+    glute_bridge: { low: "45 秒", mid: "45 秒", high: "30–45 秒" },
+    dead_bug: { low: "30–45 秒", mid: "20–40 秒", high: "15–30 秒" },
+    plank: { low: "30–45 秒", mid: "20–40 秒", high: "15–30 秒" },
+    side_plank: { low: "30 秒", mid: "20–30 秒", high: "15–30 秒" },
+    bird_dog: { low: "30 秒", mid: "20–30 秒", high: "15–30 秒" },
+    leg_raise: { low: "30–45 秒", mid: "20–40 秒", high: "15–30 秒" },
+    russian_twist: { low: "30–45 秒", mid: "20–40 秒", high: "15–30 秒" },
+  };
+
+  return {
+    setsText: `${sets} 組`,
+    repsText: repsMap[moveId]?.[level] || "10 下",
+    restText: restMap[moveId]?.[level] || "45–60 秒",
+    parameterText: ranges[moveId]?.[sex]?.[level] ? [`建議重量：${ranges[moveId][sex][level]}`] : undefined,
+  };
+}
+
+function getWorkoutCardioPrescription(
+  moveId: string,
+  sex: Sex,
+  level: WorkoutLevel,
+  style: WorkoutStyle,
+) {
+  const easyMinutes: Record<WorkoutLevel, string> = {
+    low: "20 分鐘",
+    mid: "25 分鐘",
+    high: "30 分鐘",
+  };
+  const hardMinutes: Record<WorkoutLevel, string> = {
+    low: "25 分鐘",
+    mid: "30 分鐘",
+    high: "35~40 分鐘",
+  };
+  const durationText = style === "hard" ? hardMinutes[level] : easyMinutes[level];
+
+  const cardioMap: Record<string, Record<Sex, Record<WorkoutLevel, string[]>>> = {
+    bike_ride: {
+      male: {
+        low: ["阻力：4–5", "感受：微喘，可持續完成"],
+        mid: ["阻力：5–6", "感受：腿有出力、微喘"],
+        high: ["阻力：6–7", "感受：明顯喘，但能撐住"],
+      },
+      female: {
+        low: ["阻力：3–4", "感受：微喘，可持續完成"],
+        mid: ["阻力：4–5", "感受：腿有出力、微喘"],
+        high: ["阻力：5–6", "感受：明顯喘，但能撐住"],
+      },
+    },
+    treadmill_walk: {
+      male: {
+        low: ["速度：4.8–5.5 km/h", "坡度：1–3", "感受：微喘，可講完整句"],
+        mid: ["速度：5.5–6.2 km/h", "坡度：2–4", "感受：微喘到中等"],
+        high: ["速度：6.0–6.8 km/h", "坡度：2–5", "感受：明顯喘但可持續"],
+      },
+      female: {
+        low: ["速度：4.2–5.0 km/h", "坡度：1–2", "感受：微喘，可講完整句"],
+        mid: ["速度：5.0–5.8 km/h", "坡度：2–3", "感受：微喘到中等"],
+        high: ["速度：5.5–6.2 km/h", "坡度：2–4", "感受：明顯喘但可持續"],
+      },
+    },
+    treadmill_incline: {
+      male: {
+        low: ["速度：4.5–5.2 km/h", "坡度：3–5", "感受：腿有出力、微喘"],
+        mid: ["速度：5.0–5.8 km/h", "坡度：4–6", "感受：微喘到中等"],
+        high: ["速度：5.5–6.2 km/h", "坡度：5–7", "感受：明顯喘但能完成"],
+      },
+      female: {
+        low: ["速度：4.0–4.8 km/h", "坡度：2–4", "感受：腿有出力、微喘"],
+        mid: ["速度：4.5–5.2 km/h", "坡度：3–5", "感受：微喘到中等"],
+        high: ["速度：5.0–5.8 km/h", "坡度：4–6", "感受：明顯喘但能完成"],
+      },
+    },
+  };
+
+  return {
+    durationText,
+    parameterText: cardioMap[moveId]?.[sex]?.[level] || [],
+    feeling: cardioMap[moveId]?.[sex]?.[level]?.slice(-1)?.[0]?.replace("感受：", "") || "微喘，可持續完成",
+  };
+}
+
+function buildWorkoutCard(
+  moveId: string,
+  sex: Sex,
+  level: WorkoutLevel,
+  style: WorkoutStyle,
+) {
+  const definition = getWorkoutDefinition(moveId);
+  if (!definition) return null;
+
+  const common = {
+    id: definition.id,
+    name: definition.name,
+    category: definition.category,
+    part: definition.part,
+    equipment: definition.equipment,
+    tutorial: {
+      steps: definition.steps,
+      tips: definition.tips,
+      mistakes: definition.mistakes,
+      breathing: definition.breathing,
+      caution: definition.caution,
+      alternatives: definition.alternatives,
+    },
+  };
+
+  if (definition.category === "cardio") {
+    const cardio = getWorkoutCardioPrescription(moveId, sex, level, style);
+    return {
+      ...common,
+      durationText: cardio.durationText,
+      parameterText: cardio.parameterText,
+      feeling: cardio.feeling,
+    } as WorkoutCard;
+  }
+
+  const strength = getWorkoutStrengthPrescription(moveId, sex, level, style);
+  return {
+    ...common,
+    setsText: strength.setsText,
+    repsText: strength.repsText,
+    restText: strength.restText,
+    parameterText: strength.parameterText,
+  } as WorkoutCard;
+}
+
+function buildWorkoutPlan(
+  sex: Sex,
+  level: WorkoutLevel,
+  style: WorkoutStyle,
+  selectedEquipments: WorkoutEquipment[],
+  todayStr: string,
+) {
+  const focusSeed = getWorkoutFocusSeed(todayStr);
+  const focusLabel = ["下肢＋核心", "上肢＋核心", "全身燃脂"];
+  const focus = focusLabel[focusSeed] || "全身燃脂";
+
+  const hasBike = selectedEquipments.includes("bike");
+  const hasTreadmill = selectedEquipments.includes("treadmill");
+  const hasKb = selectedEquipments.includes("kettlebell");
+
+  const cardioId = hasBike
+    ? "bike_ride"
+    : hasTreadmill
+      ? focusSeed === 0
+        ? "treadmill_incline"
+        : "treadmill_walk"
+      : null;
+
+  const lowerMoves = hasKb
+    ? ["goblet_squat", "kb_deadlift", "sumo_squat", "split_squat", "glute_bridge"]
+    : ["glute_bridge", "split_squat"];
+  const upperMoves = hasKb
+    ? ["kb_row", "kb_shoulder_press", "kb_floor_press"]
+    : [];
+  const coreMoves = ["dead_bug", "plank", "side_plank", "bird_dog", "leg_raise", "russian_twist"];
+
+  let moveIds: string[] = [];
+  if (focusSeed === 0) {
+    moveIds = [lowerMoves[0], lowerMoves[1] || lowerMoves[0], coreMoves[0], coreMoves[1]];
+    if (style === "hard") moveIds.push(lowerMoves[2] || lowerMoves[0]);
+  } else if (focusSeed === 1) {
+    moveIds = [upperMoves[0] || lowerMoves[0], upperMoves[1] || coreMoves[0], coreMoves[0], coreMoves[2]];
+    if (style === "hard") moveIds.push(upperMoves[2] || lowerMoves[1] || coreMoves[1]);
+  } else {
+    moveIds = [lowerMoves[0], upperMoves[0] || lowerMoves[1], coreMoves[0], coreMoves[3]];
+    if (style === "hard") moveIds.push(lowerMoves[2] || upperMoves[1] || coreMoves[1]);
+  }
+
+  if (!hasKb) {
+    moveIds = moveIds.filter((id) => {
+      const d = getWorkoutDefinition(id);
+      return d && d.equipment !== "kettlebell";
+    });
+    if (!moveIds.length) moveIds = ["glute_bridge", "dead_bug", "plank", "bird_dog"];
+  }
+
+  const cards = [
+    ...(cardioId ? [buildWorkoutCard(cardioId, sex, level, style)] : []),
+    ...moveIds.map((id) => buildWorkoutCard(id, sex, level, style)),
+  ].filter(Boolean) as WorkoutCard[];
+
+  const equipmentText = selectedEquipments.length
+    ? selectedEquipments.map((item) => WORKOUT_EQUIPMENT_LABEL[item]).join("＋")
+    : "徒手";
+
+  const estimatedMinutes =
+    style === "easy"
+      ? level === "low"
+        ? "25~35 分鐘"
+        : level === "mid"
+          ? "30~40 分鐘"
+          : "35~45 分鐘"
+      : level === "low"
+        ? "35~45 分鐘"
+        : level === "mid"
+          ? "40~50 分鐘"
+          : "45~60 分鐘";
+
+  return {
+    title: `${getSexWorkoutLabel(sex)}｜${WORKOUT_LEVEL_LABEL[level]}｜${WORKOUT_STYLE_LABEL[style]}`,
+    subtitle: `今日重點：${focus}｜使用器材：${equipmentText}`,
+    estimatedMinutes,
+    focus,
+    cards,
+  } satisfies WorkoutPlan;
+}
 
 function num(v: unknown) {
   const n = Number(v);
@@ -1952,6 +2599,13 @@ export default function SimpleTracker() {
 
   const [selectedSummaryYear, setSelectedSummaryYear] = useState("");
   const [selectedSummaryMonth, setSelectedSummaryMonth] = useState("");
+  const [workoutEquipments, setWorkoutEquipments] = useState<WorkoutEquipment[]>([
+    "bike",
+    "kettlebell",
+  ]);
+  const [workoutLevel, setWorkoutLevel] = useState<WorkoutLevel>("low");
+  const [workoutStyle, setWorkoutStyle] = useState<WorkoutStyle>("easy");
+  const [openWorkoutTeachId, setOpenWorkoutTeachId] = useState<string | null>(null);
 
   const penQuickPresets = [
     { label: "10 → 2.5", strength: "10", dose: "2.5" },
@@ -3781,6 +4435,31 @@ export default function SimpleTracker() {
     penInventorySummary.remainGrids,
   ]);
 
+  const workoutPlan = useMemo(() => {
+    return buildWorkoutPlan(
+      settings.sex,
+      workoutLevel,
+      workoutStyle,
+      workoutEquipments,
+      today,
+    );
+  }, [settings.sex, workoutLevel, workoutStyle, workoutEquipments, today]);
+
+  const workoutQuickTips = useMemo(() => {
+    const tips = [
+      workoutStyle === "easy"
+        ? "今天以好完成為主，不求爆。"
+        : "今天總量較高，記得把休息抓好。",
+      workoutEquipments.includes("kettlebell")
+        ? "壺鈴重量以最後 2~3 下明顯吃力，但姿勢不亂為準。"
+        : "今天沒有壺鈴時，優先把有氧與核心做完整。",
+      settings.sex === "female"
+        ? "女性版參數會自動用較保守的重量與速度。"
+        : "男性版參數會自動保留較高的重量與有氧設定。",
+    ];
+    return tips;
+  }, [workoutStyle, workoutEquipments, settings.sex]);
+
   const photoComparison = useMemo(() => {
     if (!photoRecords.length) {
       return {
@@ -4028,6 +4707,16 @@ export default function SimpleTracker() {
 
   const deletePhotoRecord = (id: string) => {
     setPhotoRecords((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const toggleWorkoutEquipment = (equipment: WorkoutEquipment) => {
+    setWorkoutEquipments((prev) => {
+      if (prev.includes(equipment)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((item) => item !== equipment);
+      }
+      return [...prev, equipment];
+    });
   };
 
   const requestNotificationPermission = async () => {
@@ -4701,6 +5390,12 @@ export default function SimpleTracker() {
                   菜單
                 </TabsTrigger>
                 <TabsTrigger
+                  value="workout"
+                  className="rounded-xl shrink-0 px-4"
+                >
+                  運動
+                </TabsTrigger>
+                <TabsTrigger
                   value="strategy"
                   className="rounded-xl shrink-0 px-4"
                 >
@@ -5265,6 +5960,174 @@ export default function SimpleTracker() {
                     ))}
                   </CardContent>
                 </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="workout">
+              <div className="grid gap-4 grid-cols-1">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>運動建議</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>想用的器材</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {(["bike", "treadmill", "kettlebell"] as WorkoutEquipment[]).map((item) => {
+                          const active = workoutEquipments.includes(item);
+                          return (
+                            <Button
+                              key={item}
+                              type="button"
+                              variant={active ? "default" : "outline"}
+                              onClick={() => toggleWorkoutEquipment(item)}
+                            >
+                              {WORKOUT_EQUIPMENT_LABEL[item]}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        至少保留一項器材；沒選到壺鈴時，系統會自動改成徒手替代動作。
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label>強度</Label>
+                        <Select
+                          value={workoutLevel}
+                          onValueChange={(v: WorkoutLevel) => setWorkoutLevel(v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">低階</SelectItem>
+                            <SelectItem value="mid">中階</SelectItem>
+                            <SelectItem value="high">高階</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>模式</Label>
+                        <Select
+                          value={workoutStyle}
+                          onValueChange={(v: WorkoutStyle) => setWorkoutStyle(v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="easy">輕鬆做</SelectItem>
+                            <SelectItem value="hard">操爆版</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border bg-slate-50 p-3 space-y-1 text-sm">
+                      <div className="font-medium">{workoutPlan.title}</div>
+                      <div className="text-slate-600">{workoutPlan.subtitle}</div>
+                      <div className="text-slate-500">
+                        預估時間：{workoutPlan.estimatedMinutes}｜系統依設定性別自動套用重量、速度、坡度與阻力。
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-sm">
+                      {workoutQuickTips.map((tip) => (
+                        <div key={tip}>• {tip}</div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {workoutPlan.cards.map((card, index) => (
+                  <Card key={`${card.id}-${index}`}>
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="text-lg font-semibold">{card.name}</div>
+                            <Badge variant="secondary">{card.part}</Badge>
+                            <Badge variant="outline">
+                              {card.category === "cardio"
+                                ? "有氧"
+                                : card.category === "strength"
+                                  ? "肌力"
+                                  : "核心"}
+                            </Badge>
+                          </div>
+                          <div className="mt-1 text-sm text-slate-500">
+                            {card.durationText
+                              ? `時間：${card.durationText}`
+                              : `${card.setsText || ""}${card.repsText ? ` × ${card.repsText}` : ""}`}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setOpenWorkoutTeachId((prev) =>
+                              prev === card.id ? null : card.id,
+                            )
+                          }
+                        >
+                          {openWorkoutTeachId === card.id ? "收合教學" : "動作教學"}
+                        </Button>
+                      </div>
+
+                      <div className="space-y-1 text-sm">
+                        {card.parameterText?.map((item) => (
+                          <div key={item}>• {item}</div>
+                        ))}
+                        {card.restText ? <div>• 組間休息：{card.restText}</div> : null}
+                        {card.feeling ? <div>• 感受：{card.feeling}</div> : null}
+                      </div>
+
+                      {openWorkoutTeachId === card.id ? (
+                        <div className="rounded-xl border bg-slate-50 p-3 space-y-3 text-sm">
+                          <div>
+                            <div className="font-medium mb-1">怎麼做</div>
+                            {card.tutorial.steps.map((step) => (
+                              <div key={step}>• {step}</div>
+                            ))}
+                          </div>
+                          <div>
+                            <div className="font-medium mb-1">動作重點</div>
+                            {card.tutorial.tips.map((tip) => (
+                              <div key={tip}>• {tip}</div>
+                            ))}
+                          </div>
+                          <div>
+                            <div className="font-medium mb-1">常見錯誤</div>
+                            {card.tutorial.mistakes.map((mistake) => (
+                              <div key={mistake}>• {mistake}</div>
+                            ))}
+                          </div>
+                          <div>
+                            <div className="font-medium mb-1">呼吸方式</div>
+                            <div>• {card.tutorial.breathing}</div>
+                          </div>
+                          <div>
+                            <div className="font-medium mb-1">注意事項</div>
+                            {card.tutorial.caution.map((item) => (
+                              <div key={item}>• {item}</div>
+                            ))}
+                          </div>
+                          <div>
+                            <div className="font-medium mb-1">替代動作</div>
+                            {card.tutorial.alternatives.map((item) => (
+                              <div key={item}>• {item}</div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </TabsContent>
 
