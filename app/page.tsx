@@ -3638,22 +3638,6 @@ export default function SimpleTracker() {
     return buildPeriodSummary("本週", windowEntries);
   }, [sortedEntries]);
 
-  const monthlySummary = useMemo(() => {
-    if (!sortedEntries.length) {
-      return buildPeriodSummary("本月", []);
-    }
-
-    const latestEntry = sortedEntries[sortedEntries.length - 1];
-    const monthStart = getMonthStart(latestEntry.date);
-    const windowEntries = sortedEntries.filter(
-      (entry) =>
-        daysBetween(monthStart, entry.date) >= 0 &&
-        daysBetween(entry.date, latestEntry.date) >= 0,
-    );
-
-    return buildPeriodSummary("本月", windowEntries);
-  }, [sortedEntries]);
-
   const summaryYearOptions = useMemo(() => {
     const years = Array.from(
       new Set(
@@ -3667,9 +3651,9 @@ export default function SimpleTracker() {
     return years;
   }, [sortedEntries, selectedSummaryYear]);
 
-  const otherMonthSummary = useMemo(() => {
+  const monthSummary = useMemo(() => {
     if (!selectedSummaryYear || !selectedSummaryMonth) {
-      return buildPeriodSummary("其他月份", []);
+      return buildPeriodSummary("月份", []);
     }
 
     const windowEntries = sortedEntries.filter((entry) => {
@@ -4539,8 +4523,7 @@ export default function SimpleTracker() {
           <div className="grid gap-4 grid-cols-1">
             {[
               { label: "本週摘要", data: weeklySummary },
-              { label: "本月摘要", data: monthlySummary },
-              { label: "整體摘要", data: overallSummary },
+                            { label: "整體摘要", data: overallSummary },
             ].map((section) => (
               <Card key={section.label}>
                 <CardHeader>
@@ -4560,7 +4543,7 @@ export default function SimpleTracker() {
 
             <Card>
               <CardHeader>
-                <CardTitle>其他月份摘要</CardTitle>
+                <CardTitle>月份摘要</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="grid grid-cols-2 gap-3">
@@ -4613,10 +4596,10 @@ export default function SimpleTracker() {
                 </div>
 
                 <div className="text-lg font-semibold">
-                  {otherMonthSummary.title}
+                  {monthSummary.title}
                 </div>
-                <div className="text-slate-500">{otherMonthSummary.summary}</div>
-                {otherMonthSummary.bullets.map((item) => (
+                <div className="text-slate-500">{monthSummary.summary}</div>
+                {monthSummary.bullets.map((item) => (
                   <div key={item}>• {item}</div>
                 ))}
               </CardContent>
