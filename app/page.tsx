@@ -78,6 +78,7 @@ type Entry = {
   muscleMass: string;
   visceralFat: string;
   bodyWater: string;
+  waist: string;
   dose: string;
   appetite: Appetite;
   cravingLevel: CravingLevel;
@@ -1856,6 +1857,23 @@ function getCompositionSnapshot(entry?: Partial<Entry> | null): CompositionSnaps
   };
 }
 
+function getWaistDeltaWithinDays(entries: Entry[], endDate: string, days: number) {
+  const waistEntries = entries.filter(
+    (entry) => num((entry as any).waist) > 0 && daysBetween(entry.date, endDate) >= 0 && daysBetween(entry.date, endDate) <= days,
+  );
+  if (waistEntries.length < 2) {
+    return { delta: 0, count: waistEntries.length, first: null as Entry | null, last: null as Entry | null };
+  }
+  const first = waistEntries[0];
+  const last = waistEntries[waistEntries.length - 1];
+  return {
+    delta: +(num(last.waist) - num(first.waist)).toFixed(1),
+    count: waistEntries.length,
+    first,
+    last,
+  };
+}
+
 function getIndexValue(current: number, base: number) {
   if (!current || !base) return 0;
   return +((current / base) * 100).toFixed(1);
@@ -2805,6 +2823,7 @@ export default function SimpleTracker() {
     muscleMass: "",
     visceralFat: "",
     bodyWater: "",
+    waist: "",
     dose: "2.5",
     appetite: "正常",
     cravingLevel: "中",
@@ -2974,6 +2993,7 @@ export default function SimpleTracker() {
                   muscleMass: String(item?.muscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
                   bodyWater: String(item?.bodyWater || item?.water || ""),
+                  waist: String(item?.waist || ""),
                   dose: item?.dose || "2.5",
                   appetite: item?.appetite || "正常",
                   cravingLevel: item?.cravingLevel || "中",
@@ -3099,6 +3119,7 @@ export default function SimpleTracker() {
                   muscleMass: String(item?.muscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
                   bodyWater: String(item?.bodyWater || ""),
+                  waist: String(item?.waist || ""),
                   dose: String(item?.dose || "2.5"),
                   appetite: (item?.appetite || "正常") as Appetite,
                   cravingLevel: (item?.cravingLevel || "中") as CravingLevel,
@@ -3182,6 +3203,7 @@ export default function SimpleTracker() {
         muscleMass: prev.muscleMass || "",
         visceralFat: prev.visceralFat || "",
         bodyWater: prev.bodyWater || "",
+        waist: (prev as any).waist || "",
       }));
       setPhotoDate(today);
       setCloudReady(true);
@@ -3258,6 +3280,7 @@ export default function SimpleTracker() {
   const latestMuscleMass = latest ? num(latest.muscleMass) : 0;
   const latestVisceralFat = latest ? num(latest.visceralFat) : 0;
   const latestBodyWater = latest ? num(latest.bodyWater) : 0;
+  const latestWaist = latest ? num(latest.waist) : 0;
   const bmi = getBMI(num(settings.height), latestWeight);
   const bmiLabel = getBMILabel(bmi);
   const bmrMifflin = getBMR(
@@ -3660,6 +3683,15 @@ export default function SimpleTracker() {
       latest?.sideEffect,
     );
 
+    const hasAtLeast14Days =
+      !!latest?.date &&
+      sortedEntries.length >= 2 &&
+      daysBetween(sortedEntries[0].date, latest.date) >= 14;
+    const waist14 = latest?.date
+      ? getWaistDeltaWithinDays(sortedEntries, latest.date, 14)
+      : { delta: 0, count: 0, first: null as Entry | null, last: null as Entry | null };
+    const hasWaistSupport = waist14.count >= 2;
+
     if (shortWindow.length < 3 || longWindow.length < 4) {
       return {
         tag: "觀察中",
@@ -3667,6 +3699,16 @@ export default function SimpleTracker() {
         detail:
           "至少先累積短期 3 筆、長期 4 筆以上身體組成紀錄，再判斷水分、體脂率、肌肉率的此消彼長。",
         confidence: "低" as const,
+        confidencePct: hasWaistSupport ? 85 : 70,
+        fatLossStage: "資料不足",
+        fatLossStageDetail:
+          "至少需 14 天以上紀錄，才能進行初步判定；若腰圍有 2 筆以上紀錄，可進一步提升可信度。",
+        fatLossStageConfidenceText: hasWaistSupport ? "85% 可信度" : "70% 可信度",
+        waistDelta14: waist14.delta,
+        waistCount14: waist14.count,
+        waistStatus: hasWaistSupport
+          ? `近 14 天腰圍 ${waist14.delta > 0 ? "+" : ""}${waist14.delta} cm`
+          : "近 14 天腰圍資料不足（至少 2 筆）",
         reasons: ["目前可用資料太少"],
         shortSummary: "短期資料不足",
         longSummary: "長期資料不足",
@@ -3674,6 +3716,7 @@ export default function SimpleTracker() {
           "先固定在相近時間量測，之後系統才比較能分辨這波體重變化主要來自水分、體脂還是肌肉率。",
         advice: [
           "先持續記錄體脂率、肌肉率、水分",
+          "補上腰圍紀錄後，減脂期判定會更準",
           waterTargetMl ? `今日先補水約 ${waterTargetMl} ml` : "先把飲水量穩住",
         ],
         waterTargetMl,
@@ -3824,11 +3867,46 @@ export default function SimpleTracker() {
     const shortSummary = `短期 ${shortTerm.days} 天：水分 ${shortTerm.bodyWaterDelta > 0 ? "+" : ""}${shortTerm.bodyWaterDelta}%，體脂率 ${shortTerm.bodyFatPctDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctDelta}%，肌肉率 ${shortTerm.muscleRateDelta > 0 ? "+" : ""}${shortTerm.muscleRateDelta}%。`;
     const longSummary = `長期 ${longTerm.days} 天：水分 ${longTerm.bodyWaterDelta > 0 ? "+" : ""}${longTerm.bodyWaterDelta}%，體脂率 ${longTerm.bodyFatPctDelta > 0 ? "+" : ""}${longTerm.bodyFatPctDelta}%，肌肉率 ${longTerm.muscleRateDelta > 0 ? "+" : ""}${longTerm.muscleRateDelta}%。`;
 
+    const stableWeightLoss = hasAtLeast14Days && longTerm.weightDelta <= -0.8;
+    const bodyFatImproving = longFatDrop;
+    const musclePreserved = !longMuscleDrop;
+    const waistClearlyDown = hasWaistSupport && waist14.delta <= -1;
+    const stageScore = [stableWeightLoss, bodyFatImproving, musclePreserved, waistClearlyDown].filter(Boolean).length;
+
+    let fatLossStage = "過渡觀察期";
+    let fatLossStageDetail = "已出現減脂跡象，建議再觀察 1~2 週。";
+
+    if (!hasAtLeast14Days) {
+      fatLossStage = "資料不足";
+      fatLossStageDetail = "至少需 14 天以上紀錄，才能進行初步判定；若腰圍有 2 筆以上紀錄，可進一步提升可信度。";
+    } else if (stageScore >= 3) {
+      fatLossStage = "已進入穩定減脂期";
+      fatLossStageDetail = hasWaistSupport
+        ? "目前下降較偏向脂肪變化，且腰圍同步縮小。"
+        : "已依體重、體脂、水分、肌肉資料完成初步判定；若腰圍有 2 筆以上紀錄，可提升判定可信度。";
+    } else if (shortWaterDrop && !waistClearlyDown) {
+      fatLossStage = "初期快速下降期";
+      fatLossStageDetail = "目前下降可能混有水分，先觀察腰圍與體脂是否持續改善。";
+    }
+
+    const confidencePct = hasWaistSupport ? 85 : 70;
+    const fatLossStageConfidenceText = `${confidencePct}% 可信度`;
+    const waistStatus = hasWaistSupport
+      ? `近 14 天腰圍 ${waist14.delta > 0 ? "+" : ""}${waist14.delta} cm`
+      : "近 14 天腰圍資料不足（至少 2 筆）";
+
     return {
       tag,
       title,
       detail,
       confidence,
+      confidencePct,
+      fatLossStage,
+      fatLossStageDetail,
+      fatLossStageConfidenceText,
+      waistDelta14: waist14.delta,
+      waistCount14: waist14.count,
+      waistStatus,
       reasons,
       shortSummary,
       longSummary,
@@ -4397,6 +4475,7 @@ export default function SimpleTracker() {
           muscleMass: muscleMassValue > 0 ? muscleMassValue : null,
           visceralFat: visceralFatValue > 0 ? visceralFatValue : null,
           bodyWater: bodyWaterValue > 0 ? bodyWaterValue : null,
+          waist: num(e.waist) > 0 ? num(e.waist) : null,
         };
       }),
     [sortedEntries, settings.goal],
@@ -4898,6 +4977,7 @@ export default function SimpleTracker() {
       muscleMass: "",
       visceralFat: "",
       bodyWater: "",
+      waist: "",
       dose: "2.5",
       appetite: "正常",
       cravingLevel: "中",
@@ -4935,6 +5015,7 @@ export default function SimpleTracker() {
       muscleMass: item.muscleMass || "",
       visceralFat: item.visceralFat || "",
       bodyWater: item.bodyWater || "",
+      waist: item.waist || "",
       dose: item.dose,
       appetite: item.appetite,
       cravingLevel: item.cravingLevel,
@@ -4977,6 +5058,7 @@ export default function SimpleTracker() {
         muscleMass: latest?.muscleMass || form.muscleMass || "",
         visceralFat: latest?.visceralFat || form.visceralFat || "",
         bodyWater: latest?.bodyWater || form.bodyWater || "",
+        waist: latest?.waist || form.waist || "",
         dose: latest?.dose || form.dose || "2.5",
         appetite: latest?.appetite || "正常",
         cravingLevel: latest?.cravingLevel || "中",
@@ -5483,6 +5565,22 @@ export default function SimpleTracker() {
                   <Droplets className="w-4 h-4" />
                   水分/體脂/肌肉判讀
                 </div>
+                <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/60 border-slate-700" : "bg-white border-slate-200"}`}>
+                  <div className="flex flex-wrap items-center gap-2 justify-between">
+                    <div className="text-xs font-medium text-slate-500">減脂期判定</div>
+                    <Badge variant={waterVsFat.fatLossStage === "已進入穩定減脂期" ? "default" : waterVsFat.fatLossStage === "過渡觀察期" ? "secondary" : "outline"}>
+                      {waterVsFat.fatLossStage}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">{waterVsFat.fatLossStageConfidenceText}</Badge>
+                    <span className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{waterVsFat.waistStatus}</span>
+                  </div>
+                  <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                    {waterVsFat.fatLossStageDetail}
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{waterVsFat.tag}</Badge>
                   <Badge
@@ -5494,7 +5592,7 @@ export default function SimpleTracker() {
                           : "outline"
                     }
                   >
-                    信心 {waterVsFat.confidence}
+                    信心 {waterVsFat.confidence}｜{waterVsFat.confidencePct}%
                   </Badge>
                 </div>
                 <div className="text-sm font-medium">{waterVsFat.title}</div>
@@ -6087,7 +6185,7 @@ export default function SimpleTracker() {
                               </div>
                               <div>
                                 內臟脂肪：{item.visceralFat || "-"}｜水分：
-                                {item.bodyWater || "-"}%
+                                {item.bodyWater || "-"}%｜腰圍：{item.waist || "-"} cm
                               </div>
                               <div>
                                 食慾：{item.appetite}｜嘴饞：{item.cravingLevel}
