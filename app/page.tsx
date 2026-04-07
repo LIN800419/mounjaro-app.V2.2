@@ -5502,32 +5502,54 @@ export default function SimpleTracker() {
                   {waterVsFat.detail}
                 </div>
 
-                <div className="rounded-xl border bg-slate-50 p-3 space-y-2">
+                <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/70 border-slate-700" : "bg-slate-50"}`}>
                   <div>
-                    <div className="text-xs font-medium text-slate-700">短期判斷</div>
-                    <div className="text-xs text-slate-500 mt-1">{waterVsFat.shortSummary}</div>
+                    <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>短期判斷</div>
+                    <div className={`text-xs mt-1 ${isDark ? "text-slate-300" : "text-slate-500"}`}>{waterVsFat.shortSummary}</div>
                   </div>
                   <div>
-                    <div className="text-xs font-medium text-slate-700">長期判斷</div>
-                    <div className="text-xs text-slate-500 mt-1">{waterVsFat.longSummary}</div>
+                    <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>長期判斷</div>
+                    <div className={`text-xs mt-1 ${isDark ? "text-slate-300" : "text-slate-500"}`}>{waterVsFat.longSummary}</div>
                   </div>
                   <div>
-                    <div className="text-xs font-medium text-slate-700">建議水量</div>
-                    <div className="text-xs text-slate-500 mt-1">約 {waterVsFat.waterTargetMl || "-"} ml</div>
+                    <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>建議水量</div>
+                    <div className={`text-xs mt-1 ${isDark ? "text-sky-300" : "text-slate-500"}`}>約 {waterVsFat.waterTargetMl || "-"} ml</div>
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <div className="text-xs font-medium text-slate-700">判讀解釋</div>
-                  <div className="text-xs text-slate-500">{waterVsFat.explanation}</div>
+                <div className={`space-y-1 rounded-xl border p-3 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
+                  <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>判讀解釋</div>
+                  <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-500"}`}>{waterVsFat.explanation}</div>
                 </div>
+
+                {waterVsFat.reasons?.length ? (
+                  <details className={`rounded-xl border p-3 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
+                    <summary className={`cursor-pointer text-xs font-medium list-none flex items-center justify-between ${isDark ? "text-slate-100" : "text-slate-700"}`}>
+                      <span>查看判讀原因</span>
+                      <span className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-400"}`}>點擊展開</span>
+                    </summary>
+                    <div className="mt-3 space-y-2">
+                      {waterVsFat.reasons.map((reason, index) => (
+                        <div
+                          key={`${reason}-${index}`}
+                          className={`rounded-lg px-2.5 py-2 text-xs leading-5 ${isDark ? "bg-slate-800 text-slate-200" : "bg-slate-50 text-slate-600"}`}
+                        >
+                          ・{reason}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
 
                 {waterVsFat.advice?.length ? (
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-slate-700">建議</div>
-                    <div className="space-y-1">
+                  <div className={`space-y-2 rounded-xl border p-3 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
+                    <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>建議</div>
+                    <div className="space-y-2">
                       {waterVsFat.advice.slice(0, 3).map((tip, index) => (
-                        <div key={`${tip}-${index}`} className="text-xs text-slate-500">
+                        <div
+                          key={`${tip}-${index}`}
+                          className={`rounded-lg px-2.5 py-2 text-xs leading-5 ${isDark ? "bg-slate-800 text-slate-200" : "bg-slate-50 text-slate-600"}`}
+                        >
                           ・{tip}
                         </div>
                       ))}
