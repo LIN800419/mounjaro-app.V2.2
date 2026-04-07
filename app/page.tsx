@@ -1839,6 +1839,54 @@ function getMuscleRateFromEntry(entry?: Partial<Entry> | null) {
   return getMuscleRateValue(num(entry.weight), num(entry.muscleMass));
 }
 
+
+type CompositionSnapshot = {
+  weight: number;
+  bodyFatPct: number;
+  muscleRate: number;
+  bodyWater: number;
+};
+
+function getCompositionSnapshot(entry?: Partial<Entry> | null): CompositionSnapshot {
+  return {
+    weight: num(entry?.weight),
+    bodyFatPct: num(entry?.bodyFatPct),
+    muscleRate: getMuscleRateFromEntry(entry),
+    bodyWater: num(entry?.bodyWater),
+  };
+}
+
+function getIndexValue(current: number, base: number) {
+  if (!current || !base) return 0;
+  return +((current / base) * 100).toFixed(1);
+}
+
+function getIndexDelta(current: number, base: number) {
+  const indexValue = getIndexValue(current, base);
+  if (!indexValue) return 0;
+  return +(indexValue - 100).toFixed(1);
+}
+
+function estimateDailyWaterTargetMl(
+  weight: number,
+  exerciseMin: number,
+  bodyWater: number,
+  sideEffect?: SideEffect,
+) {
+  if (!weight) return 0;
+
+  let target = Math.round(weight * 32);
+  if (bodyWater > 0 && bodyWater < 50) target += 300;
+  if (bodyWater > 0 && bodyWater < 45) target += 300;
+  if (exerciseMin >= 20) target += 300;
+  if (exerciseMin >= 45) target += 200;
+  if (sideEffect === "便秘") target += 400;
+  if (sideEffect === "腹瀉") target += 500;
+  if (sideEffect === "頭暈") target += 200;
+
+  return Math.min(5000, Math.max(1500, target));
+}
+
 function estimateETA(
   latestWeight: number,
   goalWeight: number,
@@ -3599,122 +3647,182 @@ export default function SimpleTracker() {
   ]);
 
   const waterVsFat = useMemo(() => {
-    if (sortedEntries.length < 3) {
+    const shortWindow = sortedEntries.slice(-4);
+    const longWindow = sortedEntries.filter((entry) => {
+      const diff = daysBetween(entry.date, latest?.date || entry.date);
+      return diff >= 0 && diff <= 28;
+    });
+
+    const waterTargetMl = estimateDailyWaterTargetMl(
+      latestWeight,
+      num(latest?.exerciseMin),
+      latestBodyWater,
+      latest?.sideEffect,
+    );
+
+    if (shortWindow.length < 3 || longWindow.length < 4) {
       return {
         tag: "觀察中",
         title: "資料不足",
-        detail: "至少先累積 3 筆以上身體組成紀錄，再判斷脂肪、水分或肌肉變化。",
+        detail:
+          "至少先累積短期 3 筆、長期 4 筆以上身體組成紀錄，再判斷水分、體脂率、肌肉率的此消彼長。",
         confidence: "低" as const,
         reasons: ["目前可用資料太少"],
+        shortSummary: "短期資料不足",
+        longSummary: "長期資料不足",
+        explanation:
+          "先固定在相近時間量測，之後系統才比較能分辨這波體重變化主要來自水分、體脂還是肌肉率。",
+        advice: [
+          "先持續記錄體脂率、肌肉率、水分",
+          waterTargetMl ? `今日先補水約 ${waterTargetMl} ml` : "先把飲水量穩住",
+        ],
+        waterTargetMl,
+        shortTerm: null,
+        longTerm: null,
       };
     }
 
-    const recent = sortedEntries.slice(-4);
-    const first = recent[0];
-    const last = recent[recent.length - 1];
-    const weightDelta = +(num(last.weight) - num(first.weight)).toFixed(1);
-    const fatPctDelta = +(num(last.bodyFatPct) - num(first.bodyFatPct)).toFixed(
-      1,
-    );
-    const fatMassDelta = +(num(last.fatMass) - num(first.fatMass)).toFixed(1);
-    const muscleDelta = +(num(last.muscleMass) - num(first.muscleMass)).toFixed(
-      1,
-    );
-    const waterDelta = +(num(last.bodyWater) - num(first.bodyWater)).toFixed(1);
-    const visceralDelta = +(
-      num(last.visceralFat) - num(first.visceralFat)
-    ).toFixed(1);
-    const days = Math.max(1, daysBetween(first.date, last.date));
+    const shortFirst = getCompositionSnapshot(shortWindow[0]);
+    const shortLast = getCompositionSnapshot(shortWindow[shortWindow.length - 1]);
+    const longFirst = getCompositionSnapshot(longWindow[0]);
+    const longLast = getCompositionSnapshot(longWindow[longWindow.length - 1]);
+
+    const shortTerm = {
+      days: Math.max(1, daysBetween(shortWindow[0].date, shortWindow[shortWindow.length - 1].date)),
+      weightDelta: +(shortLast.weight - shortFirst.weight).toFixed(1),
+      bodyFatPctDelta: +(shortLast.bodyFatPct - shortFirst.bodyFatPct).toFixed(1),
+      muscleRateDelta: +(shortLast.muscleRate - shortFirst.muscleRate).toFixed(1),
+      bodyWaterDelta: +(shortLast.bodyWater - shortFirst.bodyWater).toFixed(1),
+      bodyFatPctIndex: getIndexValue(shortLast.bodyFatPct, shortFirst.bodyFatPct),
+      muscleRateIndex: getIndexValue(shortLast.muscleRate, shortFirst.muscleRate),
+      bodyWaterIndex: getIndexValue(shortLast.bodyWater, shortFirst.bodyWater),
+      bodyFatPctIndexDelta: getIndexDelta(shortLast.bodyFatPct, shortFirst.bodyFatPct),
+      muscleRateIndexDelta: getIndexDelta(shortLast.muscleRate, shortFirst.muscleRate),
+      bodyWaterIndexDelta: getIndexDelta(shortLast.bodyWater, shortFirst.bodyWater),
+    };
+
+    const longTerm = {
+      days: Math.max(1, daysBetween(longWindow[0].date, longWindow[longWindow.length - 1].date)),
+      weightDelta: +(longLast.weight - longFirst.weight).toFixed(1),
+      bodyFatPctDelta: +(longLast.bodyFatPct - longFirst.bodyFatPct).toFixed(1),
+      muscleRateDelta: +(longLast.muscleRate - longFirst.muscleRate).toFixed(1),
+      bodyWaterDelta: +(longLast.bodyWater - longFirst.bodyWater).toFixed(1),
+      bodyFatPctIndex: getIndexValue(longLast.bodyFatPct, longFirst.bodyFatPct),
+      muscleRateIndex: getIndexValue(longLast.muscleRate, longFirst.muscleRate),
+      bodyWaterIndex: getIndexValue(longLast.bodyWater, longFirst.bodyWater),
+      bodyFatPctIndexDelta: getIndexDelta(longLast.bodyFatPct, longFirst.bodyFatPct),
+      muscleRateIndexDelta: getIndexDelta(longLast.muscleRate, longFirst.muscleRate),
+      bodyWaterIndexDelta: getIndexDelta(longLast.bodyWater, longFirst.bodyWater),
+    };
 
     const reasons: string[] = [];
-    let confidenceScore = 0;
+    const advice: string[] = [];
+    let confidenceScore = 2;
     let tag = "觀察中";
-    let title = "趨勢尚不明確";
-    let detail = "目前像是混合波動，先持續觀察 1~2 週，不要只看單日數字。";
+    let title = "三項指標互相拉扯中";
+    let detail = "短期與長期都有波動，先不要只靠單日體重下結論。";
+    let explanation = "目前較像水分、體脂率、肌肉率同時在小幅變動，需要再看幾天趨勢。";
 
-    const weightDown = weightDelta <= -0.4;
-    const fatDown = fatMassDelta <= -0.3;
-    const fatPctDown = fatPctDelta <= -0.3;
-    const waterDown = waterDelta <= -0.8;
-    const muscleDown = muscleDelta <= -0.5;
-    const fatUp = fatMassDelta >= 0.3 || fatPctDelta >= 0.3;
+    const shortWaterDrop = shortTerm.bodyWaterDelta <= -0.8 || shortTerm.bodyWaterIndexDelta <= -1.5;
+    const shortFatDrop = shortTerm.bodyFatPctDelta <= -0.3 || shortTerm.bodyFatPctIndexDelta <= -1;
+    const shortMuscleDrop = shortTerm.muscleRateDelta <= -0.3 || shortTerm.muscleRateIndexDelta <= -1;
+    const longFatDrop = longTerm.bodyFatPctDelta <= -0.5 || longTerm.bodyFatPctIndexDelta <= -1.5;
+    const longFatUp = longTerm.bodyFatPctDelta >= 0.4 || longTerm.bodyFatPctIndexDelta >= 1;
+    const longMuscleUp = longTerm.muscleRateDelta >= 0.2 || longTerm.muscleRateIndexDelta >= 0.5;
+    const longMuscleDrop = longTerm.muscleRateDelta <= -0.3 || longTerm.muscleRateIndexDelta <= -1;
+    const longWaterStable = Math.abs(longTerm.bodyWaterDelta) <= 1;
 
-    if (weightDown && fatDown && fatPctDown && !muscleDown) {
-      tag = "脂肪主導";
-      title = "目前下降以脂肪為主";
+    if (shortWaterDrop && longFatDrop && !longMuscleDrop) {
+      tag = "脂肪下降中";
+      title = "短期有水分波動，但長期仍偏向減脂";
       detail =
-        "體重、體脂率、脂肪重都有往下，且肌肉量沒有明顯掉，這是比較理想的減脂型態。";
-      reasons.push("體脂率下降");
-      reasons.push("脂肪重下降");
-      reasons.push("肌肉量保留尚可");
-      confidenceScore += 3;
-    } else if (
-      weightDown &&
-      waterDown &&
-      !fatDown &&
-      Math.abs(fatPctDelta) < 0.3
-    ) {
-      tag = "水分主導";
-      title = "最近較像水分波動";
+        "短期體重變化有一部分來自水分下降，但長期體脂率指數持續往下，肌肉率大致守住。";
+      explanation =
+        `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，代表最近量測有水分影響；但長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，方向仍偏向有效減脂。`;
+      reasons.push("長期體脂率持續下降");
+      reasons.push("肌肉率大致守住");
+      reasons.push("短期水分波動較大");
+      advice.push("先不要因為這兩天掉很快就再大砍熱量");
+      advice.push("維持蛋白質與阻力訓練，讓長期肌肉率穩住");
+      confidenceScore += 4;
+    } else if (shortWaterDrop && !longFatDrop && !longFatUp) {
+      tag = "水分波動";
+      title = "目前較像水分先動，不是脂肪明顯改變";
       detail =
-        "體重有下降，但脂肪重與體脂率沒有同步明顯往下，反而水分變化更明顯，先別過度解讀單次體重。";
-      reasons.push("水分下降較明顯");
-      reasons.push("脂肪指標變化有限");
+        "短期水分下降比體脂率變化更明顯，長期體脂率與肌肉率還沒有形成清楚方向。";
+      explanation =
+        `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，但體脂率指數只有 ${shortTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctIndexDelta}；長期體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}，目前比較像測量條件或補水狀態在影響數字。`;
+      reasons.push("短期水分下降明顯");
+      reasons.push("長期體脂率未明顯下降");
+      advice.push("先把量測時間、鹽分與喝水量固定");
+      advice.push("至少再觀察 3~7 天，不要把這次下降全當成減脂成果");
       confidenceScore += 3;
-    } else if (weightDown && muscleDown && (!fatDown || fatPctDelta >= 0)) {
+    } else if (longFatDrop && longMuscleUp && longWaterStable) {
+      tag = "漂亮減脂";
+      title = "體脂率下降，肌肉率同步守住甚至回升";
+      detail =
+        "這是比較理想的組合：長期體脂率往下，肌肉率持平或微升，水分也相對穩定。";
+      explanation =
+        `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}、水分指數 ${longTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${longTerm.bodyWaterIndexDelta}，代表你掉下來的重量較偏向脂肪，不是單純脫水。`;
+      reasons.push("長期體脂率下降");
+      reasons.push("長期肌肉率持平或上升");
+      reasons.push("長期水分相對穩定");
+      advice.push("維持目前飲食節奏，不需要為了求快再極端節食");
+      advice.push("繼續保留阻力訓練與足夠蛋白質");
+      confidenceScore += 5;
+    } else if (longMuscleDrop && !longFatDrop) {
       tag = "肌肉警訊";
-      title = "這波下降可能混有肌肉流失";
+      title = "肌肉率下降比體脂率改善更明顯";
       detail =
-        "體重下降同時肌肉量也掉，而且脂肪指標改善不夠明顯，接下來要優先補蛋白質並加上阻力訓練。";
-      reasons.push("肌肉量下降");
-      reasons.push("脂肪改善不明顯");
-      confidenceScore += 3;
-    } else if (weightDown && fatDown && waterDown) {
-      tag = "混合下降";
-      title = "目前像脂肪＋水分混合下降";
-      detail =
-        "這波體重下降同時有脂肪重與水分下降，方向不差，但不要把所有下降都當成純脂肪。";
-      reasons.push("脂肪重下降");
-      reasons.push("水分也同步下降");
-      confidenceScore += 2;
-    } else if (weightDelta >= 0.3 && fatUp) {
+        "目前比較要注意保肌，因為長期體脂率沒有明顯變好，但肌肉率已經往下掉。";
+      explanation =
+        `長期 ${longTerm.days} 天內肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，但體脂率指數只有 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}；這代表最近變輕的組成可能不夠漂亮。`;
+      reasons.push("長期肌肉率下降");
+      reasons.push("體脂率改善有限");
+      advice.push("優先檢查蛋白質是否足夠，並把蛋白質分散到三餐");
+      advice.push("每週至少安排 2~3 次阻力訓練或肌力刺激");
+      confidenceScore += 4;
+    } else if (longFatUp && !longMuscleUp) {
       tag = "脂肪回升";
-      title = "近期有脂肪回升跡象";
+      title = "長期體脂率有回升跡象";
       detail =
-        "體重沒有往下，脂肪重或體脂率反而有上升，先檢查放鬆餐、外食份量、宵夜與飲料。";
-      reasons.push("體脂率或脂肪重上升");
-      confidenceScore += 2;
+        "不只是短期水分問題，長期體脂率也有往上走，最近可能真的吃回來了一些。";
+      explanation =
+        `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}，而肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta} 沒有同步變好，代表近期回升較偏脂肪。`;
+      reasons.push("長期體脂率回升");
+      reasons.push("肌肉率沒有同步改善");
+      advice.push("先收斂外食份量、宵夜與飲料，再觀察一週");
+      advice.push("把主食與放鬆餐頻率拉回穩定區間");
+      confidenceScore += 4;
+    } else {
+      if (shortFatDrop) reasons.push("短期體脂率有下降");
+      if (shortWaterDrop) reasons.push("短期水分下降偏明顯");
+      if (shortMuscleDrop) reasons.push("短期肌肉率有下滑");
+      if (longFatDrop) reasons.push("長期體脂率仍偏下降");
+      if (!reasons.length) reasons.push("近期三項指標沒有形成一致方向");
+      advice.push("先把量測條件固定：起床後、上完廁所、空腹再量");
+      advice.push("再持續觀察短期 3~4 筆與長期 2~4 週趨勢");
     }
 
-    if (visceralDelta <= -1) {
-      reasons.push("內臟脂肪有下降");
+    if (latestBodyWater > 0 && latestBodyWater < 45) {
+      reasons.push("目前水分偏低");
+      advice.unshift("今天先把補水與電解質穩住");
       confidenceScore += 1;
-    } else if (visceralDelta >= 1) {
-      reasons.push("內臟脂肪有回升");
+    } else if (latestBodyWater > 0 && latestBodyWater < 50) {
+      reasons.push("目前水分略低");
     }
 
-    if (days >= 7) confidenceScore += 1;
-    if (
-      recent.every(
-        (entry) =>
-          num(entry.weight) > 0 &&
-          num(entry.bodyFatPct) > 0 &&
-          num(entry.fatMass) > 0,
-      )
-    ) {
-      confidenceScore += 1;
-    }
+    advice.push(waterTargetMl ? `今日建議飲水約 ${waterTargetMl} ml` : "今日先把飲水量穩住");
 
     const confidence =
-      confidenceScore >= 5
+      confidenceScore >= 7
         ? ("高" as const)
-        : confidenceScore >= 3
+        : confidenceScore >= 4
           ? ("中" as const)
           : ("低" as const);
 
-    if (!reasons.length) {
-      reasons.push("近期數值變化不夠一致");
-    }
+    const shortSummary = `短期 ${shortTerm.days} 天：水分 ${shortTerm.bodyWaterDelta > 0 ? "+" : ""}${shortTerm.bodyWaterDelta}%，體脂率 ${shortTerm.bodyFatPctDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctDelta}%，肌肉率 ${shortTerm.muscleRateDelta > 0 ? "+" : ""}${shortTerm.muscleRateDelta}%。`;
+    const longSummary = `長期 ${longTerm.days} 天：水分 ${longTerm.bodyWaterDelta > 0 ? "+" : ""}${longTerm.bodyWaterDelta}%，體脂率 ${longTerm.bodyFatPctDelta > 0 ? "+" : ""}${longTerm.bodyFatPctDelta}%，肌肉率 ${longTerm.muscleRateDelta > 0 ? "+" : ""}${longTerm.muscleRateDelta}%。`;
 
     return {
       tag,
@@ -3722,8 +3830,15 @@ export default function SimpleTracker() {
       detail,
       confidence,
       reasons,
+      shortSummary,
+      longSummary,
+      explanation,
+      advice: Array.from(new Set(advice)).slice(0, 4),
+      waterTargetMl,
+      shortTerm,
+      longTerm,
     };
-  }, [sortedEntries]);
+  }, [sortedEntries, latest, latestWeight, latestBodyWater, latest?.exerciseMin, latest?.sideEffect, latestBodyFatPct]);
 
   const strategyMode = useMemo(() => {
     if (!latest) return ["先建立第一筆紀錄"];
@@ -5366,7 +5481,7 @@ export default function SimpleTracker() {
               <CardContent className="p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <Droplets className="w-4 h-4" />
-                  水分/脂肪判斷
+                  水分/體脂/肌肉判讀
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">{waterVsFat.tag}</Badge>
@@ -5386,6 +5501,8 @@ export default function SimpleTracker() {
                 <div className="text-sm text-slate-500">
                   {waterVsFat.detail}
                 </div>
+                <div className="text-xs text-slate-500">{waterVsFat.shortSummary}</div>
+                <div className="text-xs text-slate-500">建議水量：約 {waterVsFat.waterTargetMl || "-"} ml</div>
               </CardContent>
             </Card>
 
@@ -6095,7 +6212,7 @@ export default function SimpleTracker() {
                       {settings.sex === "female" ? "女性建議" : "男性建議"}
                     </div>
                     <div>
-                      水分/脂肪判斷：{waterVsFat.title}（信心{" "}
+                      水分/體脂/肌肉判讀：{waterVsFat.title}（信心{" "}
                       {waterVsFat.confidence}）
                     </div>
                   </CardContent>
