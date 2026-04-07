@@ -3703,6 +3703,12 @@ export default function SimpleTracker() {
         fatLossStage: "資料不足",
         fatLossStageDetail:
           "至少需 14 天以上紀錄，才能進行初步判定；若腰圍有 2 筆以上紀錄，可進一步提升可信度。",
+        fatLossStageReasons: [
+          shortWindow.length < 3 ? "短期可用資料不足 3 筆" : "短期資料已達基本門檻",
+          longWindow.length < 4 ? "長期可用資料不足 4 筆" : "長期資料已達基本門檻",
+          hasAtLeast14Days ? "已累積至少 14 天紀錄" : "尚未累積至少 14 天紀錄",
+          hasWaistSupport ? "近 14 天腰圍已有 2 筆以上紀錄" : "近 14 天腰圍不足 2 筆",
+        ],
         fatLossStageConfidenceText: hasWaistSupport ? "85% 可信度" : "70% 可信度",
         waistDelta14: waist14.delta,
         waistCount14: waist14.count,
@@ -3875,18 +3881,51 @@ export default function SimpleTracker() {
 
     let fatLossStage = "過渡觀察期";
     let fatLossStageDetail = "已出現減脂跡象，建議再觀察 1~2 週。";
+    let fatLossStageReasons: string[] = [];
 
     if (!hasAtLeast14Days) {
       fatLossStage = "資料不足";
       fatLossStageDetail = "至少需 14 天以上紀錄，才能進行初步判定；若腰圍有 2 筆以上紀錄，可進一步提升可信度。";
+      fatLossStageReasons = [
+        "尚未累積至少 14 天紀錄",
+        hasWaistSupport ? "近 14 天腰圍已有 2 筆以上紀錄" : "近 14 天腰圍不足 2 筆",
+      ];
     } else if (stageScore >= 3) {
       fatLossStage = "已進入穩定減脂期";
       fatLossStageDetail = hasWaistSupport
         ? "目前下降較偏向脂肪變化，且腰圍同步縮小。"
         : "已依體重、體脂、水分、肌肉資料完成初步判定；若腰圍有 2 筆以上紀錄，可提升判定可信度。";
+      fatLossStageReasons = [
+        stableWeightLoss ? "近 14~28 天體重趨勢穩定下降" : "體重下降趨勢仍不夠穩定",
+        bodyFatImproving ? "長期體脂率有下降" : "長期體脂率下降還不夠明顯",
+        musclePreserved ? "肌肉率暫時有守住" : "肌肉率有下滑跡象",
+        hasWaistSupport
+          ? waistClearlyDown
+            ? "近 14 天腰圍明顯下降" : "近 14 天腰圍下降未達 1 cm"
+          : "近 14 天腰圍資料不足 2 筆，暫以 70% 可信度判定",
+      ];
     } else if (shortWaterDrop && !waistClearlyDown) {
       fatLossStage = "初期快速下降期";
       fatLossStageDetail = "目前下降可能混有水分，先觀察腰圍與體脂是否持續改善。";
+      fatLossStageReasons = [
+        "短期水分下降較明顯",
+        bodyFatImproving ? "雖然體脂有改善，但還需要再觀察" : "體脂下降還不夠明顯",
+        musclePreserved ? "肌肉率暫時沒有明顯惡化" : "肌肉率已有下滑跡象",
+        hasWaistSupport
+          ? waistClearlyDown
+            ? "腰圍有下降，但還想再看後續是否延續" : "腰圍下降還不夠明顯"
+          : "近 14 天腰圍資料不足 2 筆，暫以 70% 可信度判定",
+      ];
+    } else {
+      fatLossStageReasons = [
+        stableWeightLoss ? "體重趨勢有持續下降" : "體重趨勢還在波動",
+        bodyFatImproving ? "體脂率有改善" : "體脂率改善尚不夠明顯",
+        musclePreserved ? "肌肉率大致守住" : "肌肉率有下滑跡象",
+        hasWaistSupport
+          ? waistClearlyDown
+            ? "腰圍已有明顯下降" : "腰圍下降尚未達穩定減脂門檻"
+          : "近 14 天腰圍資料不足 2 筆，暫以 70% 可信度判定",
+      ];
     }
 
     const confidencePct = hasWaistSupport ? 85 : 70;
@@ -3903,6 +3942,7 @@ export default function SimpleTracker() {
       confidencePct,
       fatLossStage,
       fatLossStageDetail,
+      fatLossStageReasons,
       fatLossStageConfidenceText,
       waistDelta14: waist14.delta,
       waistCount14: waist14.count,
@@ -5579,6 +5619,21 @@ export default function SimpleTracker() {
                   <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
                     {waterVsFat.fatLossStageDetail}
                   </div>
+                  {waterVsFat.fatLossStageReasons?.length ? (
+                    <div className={`rounded-lg border p-2.5 space-y-1 ${isDark ? "bg-slate-950/40 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
+                      <div className={`text-[11px] font-medium ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                        這樣判斷的原因
+                      </div>
+                      {waterVsFat.fatLossStageReasons.map((reason: string, index: number) => (
+                        <div
+                          key={`${reason}-${index}`}
+                          className={`text-[11px] leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
+                        >
+                          ・{reason}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -5973,6 +6028,16 @@ export default function SimpleTracker() {
                         value={form.bodyWater}
                         onChange={(e) =>
                           setForm({ ...form, bodyWater: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>腰圍 (cm)</Label>
+                      <Input
+                        placeholder="例如 96.5"
+                        value={form.waist}
+                        onChange={(e) =>
+                          setForm({ ...form, waist: e.target.value })
                         }
                       />
                     </div>
