@@ -5478,12 +5478,12 @@ export default function SimpleTracker() {
             </Card>
 
             <Card>
-              <CardContent className="p-4 space-y-2">
+              <CardContent className="p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <Droplets className="w-4 h-4" />
                   水分/體脂/肌肉判讀
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{waterVsFat.tag}</Badge>
                   <Badge
                     variant={
@@ -5501,8 +5501,39 @@ export default function SimpleTracker() {
                 <div className="text-sm text-slate-500">
                   {waterVsFat.detail}
                 </div>
-                <div className="text-xs text-slate-500">{waterVsFat.shortSummary}</div>
-                <div className="text-xs text-slate-500">建議水量：約 {waterVsFat.waterTargetMl || "-"} ml</div>
+
+                <div className="rounded-xl border bg-slate-50 p-3 space-y-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-700">短期判斷</div>
+                    <div className="text-xs text-slate-500 mt-1">{waterVsFat.shortSummary}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-700">長期判斷</div>
+                    <div className="text-xs text-slate-500 mt-1">{waterVsFat.longSummary}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-700">建議水量</div>
+                    <div className="text-xs text-slate-500 mt-1">約 {waterVsFat.waterTargetMl || "-"} ml</div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-slate-700">判讀解釋</div>
+                  <div className="text-xs text-slate-500">{waterVsFat.explanation}</div>
+                </div>
+
+                {waterVsFat.advice?.length ? (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-slate-700">建議</div>
+                    <div className="space-y-1">
+                      {waterVsFat.advice.slice(0, 3).map((tip, index) => (
+                        <div key={`${tip}-${index}`} className="text-xs text-slate-500">
+                          ・{tip}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
