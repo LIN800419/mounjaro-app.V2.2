@@ -5668,7 +5668,7 @@ export default function SimpleTracker() {
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xl font-bold">首頁儀表板</div>
-                <div className="text-sm text-slate-500">一打開先看這裡</div>
+                <div className="text-sm text-slate-500">基本資訊</div>
               </div>
 
               <div className="grid gap-3 grid-cols-2">
