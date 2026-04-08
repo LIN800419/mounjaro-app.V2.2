@@ -3609,7 +3609,6 @@ export default function SimpleTracker() {
       num(entry.weight) > 0 &&
       num(entry.bodyFatPct) > 0 &&
       num(entry.fatMass) > 0 &&
-      getMuscleRateFromEntry(entry) > 0 &&
       num(entry.muscleMass) > 0 &&
       num(entry.bodyWater) > 0;
 
@@ -3621,7 +3620,7 @@ export default function SimpleTracker() {
         tag: "觀察中",
         title: "有效資料不足",
         detail:
-          "長期判斷已改成只用區間內第一筆完整有效紀錄當基準；目前完整有效資料不足，先持續記錄體重、體脂率、脂肪重、肌肉量、水分。",
+          "長期判斷已改成只用區間內第一筆完整有效紀錄當基準；目前完整有效資料不足，先持續記錄。",
         confidence: "低" as const,
         reasons: [
           validLongWindow.length
@@ -3633,13 +3632,8 @@ export default function SimpleTracker() {
 
     const longBase = validLongWindow[0];
     const longLast = validLongWindow[validLongWindow.length - 1];
-    const shortUsesFallback = validShortWindow.length < 2;
-    const shortBase = shortUsesFallback
-      ? validLongWindow[Math.max(0, validLongWindow.length - 2)]
-      : validShortWindow[0];
-    const shortLast = shortUsesFallback
-      ? longLast
-      : validShortWindow[validShortWindow.length - 1];
+    const shortBase = validShortWindow.length >= 2 ? validShortWindow[0] : validLongWindow[Math.max(0, validLongWindow.length - 2)];
+    const shortLast = validShortWindow.length >= 2 ? validShortWindow[validShortWindow.length - 1] : longLast;
 
     const weightDelta = +(num(longLast.weight) - num(longBase.weight)).toFixed(1);
     const fatPctDelta = +(num(longLast.bodyFatPct) - num(longBase.bodyFatPct)).toFixed(1);
@@ -3655,9 +3649,6 @@ export default function SimpleTracker() {
 
     const reasons: string[] = [
       `長期基準改用 ${longBase.date} 這筆完整有效紀錄`,
-      shortUsesFallback
-        ? `短期有效資料不足，因此短期改用 ${shortBase.date} 到 ${shortLast.date} 的最近兩筆完整有效紀錄`
-        : `短期基準改用 ${shortBase.date} 這筆完整有效紀錄`,
     ];
     let confidenceScore = 1;
     let tag = "觀察中";
@@ -6212,20 +6203,12 @@ export default function SimpleTracker() {
         "rounded-2xl border px-3 py-3 text-sm font-medium transition active:scale-[0.98]",
         isDark
           ? active
-            ? "border-white bg-white shadow-sm ring-2 ring-white/70"
-            : "border-slate-700 bg-slate-900"
+            ? "border-white bg-white text-slate-950 shadow-sm ring-2 ring-white/70"
+            : "border-slate-700 bg-slate-900 text-slate-200"
           : active
             ? "border-slate-900 bg-slate-900 text-white shadow-sm"
             : "border-slate-300 bg-white text-slate-700",
       ].join(" ")}
-      style={
-        isDark
-          ? {
-              color: active ? "#020617" : "#e2e8f0",
-            }
-          : undefined
-      }
-      aria-pressed={active}
     >
       {WORKOUT_EQUIPMENT_LABEL[item]}
     </button>
