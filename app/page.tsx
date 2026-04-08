@@ -78,7 +78,6 @@ type Entry = {
   muscleMass: string;
   visceralFat: string;
   bodyWater: string;
-  waist: string;
   dose: string;
   appetite: Appetite;
   cravingLevel: CravingLevel;
@@ -693,12 +692,6 @@ const WORKOUT_EQUIPMENT_LABEL: Record<WorkoutEquipment, string> = {
   bike: "飛輪",
   treadmill: "跑步機",
   kettlebell: "壺鈴",
-};
-
-const WORKOUT_EQUIPMENT_ICON: Record<WorkoutEquipment, string> = {
-  bike: "🚴",
-  treadmill: "🏃",
-  kettlebell: "🏋️",
 };
 
 function getWorkoutFocusSeed(todayStr: string) {
@@ -1846,82 +1839,6 @@ function getMuscleRateFromEntry(entry?: Partial<Entry> | null) {
   return getMuscleRateValue(num(entry.weight), num(entry.muscleMass));
 }
 
-
-type CompositionSnapshot = {
-  weight: number;
-  bodyFatPct: number;
-  muscleRate: number;
-  bodyWater: number;
-};
-
-function getCompositionSnapshot(entry?: Partial<Entry> | null): CompositionSnapshot {
-  return {
-    weight: num(entry?.weight),
-    bodyFatPct: num(entry?.bodyFatPct),
-    muscleRate: getMuscleRateFromEntry(entry),
-    bodyWater: num(entry?.bodyWater),
-  };
-}
-
-function isCompleteCompositionEntry(entry?: Partial<Entry> | null) {
-  if (!entry) return false;
-  const snapshot = getCompositionSnapshot(entry);
-  return (
-    snapshot.weight > 0 &&
-    snapshot.bodyFatPct > 0 &&
-    snapshot.muscleRate > 0 &&
-    snapshot.bodyWater > 0
-  );
-}
-
-function getWaistDeltaWithinDays(entries: Entry[], endDate: string, days: number) {
-  const waistEntries = entries.filter(
-    (entry) => num((entry as any).waist) > 0 && daysBetween(entry.date, endDate) >= 0 && daysBetween(entry.date, endDate) <= days,
-  );
-  if (waistEntries.length < 2) {
-    return { delta: 0, count: waistEntries.length, first: null as Entry | null, last: null as Entry | null };
-  }
-  const first = waistEntries[0];
-  const last = waistEntries[waistEntries.length - 1];
-  return {
-    delta: +(num(last.waist) - num(first.waist)).toFixed(1),
-    count: waistEntries.length,
-    first,
-    last,
-  };
-}
-
-function getIndexValue(current: number, base: number) {
-  if (!current || !base) return 0;
-  return +((current / base) * 100).toFixed(1);
-}
-
-function getIndexDelta(current: number, base: number) {
-  const indexValue = getIndexValue(current, base);
-  if (!indexValue) return 0;
-  return +(indexValue - 100).toFixed(1);
-}
-
-function estimateDailyWaterTargetMl(
-  weight: number,
-  exerciseMin: number,
-  bodyWater: number,
-  sideEffect?: SideEffect,
-) {
-  if (!weight) return 0;
-
-  let target = Math.round(weight * 32);
-  if (bodyWater > 0 && bodyWater < 50) target += 300;
-  if (bodyWater > 0 && bodyWater < 45) target += 300;
-  if (exerciseMin >= 20) target += 300;
-  if (exerciseMin >= 45) target += 200;
-  if (sideEffect === "便秘") target += 400;
-  if (sideEffect === "腹瀉") target += 500;
-  if (sideEffect === "頭暈") target += 200;
-
-  return Math.min(5000, Math.max(1500, target));
-}
-
 function estimateETA(
   latestWeight: number,
   goalWeight: number,
@@ -2840,7 +2757,6 @@ export default function SimpleTracker() {
     muscleMass: "",
     visceralFat: "",
     bodyWater: "",
-    waist: "",
     dose: "2.5",
     appetite: "正常",
     cravingLevel: "中",
@@ -3010,7 +2926,6 @@ export default function SimpleTracker() {
                   muscleMass: String(item?.muscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
                   bodyWater: String(item?.bodyWater || item?.water || ""),
-                  waist: String(item?.waist || ""),
                   dose: item?.dose || "2.5",
                   appetite: item?.appetite || "正常",
                   cravingLevel: item?.cravingLevel || "中",
@@ -3136,7 +3051,6 @@ export default function SimpleTracker() {
                   muscleMass: String(item?.muscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
                   bodyWater: String(item?.bodyWater || ""),
-                  waist: String(item?.waist || ""),
                   dose: String(item?.dose || "2.5"),
                   appetite: (item?.appetite || "正常") as Appetite,
                   cravingLevel: (item?.cravingLevel || "中") as CravingLevel,
@@ -3220,7 +3134,6 @@ export default function SimpleTracker() {
         muscleMass: prev.muscleMass || "",
         visceralFat: prev.visceralFat || "",
         bodyWater: prev.bodyWater || "",
-        waist: (prev as any).waist || "",
       }));
       setPhotoDate(today);
       setCloudReady(true);
@@ -3297,7 +3210,6 @@ export default function SimpleTracker() {
   const latestMuscleMass = latest ? num(latest.muscleMass) : 0;
   const latestVisceralFat = latest ? num(latest.visceralFat) : 0;
   const latestBodyWater = latest ? num(latest.bodyWater) : 0;
-  const latestWaist = latest ? num(latest.waist) : 0;
   const bmi = getBMI(num(settings.height), latestWeight);
   const bmiLabel = getBMILabel(bmi);
   const bmrMifflin = getBMR(
@@ -3687,296 +3599,144 @@ export default function SimpleTracker() {
   ]);
 
   const waterVsFat = useMemo(() => {
-    const shortWindow = sortedEntries.slice(-4);
     const longWindow = sortedEntries.filter((entry) => {
       const diff = daysBetween(entry.date, latest?.date || entry.date);
       return diff >= 0 && diff <= 28;
     });
-    const validLongWindow = longWindow.filter(isCompleteCompositionEntry);
+    const shortWindow = sortedEntries.slice(-4);
 
-    const waterTargetMl = estimateDailyWaterTargetMl(
-      latestWeight,
-      num(latest?.exerciseMin),
-      latestBodyWater,
-      latest?.sideEffect,
-    );
+    const isCompleteCompEntry = (entry: Entry) =>
+      num(entry.weight) > 0 &&
+      num(entry.bodyFatPct) > 0 &&
+      num(entry.fatMass) > 0 &&
+      num(entry.muscleMass) > 0 &&
+      num(entry.bodyWater) > 0;
 
-    const hasAtLeast14Days =
-      !!latest?.date &&
-      sortedEntries.length >= 2 &&
-      daysBetween(sortedEntries[0].date, latest.date) >= 14;
-    const waist14 = latest?.date
-      ? getWaistDeltaWithinDays(sortedEntries, latest.date, 14)
-      : { delta: 0, count: 0, first: null as Entry | null, last: null as Entry | null };
-    const hasWaistSupport = waist14.count >= 2;
+    const validLongWindow = longWindow.filter(isCompleteCompEntry);
+    const validShortWindow = shortWindow.filter(isCompleteCompEntry);
 
-    if (shortWindow.length < 3 || validLongWindow.length < 4) {
+    if (validLongWindow.length < 2) {
       return {
         tag: "觀察中",
-        title: "資料不足",
+        title: "有效資料不足",
         detail:
-          "至少先累積短期 3 筆、長期 4 筆以上身體組成紀錄，再判斷水分、體脂率、肌肉率的此消彼長。",
+          "長期判斷已改成只用區間內第一筆完整有效紀錄當基準；目前完整有效資料不足，先持續記錄。",
         confidence: "低" as const,
-        confidencePct: hasWaistSupport ? 85 : 70,
-        fatLossStage: "資料不足",
-        fatLossStageDetail:
-          "至少需 14 天以上紀錄，才能進行初步判定；若腰圍有 2 筆以上紀錄，可進一步提升可信度。",
-        fatLossStageReasons: [
-          shortWindow.length < 3 ? "短期可用資料不足 3 筆" : "短期資料已達基本門檻",
-          validLongWindow.length < 4 ? "長期完整有效資料不足 4 筆" : "長期完整有效資料已達基本門檻",
-          hasAtLeast14Days ? "已累積至少 14 天紀錄" : "尚未累積至少 14 天紀錄",
-          hasWaistSupport ? "近 14 天腰圍已有 2 筆以上紀錄" : "近 14 天腰圍不足 2 筆",
+        reasons: [
+          validLongWindow.length
+            ? "長期完整有效紀錄還不足 2 筆"
+            : "近 28 天沒有足夠完整的身體組成紀錄",
         ],
-        fatLossStageConfidenceText: hasWaistSupport ? "85% 可信度" : "70% 可信度",
-        waistDelta14: waist14.delta,
-        waistCount14: waist14.count,
-        waistStatus: hasWaistSupport
-          ? `近 14 天腰圍 ${waist14.delta > 0 ? "+" : ""}${waist14.delta} cm`
-          : "近 14 天腰圍資料不足（至少 2 筆）",
-        reasons: ["目前可用資料太少"],
-        shortSummary: "短期資料不足",
-        longSummary: "長期資料不足",
-        explanation:
-          "先固定在相近時間量測，之後系統才比較能分辨這波體重變化主要來自水分、體脂還是肌肉率。",
-        advice: [
-          "先持續記錄體脂率、肌肉率、水分",
-          "補上腰圍紀錄後，減脂期判定會更準",
-          waterTargetMl ? `今日先補水約 ${waterTargetMl} ml` : "先把飲水量穩住",
-        ],
-        waterTargetMl,
-        shortTerm: null,
-        longTerm: null,
       };
     }
 
-    const shortFirst = getCompositionSnapshot(shortWindow[0]);
-    const shortLast = getCompositionSnapshot(shortWindow[shortWindow.length - 1]);
-    const longBaseEntry = validLongWindow[0];
-    const longLastEntry = validLongWindow[validLongWindow.length - 1];
-    const longFirst = getCompositionSnapshot(longBaseEntry);
-    const longLast = getCompositionSnapshot(longLastEntry);
+    const longBase = validLongWindow[0];
+    const longLast = validLongWindow[validLongWindow.length - 1];
+    const shortBase = validShortWindow.length >= 2 ? validShortWindow[0] : validLongWindow[Math.max(0, validLongWindow.length - 2)];
+    const shortLast = validShortWindow.length >= 2 ? validShortWindow[validShortWindow.length - 1] : longLast;
 
-    const shortTerm = {
-      days: Math.max(1, daysBetween(shortWindow[0].date, shortWindow[shortWindow.length - 1].date)),
-      weightDelta: +(shortLast.weight - shortFirst.weight).toFixed(1),
-      bodyFatPctDelta: +(shortLast.bodyFatPct - shortFirst.bodyFatPct).toFixed(1),
-      muscleRateDelta: +(shortLast.muscleRate - shortFirst.muscleRate).toFixed(1),
-      bodyWaterDelta: +(shortLast.bodyWater - shortFirst.bodyWater).toFixed(1),
-      bodyFatPctIndex: getIndexValue(shortLast.bodyFatPct, shortFirst.bodyFatPct),
-      muscleRateIndex: getIndexValue(shortLast.muscleRate, shortFirst.muscleRate),
-      bodyWaterIndex: getIndexValue(shortLast.bodyWater, shortFirst.bodyWater),
-      bodyFatPctIndexDelta: getIndexDelta(shortLast.bodyFatPct, shortFirst.bodyFatPct),
-      muscleRateIndexDelta: getIndexDelta(shortLast.muscleRate, shortFirst.muscleRate),
-      bodyWaterIndexDelta: getIndexDelta(shortLast.bodyWater, shortFirst.bodyWater),
-    };
+    const weightDelta = +(num(longLast.weight) - num(longBase.weight)).toFixed(1);
+    const fatPctDelta = +(num(longLast.bodyFatPct) - num(longBase.bodyFatPct)).toFixed(1);
+    const fatMassDelta = +(num(longLast.fatMass) - num(longBase.fatMass)).toFixed(1);
+    const muscleDelta = +(num(longLast.muscleMass) - num(longBase.muscleMass)).toFixed(1);
+    const waterDelta = +(num(longLast.bodyWater) - num(longBase.bodyWater)).toFixed(1);
+    const visceralDelta = +(num(longLast.visceralFat) - num(longBase.visceralFat)).toFixed(1);
+    const days = Math.max(1, daysBetween(longBase.date, longLast.date));
 
-    const longTerm = {
-      days: Math.max(1, daysBetween(longBaseEntry.date, longLastEntry.date)),
-      weightDelta: +(longLast.weight - longFirst.weight).toFixed(1),
-      bodyFatPctDelta: +(longLast.bodyFatPct - longFirst.bodyFatPct).toFixed(1),
-      muscleRateDelta: +(longLast.muscleRate - longFirst.muscleRate).toFixed(1),
-      bodyWaterDelta: +(longLast.bodyWater - longFirst.bodyWater).toFixed(1),
-      bodyFatPctIndex: getIndexValue(longLast.bodyFatPct, longFirst.bodyFatPct),
-      muscleRateIndex: getIndexValue(longLast.muscleRate, longFirst.muscleRate),
-      bodyWaterIndex: getIndexValue(longLast.bodyWater, longFirst.bodyWater),
-      bodyFatPctIndexDelta: getIndexDelta(longLast.bodyFatPct, longFirst.bodyFatPct),
-      muscleRateIndexDelta: getIndexDelta(longLast.muscleRate, longFirst.muscleRate),
-      bodyWaterIndexDelta: getIndexDelta(longLast.bodyWater, longFirst.bodyWater),
-    };
+    const shortWaterDelta = +(num(shortLast.bodyWater) - num(shortBase.bodyWater)).toFixed(1);
+    const shortFatPctDelta = +(num(shortLast.bodyFatPct) - num(shortBase.bodyFatPct)).toFixed(1);
+    const shortDays = Math.max(1, daysBetween(shortBase.date, shortLast.date));
 
-    const reasons: string[] = [];
-    const advice: string[] = [];
-    let confidenceScore = 2;
+    const reasons: string[] = [
+      `長期基準改用 ${longBase.date} 這筆完整有效紀錄`,
+    ];
+    let confidenceScore = 1;
     let tag = "觀察中";
-    let title = "三項指標互相拉扯中";
-    let detail = "短期與長期都有波動，先不要只靠單日體重下結論。";
-    let explanation = "目前較像水分、體脂率、肌肉率同時在小幅變動，需要再看幾天趨勢。";
+    let title = "趨勢尚不明確";
+    let detail = "目前像是混合波動，先持續觀察 1~2 週，不要只看單日數字。";
 
-    const shortWaterDrop = shortTerm.bodyWaterDelta <= -0.8 || shortTerm.bodyWaterIndexDelta <= -1.5;
-    const shortFatDrop = shortTerm.bodyFatPctDelta <= -0.3 || shortTerm.bodyFatPctIndexDelta <= -1;
-    const shortMuscleDrop = shortTerm.muscleRateDelta <= -0.3 || shortTerm.muscleRateIndexDelta <= -1;
-    const longFatDrop = longTerm.bodyFatPctDelta <= -0.5 || longTerm.bodyFatPctIndexDelta <= -1.5;
-    const longFatUp = longTerm.bodyFatPctDelta >= 0.4 || longTerm.bodyFatPctIndexDelta >= 1;
-    const longMuscleUp = longTerm.muscleRateDelta >= 0.2 || longTerm.muscleRateIndexDelta >= 0.5;
-    const longMuscleDrop = longTerm.muscleRateDelta <= -0.3 || longTerm.muscleRateIndexDelta <= -1;
-    const longWaterStable = Math.abs(longTerm.bodyWaterDelta) <= 1;
+    const weightDown = weightDelta <= -0.4;
+    const fatDown = fatMassDelta <= -0.3;
+    const fatPctDown = fatPctDelta <= -0.3;
+    const waterDown = waterDelta <= -0.8;
+    const muscleDown = muscleDelta <= -0.5;
+    const fatUp = fatMassDelta >= 0.3 || fatPctDelta >= 0.3;
+    const shortWaterDrop = shortWaterDelta <= -0.8;
 
-    if (shortWaterDrop && longFatDrop && !longMuscleDrop) {
-      tag = "脂肪下降中";
-      title = "短期有水分波動，但長期仍偏向減脂";
+    if (weightDown && fatDown && fatPctDown && !muscleDown) {
+      tag = "脂肪主導";
+      title = "目前下降以脂肪為主";
       detail =
-        "短期體重變化有一部分來自水分下降，但長期體脂率指數持續往下，肌肉率大致守住。";
-      explanation =
-        `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，代表最近量測有水分影響；但長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，方向仍偏向有效減脂。`;
-      reasons.push("長期體脂率持續下降");
-      reasons.push("肌肉率大致守住");
-      reasons.push("短期水分波動較大");
-      advice.push("先不要因為這兩天掉很快就再大砍熱量");
-      advice.push("維持蛋白質與阻力訓練，讓長期肌肉率穩住");
-      confidenceScore += 4;
-    } else if (shortWaterDrop && !longFatDrop && !longFatUp) {
-      tag = "水分波動";
-      title = "目前較像水分先動，不是脂肪明顯改變";
-      detail =
-        "短期水分下降比體脂率變化更明顯，長期體脂率與肌肉率還沒有形成清楚方向。";
-      explanation =
-        `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，但體脂率指數只有 ${shortTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctIndexDelta}；長期體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}，目前比較像測量條件或補水狀態在影響數字。`;
-      reasons.push("短期水分下降明顯");
-      reasons.push("長期體脂率未明顯下降");
-      advice.push("先把量測時間、鹽分與喝水量固定");
-      advice.push("至少再觀察 3~7 天，不要把這次下降全當成減脂成果");
-      confidenceScore += 3;
-    } else if (longFatDrop && longMuscleUp && longWaterStable) {
-      tag = "漂亮減脂";
-      title = "體脂率下降，肌肉率同步守住甚至回升";
-      detail =
-        "這是比較理想的組合：長期體脂率往下，肌肉率持平或微升，水分也相對穩定。";
-      explanation =
-        `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}、水分指數 ${longTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${longTerm.bodyWaterIndexDelta}，代表你掉下來的重量較偏向脂肪，不是單純脫水。`;
+        "長期判斷是拿區間內第一筆完整有效紀錄與最新完整紀錄相比，體重、體脂率、脂肪重都有往下，且肌肉量沒有明顯掉。";
       reasons.push("長期體脂率下降");
-      reasons.push("長期肌肉率持平或上升");
-      reasons.push("長期水分相對穩定");
-      advice.push("維持目前飲食節奏，不需要為了求快再極端節食");
-      advice.push("繼續保留阻力訓練與足夠蛋白質");
-      confidenceScore += 5;
-    } else if (longMuscleDrop && !longFatDrop) {
+      reasons.push("長期脂肪重下降");
+      reasons.push("長期肌肉量保留尚可");
+      confidenceScore += 3;
+    } else if (weightDown && shortWaterDrop && !fatDown && Math.abs(fatPctDelta) < 0.3) {
+      tag = "水分主導";
+      title = "最近較像水分波動";
+      detail =
+        "短期水分有下降，但用長期第一筆完整有效紀錄回看，脂肪重與體脂率沒有同步明顯往下，先別把這波全當成減脂。";
+      reasons.push(`短期 ${shortDays} 天水分下降較明顯`);
+      reasons.push("長期脂肪指標變化有限");
+      confidenceScore += 3;
+    } else if (weightDown && muscleDown && (!fatDown || fatPctDelta >= 0)) {
       tag = "肌肉警訊";
-      title = "肌肉率下降比體脂率改善更明顯";
+      title = "這波下降可能混有肌肉流失";
       detail =
-        "目前比較要注意保肌，因為長期體脂率沒有明顯變好，但肌肉率已經往下掉。";
-      explanation =
-        `長期 ${longTerm.days} 天內肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，但體脂率指數只有 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}；這代表最近變輕的組成可能不夠漂亮。`;
-      reasons.push("長期肌肉率下降");
-      reasons.push("體脂率改善有限");
-      advice.push("優先檢查蛋白質是否足夠，並把蛋白質分散到三餐");
-      advice.push("每週至少安排 2~3 次阻力訓練或肌力刺激");
-      confidenceScore += 4;
-    } else if (longFatUp && !longMuscleUp) {
+        "用長期完整有效基準回看，體重下降同時肌肉量也掉，而且脂肪指標改善不夠明顯，接下來要優先補蛋白質並加上阻力訓練。";
+      reasons.push("長期肌肉量下降");
+      reasons.push("長期脂肪改善不明顯");
+      confidenceScore += 3;
+    } else if (weightDown && fatDown && waterDown) {
+      tag = "混合下降";
+      title = "目前像脂肪＋水分混合下降";
+      detail =
+        "長期回看有脂肪重與水分一起下降，方向不差，但不要把所有下降都當成純脂肪。";
+      reasons.push("長期脂肪重下降");
+      reasons.push("長期水分也同步下降");
+      confidenceScore += 2;
+    } else if (weightDelta >= 0.3 && fatUp) {
       tag = "脂肪回升";
-      title = "長期體脂率有回升跡象";
+      title = "近期有脂肪回升跡象";
       detail =
-        "不只是短期水分問題，長期體脂率也有往上走，最近可能真的吃回來了一些。";
-      explanation =
-        `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}，而肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta} 沒有同步變好，代表近期回升較偏脂肪。`;
-      reasons.push("長期體脂率回升");
-      reasons.push("肌肉率沒有同步改善");
-      advice.push("先收斂外食份量、宵夜與飲料，再觀察一週");
-      advice.push("把主食與放鬆餐頻率拉回穩定區間");
-      confidenceScore += 4;
-    } else {
-      if (shortFatDrop) reasons.push("短期體脂率有下降");
-      if (shortWaterDrop) reasons.push("短期水分下降偏明顯");
-      if (shortMuscleDrop) reasons.push("短期肌肉率有下滑");
-      if (longFatDrop) reasons.push("長期體脂率仍偏下降");
-      if (!reasons.length) reasons.push("近期三項指標沒有形成一致方向");
-      advice.push("先把量測條件固定：起床後、上完廁所、空腹再量");
-      advice.push("再持續觀察短期 3~4 筆與長期 2~4 週趨勢");
+        "用區間內第一筆完整有效紀錄當基準回看，體脂率或脂肪重有上升，先檢查放鬆餐、外食份量、宵夜與飲料。";
+      reasons.push("長期體脂率或脂肪重上升");
+      confidenceScore += 2;
     }
 
-    if (latestBodyWater > 0 && latestBodyWater < 45) {
-      reasons.push("目前水分偏低");
-      advice.unshift("今天先把補水與電解質穩住");
+    if (visceralDelta <= -1) {
+      reasons.push("內臟脂肪有下降");
       confidenceScore += 1;
-    } else if (latestBodyWater > 0 && latestBodyWater < 50) {
-      reasons.push("目前水分略低");
+    } else if (visceralDelta >= 1) {
+      reasons.push("內臟脂肪有回升");
     }
 
-    advice.push(waterTargetMl ? `今日建議飲水約 ${waterTargetMl} ml` : "今日先把飲水量穩住");
+    if (days >= 14) confidenceScore += 1;
+    if (validLongWindow.length >= 3) confidenceScore += 1;
 
     const confidence =
-      confidenceScore >= 7
+      confidenceScore >= 5
         ? ("高" as const)
-        : confidenceScore >= 4
+        : confidenceScore >= 3
           ? ("中" as const)
           : ("低" as const);
 
-    const shortSummary = `短期 ${shortTerm.days} 天：水分 ${shortTerm.bodyWaterDelta > 0 ? "+" : ""}${shortTerm.bodyWaterDelta}%，體脂率 ${shortTerm.bodyFatPctDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctDelta}%，肌肉率 ${shortTerm.muscleRateDelta > 0 ? "+" : ""}${shortTerm.muscleRateDelta}%。`;
-    const longSummary = `長期 ${longTerm.days} 天：水分 ${longTerm.bodyWaterDelta > 0 ? "+" : ""}${longTerm.bodyWaterDelta}%，體脂率 ${longTerm.bodyFatPctDelta > 0 ? "+" : ""}${longTerm.bodyFatPctDelta}%，肌肉率 ${longTerm.muscleRateDelta > 0 ? "+" : ""}${longTerm.muscleRateDelta}%。`;
-
-    const stableWeightLoss = hasAtLeast14Days && longTerm.weightDelta <= -0.8;
-    const bodyFatImproving = longFatDrop;
-    const musclePreserved = !longMuscleDrop;
-    const waistClearlyDown = hasWaistSupport && waist14.delta <= -1;
-    const stageScore = [stableWeightLoss, bodyFatImproving, musclePreserved, waistClearlyDown].filter(Boolean).length;
-
-    let fatLossStage = "過渡觀察期";
-    let fatLossStageDetail = "已出現減脂跡象，建議再觀察 1~2 週。";
-    let fatLossStageReasons: string[] = [];
-
-    if (!hasAtLeast14Days) {
-      fatLossStage = "資料不足";
-      fatLossStageDetail = "至少需 14 天以上紀錄，才能進行初步判定；若腰圍有 2 筆以上紀錄，可進一步提升可信度。";
-      fatLossStageReasons = [
-        "尚未累積至少 14 天紀錄",
-        hasWaistSupport ? "近 14 天腰圍已有 2 筆以上紀錄" : "近 14 天腰圍不足 2 筆",
-      ];
-    } else if (stageScore >= 3) {
-      fatLossStage = "已進入穩定減脂期";
-      fatLossStageDetail = hasWaistSupport
-        ? "目前下降較偏向脂肪變化，且腰圍同步縮小。"
-        : "已依體重、體脂、水分、肌肉資料完成初步判定；若腰圍有 2 筆以上紀錄，可提升判定可信度。";
-      fatLossStageReasons = [
-        stableWeightLoss ? "近 14~28 天體重趨勢穩定下降" : "體重下降趨勢仍不夠穩定",
-        bodyFatImproving ? "長期體脂率有下降" : "長期體脂率下降還不夠明顯",
-        musclePreserved ? "肌肉率暫時有守住" : "肌肉率有下滑跡象",
-        hasWaistSupport
-          ? waistClearlyDown
-            ? "近 14 天腰圍明顯下降" : "近 14 天腰圍下降未達 1 cm"
-          : "近 14 天腰圍資料不足 2 筆，暫以 70% 可信度判定",
-      ];
-    } else if (shortWaterDrop && !waistClearlyDown) {
-      fatLossStage = "初期快速下降期";
-      fatLossStageDetail = "目前下降可能混有水分，先觀察腰圍與體脂是否持續改善。";
-      fatLossStageReasons = [
-        "短期水分下降較明顯",
-        bodyFatImproving ? "雖然體脂有改善，但還需要再觀察" : "體脂下降還不夠明顯",
-        musclePreserved ? "肌肉率暫時沒有明顯惡化" : "肌肉率已有下滑跡象",
-        hasWaistSupport
-          ? waistClearlyDown
-            ? "腰圍有下降，但還想再看後續是否延續" : "腰圍下降還不夠明顯"
-          : "近 14 天腰圍資料不足 2 筆，暫以 70% 可信度判定",
-      ];
-    } else {
-      fatLossStageReasons = [
-        stableWeightLoss ? "體重趨勢有持續下降" : "體重趨勢還在波動",
-        bodyFatImproving ? "體脂率有改善" : "體脂率改善尚不夠明顯",
-        musclePreserved ? "肌肉率大致守住" : "肌肉率有下滑跡象",
-        hasWaistSupport
-          ? waistClearlyDown
-            ? "腰圍已有明顯下降" : "腰圍下降尚未達穩定減脂門檻"
-          : "近 14 天腰圍資料不足 2 筆，暫以 70% 可信度判定",
-      ];
+    if (Math.abs(shortFatPctDelta) >= 0.3) {
+      reasons.push(`短期 ${shortDays} 天體脂率 ${shortFatPctDelta > 0 ? "+" : ""}${shortFatPctDelta}%`);
     }
-
-    const confidencePct = hasWaistSupport ? 85 : 70;
-    const fatLossStageConfidenceText = `${confidencePct}% 可信度`;
-    const waistStatus = hasWaistSupport
-      ? `近 14 天腰圍 ${waist14.delta > 0 ? "+" : ""}${waist14.delta} cm`
-      : "近 14 天腰圍資料不足（至少 2 筆）";
+    if (!reasons.length) {
+      reasons.push("近期數值變化不夠一致");
+    }
 
     return {
       tag,
       title,
       detail,
       confidence,
-      confidencePct,
-      fatLossStage,
-      fatLossStageDetail,
-      fatLossStageReasons,
-      fatLossStageConfidenceText,
-      waistDelta14: waist14.delta,
-      waistCount14: waist14.count,
-      waistStatus,
       reasons,
-      shortSummary,
-      longSummary,
-      explanation,
-      advice: Array.from(new Set(advice)).slice(0, 4),
-      waterTargetMl,
-      shortTerm,
-      longTerm,
     };
-  }, [sortedEntries, latest, latestWeight, latestBodyWater, latest?.exerciseMin, latest?.sideEffect, latestBodyFatPct]);
+  }, [sortedEntries, latest]);
 
   const strategyMode = useMemo(() => {
     if (!latest) return ["先建立第一筆紀錄"];
@@ -4535,7 +4295,6 @@ export default function SimpleTracker() {
           muscleMass: muscleMassValue > 0 ? muscleMassValue : null,
           visceralFat: visceralFatValue > 0 ? visceralFatValue : null,
           bodyWater: bodyWaterValue > 0 ? bodyWaterValue : null,
-          waist: num(e.waist) > 0 ? num(e.waist) : null,
         };
       }),
     [sortedEntries, settings.goal],
@@ -5037,7 +4796,6 @@ export default function SimpleTracker() {
       muscleMass: "",
       visceralFat: "",
       bodyWater: "",
-      waist: "",
       dose: "2.5",
       appetite: "正常",
       cravingLevel: "中",
@@ -5075,7 +4833,6 @@ export default function SimpleTracker() {
       muscleMass: item.muscleMass || "",
       visceralFat: item.visceralFat || "",
       bodyWater: item.bodyWater || "",
-      waist: item.waist || "",
       dose: item.dose,
       appetite: item.appetite,
       cravingLevel: item.cravingLevel,
@@ -5118,7 +4875,6 @@ export default function SimpleTracker() {
         muscleMass: latest?.muscleMass || form.muscleMass || "",
         visceralFat: latest?.visceralFat || form.visceralFat || "",
         bodyWater: latest?.bodyWater || form.bodyWater || "",
-        waist: latest?.waist || form.waist || "",
         dose: latest?.dose || form.dose || "2.5",
         appetite: latest?.appetite || "正常",
         cravingLevel: latest?.cravingLevel || "中",
@@ -5422,7 +5178,7 @@ export default function SimpleTracker() {
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xl font-bold">首頁儀表板</div>
-                <div className="text-sm text-slate-500">資本資訊</div>
+                <div className="text-sm text-slate-500">基本資訊</div>
               </div>
 
               <div className="grid gap-3 grid-cols-2">
@@ -5620,43 +5376,12 @@ export default function SimpleTracker() {
             </Card>
 
             <Card>
-              <CardContent className="p-4 space-y-3">
+              <CardContent className="p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <Droplets className="w-4 h-4" />
-                  水分/體脂/肌肉判讀
+                  水分/脂肪判斷
                 </div>
-                <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/60 border-slate-700" : "bg-white border-slate-200"}`}>
-                  <div className="flex flex-wrap items-center gap-2 justify-between">
-                    <div className="text-xs font-medium text-slate-500">減脂期判定</div>
-                    <Badge variant={waterVsFat.fatLossStage === "已進入穩定減脂期" ? "default" : waterVsFat.fatLossStage === "過渡觀察期" ? "secondary" : "outline"}>
-                      {waterVsFat.fatLossStage}
-                    </Badge>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{waterVsFat.fatLossStageConfidenceText}</Badge>
-                    <span className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{waterVsFat.waistStatus}</span>
-                  </div>
-                  <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
-                    {waterVsFat.fatLossStageDetail}
-                  </div>
-                  {waterVsFat.fatLossStageReasons?.length ? (
-                    <div className={`rounded-lg border p-2.5 space-y-1 ${isDark ? "bg-slate-950/40 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
-                      <div className={`text-[11px] font-medium ${isDark ? "text-slate-200" : "text-slate-700"}`}>
-                        這樣判斷的原因
-                      </div>
-                      {waterVsFat.fatLossStageReasons.map((reason: string, index: number) => (
-                        <div
-                          key={`${reason}-${index}`}
-                          className={`text-[11px] leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}
-                        >
-                          ・{reason}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-2">
                   <Badge variant="secondary">{waterVsFat.tag}</Badge>
                   <Badge
                     variant={
@@ -5667,68 +5392,13 @@ export default function SimpleTracker() {
                           : "outline"
                     }
                   >
-                    信心 {waterVsFat.confidence}｜{waterVsFat.confidencePct}%
+                    信心 {waterVsFat.confidence}
                   </Badge>
                 </div>
                 <div className="text-sm font-medium">{waterVsFat.title}</div>
                 <div className="text-sm text-slate-500">
                   {waterVsFat.detail}
                 </div>
-
-                <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/70 border-slate-700" : "bg-slate-50"}`}>
-                  <div>
-                    <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>短期判斷</div>
-                    <div className={`text-xs mt-1 ${isDark ? "text-slate-300" : "text-slate-500"}`}>{waterVsFat.shortSummary}</div>
-                  </div>
-                  <div>
-                    <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>長期判斷</div>
-                    <div className={`text-xs mt-1 ${isDark ? "text-slate-300" : "text-slate-500"}`}>{waterVsFat.longSummary}</div>
-                  </div>
-                  <div>
-                    <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>建議水量</div>
-                    <div className={`text-xs mt-1 ${isDark ? "text-sky-300" : "text-slate-500"}`}>約 {waterVsFat.waterTargetMl || "-"} ml</div>
-                  </div>
-                </div>
-
-                <div className={`space-y-1 rounded-xl border p-3 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
-                  <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>判讀解釋</div>
-                  <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-500"}`}>{waterVsFat.explanation}</div>
-                </div>
-
-                {waterVsFat.reasons?.length ? (
-                  <details className={`rounded-xl border p-3 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
-                    <summary className={`cursor-pointer text-xs font-medium list-none flex items-center justify-between ${isDark ? "text-slate-100" : "text-slate-700"}`}>
-                      <span>查看判讀原因</span>
-                      <span className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-400"}`}>點擊展開</span>
-                    </summary>
-                    <div className="mt-3 space-y-2">
-                      {waterVsFat.reasons.map((reason, index) => (
-                        <div
-                          key={`${reason}-${index}`}
-                          className={`rounded-lg px-2.5 py-2 text-xs leading-5 ${isDark ? "bg-slate-800 text-slate-200" : "bg-slate-50 text-slate-600"}`}
-                        >
-                          ・{reason}
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                ) : null}
-
-                {waterVsFat.advice?.length ? (
-                  <div className={`space-y-2 rounded-xl border p-3 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
-                    <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>建議</div>
-                    <div className="space-y-2">
-                      {waterVsFat.advice.slice(0, 3).map((tip, index) => (
-                        <div
-                          key={`${tip}-${index}`}
-                          className={`rounded-lg px-2.5 py-2 text-xs leading-5 ${isDark ? "bg-slate-800 text-slate-200" : "bg-slate-50 text-slate-600"}`}
-                        >
-                          ・{tip}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
               </CardContent>
             </Card>
 
@@ -6051,16 +5721,6 @@ export default function SimpleTracker() {
                         }
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label>腰圍 (cm)</Label>
-                      <Input
-                        placeholder="例如 96.5"
-                        value={form.waist}
-                        onChange={(e) =>
-                          setForm({ ...form, waist: e.target.value })
-                        }
-                      />
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-3">
@@ -6270,7 +5930,7 @@ export default function SimpleTracker() {
                               </div>
                               <div>
                                 內臟脂肪：{item.visceralFat || "-"}｜水分：
-                                {item.bodyWater || "-"}%｜腰圍：{item.waist || "-"} cm
+                                {item.bodyWater || "-"}%
                               </div>
                               <div>
                                 食慾：{item.appetite}｜嘴饞：{item.cravingLevel}
@@ -6448,7 +6108,7 @@ export default function SimpleTracker() {
                       {settings.sex === "female" ? "女性建議" : "男性建議"}
                     </div>
                     <div>
-                      水分/體脂/肌肉判讀：{waterVsFat.title}（信心{" "}
+                      水分/脂肪判斷：{waterVsFat.title}（信心{" "}
                       {waterVsFat.confidence}）
                     </div>
                   </CardContent>
@@ -6540,40 +6200,25 @@ export default function SimpleTracker() {
       type="button"
       onClick={() => toggleWorkoutEquipment(item)}
       className={[
-        "rounded-2xl border px-4 py-3 text-sm font-medium transition active:scale-[0.98] min-w-[112px]",
+        "rounded-2xl border px-4 py-3 text-sm font-medium transition active:scale-[0.98]",
         isDark
           ? active
-            ? "border-white bg-white shadow-sm ring-2 ring-white/70"
-            : "border-slate-500 bg-slate-950"
+            ? "border-white bg-slate-950 shadow-sm ring-2 ring-white/70"
+            : "border-slate-400 bg-slate-950"
           : active
             ? "border-slate-900 bg-slate-900 text-white shadow-sm"
             : "border-slate-300 bg-white text-slate-700",
       ].join(" ")}
-      style={
-        isDark
-          ? {
-              color: active ? "#020617" : "#f8fafc",
-            }
-          : undefined
-      }
+      style={isDark ? { color: "#ffffff" } : undefined}
       aria-pressed={active}
       aria-label={WORKOUT_EQUIPMENT_LABEL[item]}
       title={WORKOUT_EQUIPMENT_LABEL[item]}
     >
-      <span className="flex flex-col items-center justify-center gap-1">
-        <span
-          aria-hidden="true"
-          className="text-lg leading-none"
-          style={{ color: active ? (isDark ? "#020617" : "currentColor") : isDark ? "#f8fafc" : "currentColor" }}
-        >
-          {WORKOUT_EQUIPMENT_ICON[item]}
-        </span>
-        <span
-          className="text-base leading-none font-semibold tracking-wide"
-          style={{ color: active ? (isDark ? "#020617" : "currentColor") : isDark ? "#f8fafc" : "currentColor" }}
-        >
-          {WORKOUT_EQUIPMENT_LABEL[item]}
-        </span>
+      <span
+        className="block text-base font-semibold"
+        style={isDark ? { color: "#ffffff" } : undefined}
+      >
+        {WORKOUT_EQUIPMENT_LABEL[item]}
       </span>
     </button>
   );
