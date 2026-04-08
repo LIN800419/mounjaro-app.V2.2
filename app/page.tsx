@@ -3599,58 +3599,35 @@ export default function SimpleTracker() {
   ]);
 
   const waterVsFat = useMemo(() => {
-    const longWindow = sortedEntries.filter((entry) => {
-      const diff = daysBetween(entry.date, latest?.date || entry.date);
-      return diff >= 0 && diff <= 28;
-    });
-    const shortWindow = sortedEntries.slice(-4);
-
-    const isCompleteCompEntry = (entry: Entry) =>
-      num(entry.weight) > 0 &&
-      num(entry.bodyFatPct) > 0 &&
-      num(entry.fatMass) > 0 &&
-      num(entry.muscleMass) > 0 &&
-      num(entry.bodyWater) > 0;
-
-    const validLongWindow = longWindow.filter(isCompleteCompEntry);
-    const validShortWindow = shortWindow.filter(isCompleteCompEntry);
-
-    if (validLongWindow.length < 2) {
+    if (sortedEntries.length < 3) {
       return {
         tag: "觀察中",
-        title: "有效資料不足",
-        detail:
-          "長期判斷已改成只用區間內第一筆完整有效紀錄當基準；目前完整有效資料不足，先持續記錄。",
+        title: "資料不足",
+        detail: "至少先累積 3 筆以上身體組成紀錄，再判斷脂肪、水分或肌肉變化。",
         confidence: "低" as const,
-        reasons: [
-          validLongWindow.length
-            ? "長期完整有效紀錄還不足 2 筆"
-            : "近 28 天沒有足夠完整的身體組成紀錄",
-        ],
+        reasons: ["目前可用資料太少"],
       };
     }
 
-    const longBase = validLongWindow[0];
-    const longLast = validLongWindow[validLongWindow.length - 1];
-    const shortBase = validShortWindow.length >= 2 ? validShortWindow[0] : validLongWindow[Math.max(0, validLongWindow.length - 2)];
-    const shortLast = validShortWindow.length >= 2 ? validShortWindow[validShortWindow.length - 1] : longLast;
+    const recent = sortedEntries.slice(-4);
+    const first = recent[0];
+    const last = recent[recent.length - 1];
+    const weightDelta = +(num(last.weight) - num(first.weight)).toFixed(1);
+    const fatPctDelta = +(num(last.bodyFatPct) - num(first.bodyFatPct)).toFixed(
+      1,
+    );
+    const fatMassDelta = +(num(last.fatMass) - num(first.fatMass)).toFixed(1);
+    const muscleDelta = +(num(last.muscleMass) - num(first.muscleMass)).toFixed(
+      1,
+    );
+    const waterDelta = +(num(last.bodyWater) - num(first.bodyWater)).toFixed(1);
+    const visceralDelta = +(
+      num(last.visceralFat) - num(first.visceralFat)
+    ).toFixed(1);
+    const days = Math.max(1, daysBetween(first.date, last.date));
 
-    const weightDelta = +(num(longLast.weight) - num(longBase.weight)).toFixed(1);
-    const fatPctDelta = +(num(longLast.bodyFatPct) - num(longBase.bodyFatPct)).toFixed(1);
-    const fatMassDelta = +(num(longLast.fatMass) - num(longBase.fatMass)).toFixed(1);
-    const muscleDelta = +(num(longLast.muscleMass) - num(longBase.muscleMass)).toFixed(1);
-    const waterDelta = +(num(longLast.bodyWater) - num(longBase.bodyWater)).toFixed(1);
-    const visceralDelta = +(num(longLast.visceralFat) - num(longBase.visceralFat)).toFixed(1);
-    const days = Math.max(1, daysBetween(longBase.date, longLast.date));
-
-    const shortWaterDelta = +(num(shortLast.bodyWater) - num(shortBase.bodyWater)).toFixed(1);
-    const shortFatPctDelta = +(num(shortLast.bodyFatPct) - num(shortBase.bodyFatPct)).toFixed(1);
-    const shortDays = Math.max(1, daysBetween(shortBase.date, shortLast.date));
-
-    const reasons: string[] = [
-      `長期基準改用 ${longBase.date} 這筆完整有效紀錄`,
-    ];
-    let confidenceScore = 1;
+    const reasons: string[] = [];
+    let confidenceScore = 0;
     let tag = "觀察中";
     let title = "趨勢尚不明確";
     let detail = "目前像是混合波動，先持續觀察 1~2 週，不要只看單日數字。";
@@ -3661,47 +3638,51 @@ export default function SimpleTracker() {
     const waterDown = waterDelta <= -0.8;
     const muscleDown = muscleDelta <= -0.5;
     const fatUp = fatMassDelta >= 0.3 || fatPctDelta >= 0.3;
-    const shortWaterDrop = shortWaterDelta <= -0.8;
 
     if (weightDown && fatDown && fatPctDown && !muscleDown) {
       tag = "脂肪主導";
       title = "目前下降以脂肪為主";
       detail =
-        "長期判斷是拿區間內第一筆完整有效紀錄與最新完整紀錄相比，體重、體脂率、脂肪重都有往下，且肌肉量沒有明顯掉。";
-      reasons.push("長期體脂率下降");
-      reasons.push("長期脂肪重下降");
-      reasons.push("長期肌肉量保留尚可");
+        "體重、體脂率、脂肪重都有往下，且肌肉量沒有明顯掉，這是比較理想的減脂型態。";
+      reasons.push("體脂率下降");
+      reasons.push("脂肪重下降");
+      reasons.push("肌肉量保留尚可");
       confidenceScore += 3;
-    } else if (weightDown && shortWaterDrop && !fatDown && Math.abs(fatPctDelta) < 0.3) {
+    } else if (
+      weightDown &&
+      waterDown &&
+      !fatDown &&
+      Math.abs(fatPctDelta) < 0.3
+    ) {
       tag = "水分主導";
       title = "最近較像水分波動";
       detail =
-        "短期水分有下降，但用長期第一筆完整有效紀錄回看，脂肪重與體脂率沒有同步明顯往下，先別把這波全當成減脂。";
-      reasons.push(`短期 ${shortDays} 天水分下降較明顯`);
-      reasons.push("長期脂肪指標變化有限");
+        "體重有下降，但脂肪重與體脂率沒有同步明顯往下，反而水分變化更明顯，先別過度解讀單次體重。";
+      reasons.push("水分下降較明顯");
+      reasons.push("脂肪指標變化有限");
       confidenceScore += 3;
     } else if (weightDown && muscleDown && (!fatDown || fatPctDelta >= 0)) {
       tag = "肌肉警訊";
       title = "這波下降可能混有肌肉流失";
       detail =
-        "用長期完整有效基準回看，體重下降同時肌肉量也掉，而且脂肪指標改善不夠明顯，接下來要優先補蛋白質並加上阻力訓練。";
-      reasons.push("長期肌肉量下降");
-      reasons.push("長期脂肪改善不明顯");
+        "體重下降同時肌肉量也掉，而且脂肪指標改善不夠明顯，接下來要優先補蛋白質並加上阻力訓練。";
+      reasons.push("肌肉量下降");
+      reasons.push("脂肪改善不明顯");
       confidenceScore += 3;
     } else if (weightDown && fatDown && waterDown) {
       tag = "混合下降";
       title = "目前像脂肪＋水分混合下降";
       detail =
-        "長期回看有脂肪重與水分一起下降，方向不差，但不要把所有下降都當成純脂肪。";
-      reasons.push("長期脂肪重下降");
-      reasons.push("長期水分也同步下降");
+        "這波體重下降同時有脂肪重與水分下降，方向不差，但不要把所有下降都當成純脂肪。";
+      reasons.push("脂肪重下降");
+      reasons.push("水分也同步下降");
       confidenceScore += 2;
     } else if (weightDelta >= 0.3 && fatUp) {
       tag = "脂肪回升";
       title = "近期有脂肪回升跡象";
       detail =
-        "用區間內第一筆完整有效紀錄當基準回看，體脂率或脂肪重有上升，先檢查放鬆餐、外食份量、宵夜與飲料。";
-      reasons.push("長期體脂率或脂肪重上升");
+        "體重沒有往下，脂肪重或體脂率反而有上升，先檢查放鬆餐、外食份量、宵夜與飲料。";
+      reasons.push("體脂率或脂肪重上升");
       confidenceScore += 2;
     }
 
@@ -3712,8 +3693,17 @@ export default function SimpleTracker() {
       reasons.push("內臟脂肪有回升");
     }
 
-    if (days >= 14) confidenceScore += 1;
-    if (validLongWindow.length >= 3) confidenceScore += 1;
+    if (days >= 7) confidenceScore += 1;
+    if (
+      recent.every(
+        (entry) =>
+          num(entry.weight) > 0 &&
+          num(entry.bodyFatPct) > 0 &&
+          num(entry.fatMass) > 0,
+      )
+    ) {
+      confidenceScore += 1;
+    }
 
     const confidence =
       confidenceScore >= 5
@@ -3722,9 +3712,6 @@ export default function SimpleTracker() {
           ? ("中" as const)
           : ("低" as const);
 
-    if (Math.abs(shortFatPctDelta) >= 0.3) {
-      reasons.push(`短期 ${shortDays} 天體脂率 ${shortFatPctDelta > 0 ? "+" : ""}${shortFatPctDelta}%`);
-    }
     if (!reasons.length) {
       reasons.push("近期數值變化不夠一致");
     }
@@ -3736,7 +3723,7 @@ export default function SimpleTracker() {
       confidence,
       reasons,
     };
-  }, [sortedEntries, latest]);
+  }, [sortedEntries]);
 
   const strategyMode = useMemo(() => {
     if (!latest) return ["先建立第一筆紀錄"];
@@ -5178,7 +5165,7 @@ export default function SimpleTracker() {
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xl font-bold">首頁儀表板</div>
-                <div className="text-sm text-slate-500">基本資訊</div>
+                <div className="text-sm text-slate-500">一打開先看這裡</div>
               </div>
 
               <div className="grid gap-3 grid-cols-2">
@@ -6192,37 +6179,29 @@ export default function SimpleTracker() {
                       <Label>想用的器材</Label>
                       <div className="flex flex-wrap gap-2">
                         {(["bike", "treadmill", "kettlebell"] as WorkoutEquipment[]).map((item) => {
-  const active = workoutEquipments.includes(item);
+                          const active = workoutEquipments.includes(item);
 
-  return (
-    <button
-      key={item}
-      type="button"
-      onClick={() => toggleWorkoutEquipment(item)}
-      className={[
-        "rounded-2xl border px-4 py-3 text-sm font-medium transition active:scale-[0.98]",
-        isDark
-          ? active
-            ? "border-white bg-slate-950 shadow-sm ring-2 ring-white/70"
-            : "border-slate-400 bg-slate-950"
-          : active
-            ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-            : "border-slate-300 bg-white text-slate-700",
-      ].join(" ")}
-      style={isDark ? { color: "#ffffff" } : undefined}
-      aria-pressed={active}
-      aria-label={WORKOUT_EQUIPMENT_LABEL[item]}
-      title={WORKOUT_EQUIPMENT_LABEL[item]}
-    >
-      <span
-        className="block text-base font-semibold"
-        style={isDark ? { color: "#ffffff" } : undefined}
-      >
-        {WORKOUT_EQUIPMENT_LABEL[item]}
-      </span>
-    </button>
-  );
-})}
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => toggleWorkoutEquipment(item)}
+                              aria-pressed={active}
+                              className={[
+                                "rounded-2xl border px-4 py-3 text-sm font-medium transition active:scale-[0.98]",
+                                isDark
+                                  ? active
+                                    ? "border-white bg-slate-900 text-white shadow-sm ring-2 ring-white/70"
+                                    : "border-slate-500 bg-slate-900 text-white"
+                                  : active
+                                    ? "border-slate-900 bg-slate-900 text-white shadow-sm ring-2 ring-slate-300"
+                                    : "border-slate-300 bg-white text-slate-700",
+                              ].join(" ")}
+                            >
+                              <span className="text-inherit">{WORKOUT_EQUIPMENT_LABEL[item]}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                       <div className="text-xs text-slate-500">
                         至少保留一項器材；沒選到壺鈴時，系統會自動改成徒手替代動作。
