@@ -1857,11 +1857,6 @@ function getCompositionSnapshot(entry?: Partial<Entry> | null): CompositionSnaps
   };
 }
 
-function isCompleteCompositionEntry(entry?: Partial<Entry> | null) {
-  const snap = getCompositionSnapshot(entry);
-  return snap.weight > 0 && snap.bodyFatPct > 0 && snap.muscleRate > 0 && snap.bodyWater > 0;
-}
-
 function getWaistDeltaWithinDays(entries: Entry[], endDate: string, days: number) {
   const waistEntries = entries.filter(
     (entry) => num((entry as any).waist) > 0 && daysBetween(entry.date, endDate) >= 0 && daysBetween(entry.date, endDate) <= days,
@@ -1979,6 +1974,7 @@ const METRIC_COLORS: Record<string, string> = {
   muscleMass: "#ea580c",
   visceralFat: "#cbd5e1",
   bodyWater: "#0284c7",
+  waist: "#b45309",
 };
 
 type MetricLineCardProps = {
@@ -3736,59 +3732,13 @@ export default function SimpleTracker() {
       };
     }
 
-    const validShortWindow = shortWindow.filter((entry) => isCompleteCompositionEntry(entry));
-    const validLongWindow = longWindow.filter((entry) => isCompleteCompositionEntry(entry));
-
-    if (validShortWindow.length < 2 || validLongWindow.length < 2) {
-      return {
-        tag: "觀察中",
-        title: "有效資料不足",
-        detail:
-          "短期或長期區間內缺少完整的水分、體脂率、肌肉率紀錄，先補齊完整量測再判讀會更準。",
-        confidence: "低" as const,
-        confidencePct: hasWaistSupport ? 85 : 70,
-        fatLossStage: "資料不足",
-        fatLossStageDetail:
-          "雖然區間內有紀錄，但完整有效的身體組成資料不足，暫時不進行長期判讀。",
-        fatLossStageReasons: [
-          `短期完整資料 ${validShortWindow.length} 筆`,
-          `長期完整資料 ${validLongWindow.length} 筆`,
-          hasWaistSupport ? "近 14 天腰圍已有 2 筆以上紀錄" : "近 14 天腰圍不足 2 筆",
-        ],
-        fatLossStageConfidenceText: hasWaistSupport ? "85% 可信度" : "70% 可信度",
-        waistDelta14: waist14.delta,
-        waistCount14: waist14.count,
-        waistStatus: hasWaistSupport
-          ? `近 14 天腰圍 ${waist14.delta > 0 ? "+" : ""}${waist14.delta} cm`
-          : "近 14 天腰圍資料不足（至少 2 筆）",
-        reasons: ["完整有效的身體組成資料不足"],
-        shortSummary: `短期完整資料 ${validShortWindow.length} 筆`,
-        longSummary: `長期完整資料 ${validLongWindow.length} 筆`,
-        explanation:
-          "長期判斷已改成只用完整有效紀錄；目前有效資料不夠，所以先不硬判。",
-        advice: [
-          "固定在相近時間量測體脂率、肌肉率、水分",
-          "至少讓短期有 2 筆、長期有 2 筆完整有效資料",
-          waterTargetMl ? `今日先補水約 ${waterTargetMl} ml` : "先把飲水量穩住",
-        ],
-        waterTargetMl,
-        shortTerm: null,
-        longTerm: null,
-      };
-    }
-
-    const shortBaseEntry = validShortWindow[0];
-    const shortLastEntry = validShortWindow[validShortWindow.length - 1];
-    const longBaseEntry = validLongWindow[0];
-    const longLastEntry = validLongWindow[validLongWindow.length - 1];
-
-    const shortFirst = getCompositionSnapshot(shortBaseEntry);
-    const shortLast = getCompositionSnapshot(shortLastEntry);
-    const longFirst = getCompositionSnapshot(longBaseEntry);
-    const longLast = getCompositionSnapshot(longLastEntry);
+    const shortFirst = getCompositionSnapshot(shortWindow[0]);
+    const shortLast = getCompositionSnapshot(shortWindow[shortWindow.length - 1]);
+    const longFirst = getCompositionSnapshot(longWindow[0]);
+    const longLast = getCompositionSnapshot(longWindow[longWindow.length - 1]);
 
     const shortTerm = {
-      days: Math.max(1, daysBetween(shortBaseEntry.date, shortLastEntry.date)),
+      days: Math.max(1, daysBetween(shortWindow[0].date, shortWindow[shortWindow.length - 1].date)),
       weightDelta: +(shortLast.weight - shortFirst.weight).toFixed(1),
       bodyFatPctDelta: +(shortLast.bodyFatPct - shortFirst.bodyFatPct).toFixed(1),
       muscleRateDelta: +(shortLast.muscleRate - shortFirst.muscleRate).toFixed(1),
@@ -3802,7 +3752,7 @@ export default function SimpleTracker() {
     };
 
     const longTerm = {
-      days: Math.max(1, daysBetween(longBaseEntry.date, longLastEntry.date)),
+      days: Math.max(1, daysBetween(longWindow[0].date, longWindow[longWindow.length - 1].date)),
       weightDelta: +(longLast.weight - longFirst.weight).toFixed(1),
       bodyFatPctDelta: +(longLast.bodyFatPct - longFirst.bodyFatPct).toFixed(1),
       muscleRateDelta: +(longLast.muscleRate - longFirst.muscleRate).toFixed(1),
@@ -4009,106 +3959,76 @@ export default function SimpleTracker() {
     };
   }, [sortedEntries, latest, latestWeight, latestBodyWater, latest?.exerciseMin, latest?.sideEffect, latestBodyFatPct]);
 
+  const strategyMode = useMemo(() => {
+    if (!latest) return ["先建立第一筆紀錄"];
+    const tips: string[] = [];
+    if (latest.cravingLevel === "高") {
+      tips.push("今天把餅乾、甜食移出視線，先準備茶葉蛋、毛豆、無糖豆漿");
+    }
+    if (latest.appetite === "下降") {
+      tips.push("食量小時改少量多餐，優先蛋白質與水分");
+    }
+    if (latest.sideEffect === "噁心") {
+      tips.push("避免油膩與大份量，改清淡小餐");
+    }
+    if (latest.sideEffect === "便秘") {
+      tips.push("今天多喝水，加奇異果、蔬菜、毛豆");
+    }
+    if (weeklyLoss < 0.3 && sortedEntries.length >= 3) {
+      tips.push("減重偏慢，可先檢查飲料、零食與隱藏熱量");
+    }
+    if (!tips.length) {
+      tips.push("維持目前節奏，繼續固定施打與記錄體重");
+    }
+    return tips;
+  }, [latest, weeklyLoss, sortedEntries.length]);
+
   const elcdStatus = useMemo(() => {
     if (!settings.elcdMode) {
-      return {
-        enabled: false,
-        score: 0,
-        reasons: ["極低熱量模式未開啟"],
-        statusTitle: "未開啟",
-        statusDetail: "你目前沒有開啟 ELCD 自動判斷，所以系統不會主動切到極低熱量日。",
-        suitableSignals: [] as string[],
-        cautionSignals: ["設定中 ELCD 模式尚未開啟"],
-        actionPlan: ["若之後要啟用，再讓系統依停滯、食慾與副作用自動判斷"],
-      };
+      return { enabled: false, score: 0, reasons: ["極低熱量模式未開啟"] };
     }
     if (!latest || sortedEntries.length < 3) {
       return {
         enabled: false,
         score: 0,
         reasons: ["資料不足，至少需要 3 筆紀錄"],
-        statusTitle: "暫不判定",
-        statusDetail: "ELCD 需要至少幾筆近期紀錄，才能分辨你是停滯、單純水分波動，還是真的適合壓到更低熱量。",
-        suitableSignals: [] as string[],
-        cautionSignals: ["近期紀錄不足 3 筆"],
-        actionPlan: ["先把體重、食慾、嘴饞、副作用補滿幾筆再看"],
       };
     }
 
     let score = 0;
     const reasons: string[] = [];
-    const suitableSignals: string[] = [];
-    const cautionSignals: string[] = [];
-    const actionPlan: string[] = [];
 
     if (plateau.isPlateau) {
       score += 3;
       reasons.push("近兩週可能停滯");
-      suitableSignals.push("近 2 週體重接近停滯，短期下修熱量有機會重新啟動下降");
     }
     if (weeklyLoss < 0.3) {
       score += 2;
       reasons.push("每週下降偏慢");
-      suitableSignals.push(`目前每週約 ${weeklyLoss} kg，下降偏慢`);
     }
     if (latest.appetite === "下降") {
       score += 2;
       reasons.push("目前食慾下降，較適合低熱量日");
-      suitableSignals.push("現在食慾偏低，比較有機會把 ELCD 做得乾淨又不痛苦");
     }
     if (num(latest.exerciseMin) >= 20) {
       score += 1;
       reasons.push("近期有基本活動量");
-      suitableSignals.push(`最近活動量有到 ${latest.exerciseMin} 分鐘，執行度較佳`);
     }
     if (latest.cravingLevel === "高") {
       score -= 3;
       reasons.push("嘴饞高，避免低熱量後暴食");
-      cautionSignals.push("今天嘴饞偏高，硬壓熱量容易晚上反撲");
     }
     if (latest.sideEffect !== "無") {
       score -= 2;
       reasons.push("有副作用，先以舒適度優先");
-      cautionSignals.push(`目前有 ${latest.sideEffect}，不建議在不舒服時再硬壓熱量`);
-    }
-    if (weeklyLoss > 1.2) {
-      cautionSignals.push(`目前每週約 ${weeklyLoss} kg，下降已偏快，不適合再壓太低`);
-    }
-    if (waterVsFat.tag === "肌肉警訊") {
-      cautionSignals.push("近期組成判讀有肌肉警訊，ELCD 要更保守");
-    }
-    if (waterVsFat.tag === "漂亮減脂") {
-      suitableSignals.push("目前組成判讀偏向漂亮減脂，不一定需要靠 ELCD 再加速");
-    }
-
-    const enabled = score >= 3;
-    let statusTitle = enabled ? "今天可啟動" : "今天不建議";
-    let statusDetail = enabled
-      ? "目前比較像適合用 1 天極低熱量把節奏拉回來，但前提是嘴饞與副作用沒有失控。"
-      : "今天看起來不適合硬切 ELCD，先把正常減脂節奏與舒適度顧好。";
-
-    if (enabled) {
-      actionPlan.push(`今天可把熱量壓到約 ${Math.max(900, cutCalories - 400)} kcal 左右`);
-      actionPlan.push("三餐優先蛋白質、豆腐、蛋、雞胸、魚肉與蔬菜");
-      actionPlan.push("若晚上嘴饞上來，就不要硬撐 ELCD，改回一般減脂熱量比較穩");
-    } else {
-      actionPlan.push(`今天先維持一般減脂熱量約 ${cutCalories} kcal`);
-      if (latest.cravingLevel === "高") actionPlan.push("先處理嘴饞：把零食移開，先備蛋白質加餐");
-      if (latest.sideEffect !== "無") actionPlan.push("先把副作用與補水穩住，再談更低熱量");
-      if (!plateau.isPlateau && weeklyLoss >= 0.3) actionPlan.push("目前其實還有在降，不需要為了求快硬開 ELCD");
     }
 
     return {
-      enabled,
+      enabled: score >= 3,
       score,
       reasons: reasons.length ? reasons : ["目前沒有明確啟動條件"],
-      statusTitle,
-      statusDetail,
-      suitableSignals,
-      cautionSignals,
-      actionPlan,
     };
-  }, [settings.elcdMode, latest, sortedEntries, plateau, weeklyLoss, cutCalories, waterVsFat.tag]);
+  }, [settings.elcdMode, latest, sortedEntries, plateau, weeklyLoss]);
 
   const isELCDDay = elcdStatus.enabled;
 
@@ -4439,6 +4359,75 @@ export default function SimpleTracker() {
     return { dose: latestShot.dose, shotCount: count, weeks: count };
   }, [shotEntries]);
 
+  const strategyIntegratedSummary = useMemo(() => {
+    if (!latest) {
+      return {
+        headline: "先建立第一筆完整紀錄",
+        overview: "目前策略分頁會在你累積幾筆體重、施打、食慾、嘴饞與體組成資料後，才會開始真的變得有用。",
+        coachNotes: ["先固定記錄體重、施打、食慾、嘴饞與副作用"],
+        learnedSignals: ["目前個人化學習仍在暖機中"],
+        updateSignals: ["等累積更多紀錄後，這裡會自動改寫成你的個人策略"],
+      };
+    }
+
+    const coachNotes: string[] = [];
+    const learnedSignals: string[] = [];
+    const updateSignals: string[] = [];
+
+    if (currentDoseSeries.dose !== "-") {
+      coachNotes.push(`目前多半落在 ${currentDoseSeries.dose} mg，已連續 ${currentDoseSeries.shotCount} 針；${doseEscalationPlan.title.replace("。", "")}。`);
+    }
+
+    if (plateau.isPlateau) {
+      coachNotes.push("近兩週有停滯跡象，現在最值得檢查的是外食份量、零食、飲料與活動量，而不是只想著再餓一點。");
+      updateSignals.push("若再連續 1~2 週停滯，才更值得考慮調整劑量或熱量。");
+    } else if (weeklyLoss > 0) {
+      coachNotes.push(`目前每週約下降 ${weeklyLoss} kg，整體仍在往下，只是重點要看掉的是脂肪、水分還是肌肉。`);
+    }
+
+    if (latest.appetite === "下降") {
+      learnedSignals.push("你現在處在食慾較低的時段，最適合把蛋白質、蔬菜與水分補齊，而不是乾脆亂吃或不吃。");
+    } else if (latest.appetite === "偏餓") {
+      learnedSignals.push("你最近偏餓，代表失守風險比平常高，這時候比起硬撐，更需要先把加餐設計好。");
+    }
+
+    if (latest.cravingLevel === "高") {
+      learnedSignals.push("你這幾天嘴饞偏高，真正的策略不是意志力硬撐，而是先把茶葉蛋、毛豆、豆漿、優格這些替代品放在手邊。");
+    } else {
+      learnedSignals.push(`個人化學習目前認為：${personalAI.effectivePattern}。`);
+    }
+
+    learnedSignals.push(`最容易成功的時段／狀態：${personalAI.bestWindow}。`);
+    learnedSignals.push(`最容易失守的時段／狀態：${personalAI.riskWindow}。`);
+
+    coachNotes.push(`體組成目前判讀為「${waterVsFat.title}」；${waterVsFat.detail}`);
+    coachNotes.push(`減脂期判定：${waterVsFat.fatLossStage}，${waterVsFat.waistStatus}。`);
+
+    if (waterVsFat.tag === "肌肉警訊") {
+      updateSignals.push("接下來比起追求更低體重，更要先守住肌肉率：蛋白質分散到三餐，並保留基本阻力訓練。");
+    } else if (waterVsFat.tag === "水分波動") {
+      updateSignals.push("這一段先把量測條件與喝水量固定，不要把短期掉很快全都當成脂肪下降。");
+    } else if (waterVsFat.tag === "漂亮減脂") {
+      updateSignals.push("目前方向其實不錯，接下來最重要的是穩定複製，而不是每幾天就大改一次菜單。");
+    }
+
+    if (latest.sideEffect !== "無") {
+      updateSignals.push(`目前有 ${latest.sideEffect}，策略要先顧舒適度，再談加速減脂。`);
+    }
+
+    if (shotPattern.currentDay > 0) {
+      updateSignals.push(`施打循環目前在第 ${shotPattern.currentDay} 天；低食慾常見在 ${shotPattern.appetiteText}，高嘴饞常見在 ${shotPattern.cravingText}。`);
+    }
+
+    return {
+      headline: coachNotes[0] || "目前策略以穩定執行為主",
+      overview: `系統現在不是只看單一體重，而是會一起參考施打劑量、停滯、食慾、嘴饞、副作用、水分／體脂／肌肉判讀與腰圍變化，來更新你的策略內容。`,
+      coachNotes: Array.from(new Set(coachNotes)).slice(0, 4),
+      learnedSignals: Array.from(new Set(learnedSignals)).slice(0, 4),
+      updateSignals: Array.from(new Set(updateSignals)).slice(0, 4),
+    };
+  }, [latest, currentDoseSeries.dose, currentDoseSeries.shotCount, doseEscalationPlan.title, plateau.isPlateau, weeklyLoss, personalAI.bestWindow, personalAI.riskWindow, personalAI.effectivePattern, waterVsFat.title, waterVsFat.detail, waterVsFat.tag, waterVsFat.fatLossStage, waterVsFat.waistStatus, latest?.appetite, latest?.cravingLevel, latest?.sideEffect, shotPattern.currentDay, shotPattern.appetiteText, shotPattern.cravingText]);
+
   const doseEscalationPlan = useMemo(() => {
     if (!shotEntries.length) {
       return {
@@ -4509,93 +4498,6 @@ export default function SimpleTracker() {
       ready: false,
     };
   }, [shotEntries, currentDoseSeries, plateau.isPlateau, weeklyLoss, latest]);
-
-  const strategySummary = useMemo(() => {
-    if (!latest) {
-      return {
-        headline: "先建立第一筆紀錄",
-        overview: "目前還沒有足夠紀錄，策略頁會在你累積施打、體重、食慾與副作用後才開始變得有用。",
-        priorities: ["先固定記錄體重與施打日", "補上食慾、嘴饞、副作用與運動分鐘數"],
-        observations: ["目前資料不足，暫時沒有可判讀的個人模式"],
-        doseContext: "尚無施打脈絡",
-        nextActions: ["先連續記錄一週以上"],
-      };
-    }
-
-    const priorities: string[] = [];
-    const observations: string[] = [];
-    const nextActions: string[] = [];
-
-    const doseContext = shotEntries.length
-      ? `目前多半在 ${currentDoseSeries.dose} mg，已連續 ${currentDoseSeries.shotCount} 針。${doseEscalationPlan.subtitle}`
-      : "目前尚無完整施打脈絡。";
-
-    if (plateau.isPlateau) {
-      priorities.push("現在的重點是先打破停滯，不是盲目再降更多熱量");
-      nextActions.push("先檢查最近 7~14 天的外食、零食、飲料與步數");
-    }
-    if (weeklyLoss > 1.2) {
-      priorities.push("目前下降偏快，先保肌，不要再追求更快");
-      nextActions.push("蛋白質與阻力訓練優先，避免熱量切太低");
-    } else if (weeklyLoss > 0 && weeklyLoss < 0.3) {
-      priorities.push("目前下降偏慢，先找出卡住點");
-      nextActions.push("把 1 週內最常失守的餐次抓出來修正");
-    }
-
-    if (latest.appetite === "下降") {
-      observations.push("目前食慾下降，這段時間最適合吃乾淨、把蛋白質補齊");
-      nextActions.push("趁食慾低時把正餐結構做好，不要只吃很少但蛋白質不足");
-    } else if (latest.appetite === "偏餓") {
-      observations.push("目前偏餓，代表這陣子更容易失守，不適合只靠意志力硬撐");
-      nextActions.push("先把加餐改成高蛋白，避免晚餐後亂吃");
-    }
-
-    if (latest.cravingLevel === "高") {
-      priorities.push("眼前最重要的是先壓嘴饞，不然再好的劑量也會被吃回去");
-      nextActions.push("把零食替換成茶葉蛋、無糖優格、毛豆或豆漿");
-    }
-
-    if (latest.sideEffect !== "無") {
-      observations.push(`目前有 ${latest.sideEffect}，飲食策略要先顧舒適度，再談加速減脂`);
-      nextActions.push("這幾天先用清淡、少量多餐、好消化的組合");
-    }
-
-    observations.push(`目前體組成判讀：${waterVsFat.title}。${waterVsFat.detail}`);
-    observations.push(`減脂期判定：${waterVsFat.fatLossStage}｜${waterVsFat.waistStatus}`);
-    if (cheatDecision.level !== "-") {
-      observations.push(`放鬆餐判斷：${cheatDecision.level}，原因是 ${cheatDecision.reason}`);
-    }
-
-    if (doseAI.level === "建議升劑量" || doseAI.level === "可考慮升劑量") {
-      priorities.push(`劑量面目前是「${doseAI.level}」：${doseAI.reason}`);
-      nextActions.push(`施打策略可再觀察：${doseAI.action}`);
-    } else {
-      observations.push(`劑量判讀：${doseAI.level}｜${doseAI.reason}`);
-    }
-
-    if (waterVsFat.tag === "肌肉警訊") {
-      priorities.push("目前比起追體重，更該先守住肌肉率");
-      nextActions.push("三餐蛋白質分散補足，每週至少 2~3 次肌力刺激");
-    } else if (waterVsFat.tag === "水分波動") {
-      priorities.push("先把量測條件與補水固定，不要被單次數字騙到");
-      nextActions.push(`今天飲水先抓約 ${waterVsFat.waterTargetMl} ml`);
-    } else if (waterVsFat.tag === "漂亮減脂") {
-      priorities.push("目前方向是對的，重點是穩定複製，不是再亂改很多東西");
-      nextActions.push("維持目前飲食結構與運動節奏，再看 1~2 週" );
-    }
-
-    if (!priorities.length) priorities.push("目前主策略是穩定執行，不要頻繁大改");
-    if (!nextActions.length) nextActions.push("照目前節奏再觀察 3~7 天");
-
-    return {
-      headline: priorities[0],
-      overview: `現在的紀錄顯示：${doseContext} 近期每週約 ${weeklyLoss || 0} kg，${plateau.isPlateau ? "並有停滯跡象。" : "尚未出現明顯停滯。"}`,
-      priorities: Array.from(new Set(priorities)).slice(0, 4),
-      observations: Array.from(new Set(observations)).slice(0, 5),
-      doseContext,
-      nextActions: Array.from(new Set(nextActions)).slice(0, 4),
-    };
-  }, [latest, shotEntries.length, currentDoseSeries.dose, currentDoseSeries.shotCount, doseEscalationPlan.subtitle, plateau.isPlateau, weeklyLoss, waterVsFat.title, waterVsFat.detail, waterVsFat.fatLossStage, waterVsFat.waistStatus, waterVsFat.tag, waterVsFat.waterTargetMl, cheatDecision.level, cheatDecision.reason, doseAI.level, doseAI.reason, doseAI.action]);
 
   const penInventorySummary = useMemo(() => {
     const strength = Math.max(0, num(penInventory.penStrength));
@@ -4806,6 +4708,61 @@ export default function SimpleTracker() {
   const eta = useMemo(() => {
     return estimateETA(latestWeight, num(settings.goal), weeklyLoss);
   }, [latestWeight, settings.goal, weeklyLoss]);
+
+  const trendAnalysisSummary = useMemo(() => {
+    const latestAvg7 = chartData.length ? chartData[chartData.length - 1].avg7 : null;
+    const firstWeightRow = chartData.find((row) => typeof row.weight === "number" && row.weight > 0);
+    const lastWeightRow = [...chartData].reverse().find((row) => typeof row.weight === "number" && row.weight > 0);
+    const firstWaistRow = chartData.find((row) => typeof row.waist === "number" && row.waist > 0);
+    const lastWaistRow = [...chartData].reverse().find((row) => typeof row.waist === "number" && row.waist > 0);
+
+    const totalWeightDelta =
+      firstWeightRow && lastWeightRow
+        ? +(Number(lastWeightRow.weight) - Number(firstWeightRow.weight)).toFixed(1)
+        : 0;
+    const totalWaistDelta =
+      firstWaistRow && lastWaistRow
+        ? +(Number(lastWaistRow.waist) - Number(firstWaistRow.waist)).toFixed(1)
+        : 0;
+
+    const bullets: string[] = [];
+    bullets.push(
+      recent7Delta < 0
+        ? `近 7 天體重約下降 ${Math.abs(recent7Delta)} kg。`
+        : recent7Delta > 0
+          ? `近 7 天體重約上升 ${recent7Delta} kg。`
+          : "近 7 天體重大致持平。"
+    );
+
+    if (latestAvg7) bullets.push(`目前 7 日移動平均約 ${latestAvg7} kg，可用來過濾單日水分波動。`);
+    if (lastWaistRow) {
+      bullets.push(
+        totalWaistDelta < 0
+          ? `腰圍自第一筆有效紀錄以來約下降 ${Math.abs(totalWaistDelta)} cm。`
+          : totalWaistDelta > 0
+            ? `腰圍自第一筆有效紀錄以來約上升 ${totalWaistDelta} cm。`
+            : "腰圍目前大致持平。"
+      );
+    } else {
+      bullets.push("腰圍有效紀錄仍偏少，腰腹變化判讀還可以再更準。");
+    }
+
+    bullets.push(`體組成判讀目前是「${waterVsFat.title}」；${waterVsFat.detail}`);
+    bullets.push(`減脂期判定為「${waterVsFat.fatLossStage}」；${waterVsFat.waistStatus}`);
+    bullets.push(`最新體脂率 ${latestBodyFatPct || "-"}%、肌肉率 ${latestMuscleRate || "-"}%、水分 ${latestBodyWater || "-"}%。`);
+
+    if (plateau.isPlateau) {
+      bullets.push("雖然曲線看起來有波動，但系統判定近兩週可能接近停滯，接下來更該看飲食一致性與活動量。");
+    } else {
+      bullets.push("目前尚未看到明顯停滯，重點是把目前有效的節奏繼續複製。");
+    }
+
+    return {
+      bullets: bullets.slice(0, 6),
+      totalWeightDelta,
+      totalWaistDelta,
+    };
+  }, [chartData, recent7Delta, waterVsFat.title, waterVsFat.detail, waterVsFat.fatLossStage, waterVsFat.waistStatus, latestBodyFatPct, latestMuscleRate, latestBodyWater, plateau.isPlateau]);
 
   const buildPeriodSummary = (
     periodLabel: string,
@@ -5719,8 +5676,8 @@ export default function SimpleTracker() {
             </Card>
 
             <Card>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center gap-2 mb-1">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
                   <Flame className="w-4 h-4" />
                   ELCD 狀態
                 </div>
@@ -5732,25 +5689,13 @@ export default function SimpleTracker() {
                     : "未開啟"}
                 </div>
                 <div className="text-sm text-slate-500">
-                  {elcdStatus.statusTitle}｜AI 分數：{elcdStatus.score}
+                  AI 分數：{elcdStatus.score}
                 </div>
-                <div className="text-sm leading-6">{elcdStatus.statusDetail}</div>
-                {elcdStatus.suitableSignals.length ? (
-                  <div className="text-sm space-y-1">
-                    <div className="font-medium">適合訊號</div>
-                    {elcdStatus.suitableSignals.slice(0, 2).map((r) => (
-                      <div key={r}>• {r}</div>
-                    ))}
-                  </div>
-                ) : null}
-                {elcdStatus.cautionSignals.length ? (
-                  <div className="text-sm space-y-1">
-                    <div className="font-medium">保留原因</div>
-                    {elcdStatus.cautionSignals.slice(0, 2).map((r) => (
-                      <div key={r}>• {r}</div>
-                    ))}
-                  </div>
-                ) : null}
+                <div className="text-sm mt-2 space-y-1">
+                  {elcdStatus.reasons.slice(0, 2).map((r) => (
+                    <div key={r}>• {r}</div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
@@ -6550,6 +6495,12 @@ export default function SimpleTracker() {
                     unit: "%",
                     color: METRIC_COLORS.bodyWater,
                   },
+                  {
+                    key: "waist",
+                    title: "腰圍趨勢",
+                    unit: "cm",
+                    color: METRIC_COLORS.waist,
+                  },
                 ].map((metric) => (
                   <MetricLineCard
                     key={metric.key}
@@ -6573,9 +6524,9 @@ export default function SimpleTracker() {
                   <CardHeader>
                     <CardTitle>分析摘要</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div>
-                      停滯期：
+                  <CardContent className="space-y-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span>停滯期：</span>
                       <Badge
                         variant={
                           plateau.isPlateau ? "destructive" : "secondary"
@@ -6585,31 +6536,29 @@ export default function SimpleTracker() {
                       </Badge>
                     </div>
                     <div>{plateau.text}</div>
-                    <div>估算體脂：{bodyFat || "-"}%</div>
-                    <div>最新肌肉率：{latestMuscleRate || "-"}%</div>
-                    <div>
-                      7日移動平均：
-                      {chartData.length
-                        ? chartData[chartData.length - 1].avg7
-                        : "-"}{" "}
-                      kg
+
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-xl border p-3 bg-slate-50">
+                        <div className="text-slate-500 text-xs mb-1">最新體組成</div>
+                        <div>體脂率：{latestBodyFatPct || "-"}%</div>
+                        <div>肌肉率：{latestMuscleRate || "-"}%</div>
+                        <div>水分：{latestBodyWater || "-"}%</div>
+                        <div>腰圍：{latestWaist || "-"} cm</div>
+                      </div>
+                      <div className="rounded-xl border p-3 bg-slate-50">
+                        <div className="text-slate-500 text-xs mb-1">代謝與熱量</div>
+                        <div>BMR：{bmr || "-"} kcal</div>
+                        <div>TDEE：{tdee || "-"} kcal</div>
+                        <div>建議減脂熱量：{cutCalories || "-"} kcal</div>
+                        <div>7 日移動平均：{chartData.length ? chartData[chartData.length - 1].avg7 : "-"} kg</div>
+                      </div>
                     </div>
-                    <div>
-                      BMR：{bmr || "-"} kcal（
-                      {settings.bmrMethod === "katch"
-                        ? "體脂器公式"
-                        : "一般公式"}
-                      ）
-                    </div>
-                    <div>TDEE：{tdee || "-"} kcal</div>
-                    <div>建議減脂熱量：{cutCalories || "-"} kcal</div>
-                    <div>
-                      性別版型：
-                      {settings.sex === "female" ? "女性建議" : "男性建議"}
-                    </div>
-                    <div>
-                      水分/體脂/肌肉判讀：{waterVsFat.title}（信心{" "}
-                      {waterVsFat.confidence}）
+
+                    <div className="rounded-xl border p-3 bg-white space-y-2">
+                      <div className="font-medium">趨勢重點</div>
+                      {trendAnalysisSummary.bullets.map((item) => (
+                        <div key={item}>• {item}</div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -6699,20 +6648,18 @@ export default function SimpleTracker() {
       key={item}
       type="button"
       onClick={() => toggleWorkoutEquipment(item)}
-      aria-pressed={active}
       className={[
         "rounded-2xl border px-3 py-3 text-sm font-medium transition active:scale-[0.98]",
         isDark
           ? active
-            ? "border-white bg-slate-900 shadow-sm ring-2 ring-white/70"
-            : "border-slate-700 bg-slate-900"
+            ? "border-white bg-white text-slate-950 shadow-sm ring-2 ring-white/70"
+            : "border-slate-700 bg-slate-900 text-slate-200"
           : active
             ? "border-slate-900 bg-slate-900 text-white shadow-sm"
             : "border-slate-300 bg-white text-slate-700",
       ].join(" ")}
-      style={isDark ? { backgroundColor: "rgb(15 23 42)", color: "rgb(255 255 255)" } : undefined}
     >
-      <span style={isDark ? { color: "rgb(255 255 255)" } : undefined}>{WORKOUT_EQUIPMENT_LABEL[item]}</span>
+      {WORKOUT_EQUIPMENT_LABEL[item]}
     </button>
   );
 })}
@@ -6870,19 +6817,28 @@ export default function SimpleTracker() {
                       猛健樂專用減脂策略
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div className="text-base font-semibold">{strategySummary.headline}</div>
-                    <div className="text-slate-600 leading-6">{strategySummary.overview}</div>
-                    <div className="rounded-xl border p-3 space-y-2">
-                      <div className="font-medium">目前策略重點</div>
-                      {strategySummary.priorities.map((tip) => (
-                        <div key={tip}>• {tip}</div>
+                  <CardContent className="space-y-4 text-sm">
+                    <div className="font-medium">{strategyIntegratedSummary.headline}</div>
+                    <div className="text-slate-600">{strategyIntegratedSummary.overview}</div>
+
+                    <div className="rounded-xl border bg-slate-50 p-3 space-y-2">
+                      <div className="font-medium">現在最值得做的事</div>
+                      {strategyIntegratedSummary.coachNotes.map((item) => (
+                        <div key={item}>• {item}</div>
                       ))}
                     </div>
-                    <div className="rounded-xl border p-3 space-y-2">
-                      <div className="font-medium">系統目前看到的狀況</div>
-                      {strategySummary.observations.map((tip) => (
-                        <div key={tip}>• {tip}</div>
+
+                    <div className="rounded-xl border bg-white p-3 space-y-2">
+                      <div className="font-medium">系統從你的紀錄學到什麼</div>
+                      {strategyIntegratedSummary.learnedSignals.map((item) => (
+                        <div key={item}>• {item}</div>
+                      ))}
+                    </div>
+
+                    <div className="rounded-xl border bg-white p-3 space-y-2">
+                      <div className="font-medium">接下來內容會怎麼跟著資料更新</div>
+                      {strategyIntegratedSummary.updateSignals.map((item) => (
+                        <div key={item}>• {item}</div>
                       ))}
                     </div>
                   </CardContent>
@@ -6892,53 +6848,16 @@ export default function SimpleTracker() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <CalendarClock className="w-4 h-4" />
-                      接下來怎麼做比較有用
+                      劑量與施打節奏觀察
                     </CardTitle>
                   </CardHeader>
-                  <div className="mt-4 border-t pt-3 px-6 space-y-1">
-                    <div className="text-sm font-medium mb-1">
-                      💉 劑量AI判斷
-                    </div>
-                    <div className="text-lg font-semibold">{doseAI.level}</div>
-                    <div className="text-sm text-slate-500">
-                      {doseAI.reason}
-                    </div>
-                    <div className="text-sm">👉 {doseAI.action}</div>
-                    <div className="text-sm text-slate-500 pt-2">{strategySummary.doseContext}</div>
-                  </div>
                   <CardContent className="space-y-2 text-sm">
-                    {strategySummary.nextActions.map((tip) => (
-                      <div key={tip}>• {tip}</div>
-                    ))}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>🧠 個人化 AI 學習</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="font-medium">{personalAI.summary}</div>
-                    <div className="text-sm text-slate-600">
-                      最容易成功的時段／狀態：{personalAI.bestWindow}
-                    </div>
-                    <div className="text-sm text-slate-600">
-                      最容易失守的時段／狀態：{personalAI.riskWindow}
-                    </div>
-                    <div className="text-sm text-slate-600">
-                      目前看起來最有效的模式：{personalAI.effectivePattern}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>AI 學到的重點</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    {personalAI.learningTips.map((tip) => (
-                      <div key={tip}>• {tip}</div>
-                    ))}
+                    <div>• 劑量 AI 判斷：{doseAI.level}</div>
+                    <div>• 判斷原因：{doseAI.reason}</div>
+                    <div>• 建議動作：{doseAI.action}</div>
+                    <div>• 目前連續劑量：{currentDoseSeries.dose} mg／{currentDoseSeries.shotCount} 針</div>
+                    <div>• 升階建議：{doseEscalationPlan.title}</div>
+                    <div>• {doseEscalationPlan.subtitle}</div>
                   </CardContent>
                 </Card>
               </div>
