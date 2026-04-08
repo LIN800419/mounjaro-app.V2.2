@@ -1979,6 +1979,7 @@ const METRIC_COLORS: Record<string, string> = {
   muscleMass: "#ea580c",
   visceralFat: "#cbd5e1",
   bodyWater: "#0284c7",
+  waist: "#0f766e",
 };
 
 type MetricLineCardProps = {
@@ -4324,14 +4325,31 @@ export default function SimpleTracker() {
     return base;
   }, [latest]);
 
+  const currentDoseSeries = useMemo(() => {
+    const orderedShotEntries = [...shotEntries].reverse();
+    if (!orderedShotEntries.length)
+      return { dose: "-", shotCount: 0, weeks: 0 };
+    const latestShot = orderedShotEntries[orderedShotEntries.length - 1];
+    let count = 0;
+    for (let i = orderedShotEntries.length - 1; i >= 0; i -= 1) {
+      if (orderedShotEntries[i].dose === latestShot.dose) count += 1;
+      else break;
+    }
+    return { dose: latestShot.dose, shotCount: count, weeks: count };
+  }, [shotEntries]);
+
   const personalAI = useMemo(() => {
     if (sortedEntries.length < 5) {
       return {
-        summary: "資料還不夠，累積 5 筆以上會開始學你的模式",
+        summary: "資料還不夠，累積 5 筆以上後，策略頁才會開始整合出你的習慣模式。",
         bestWindow: "-",
         riskWindow: "-",
         effectivePattern: "-",
         learningTips: ["先持續記錄體重、食慾、嘴饞、運動時間"],
+        coachSummary: "目前還在收集你的個人節奏，先把紀錄連續性建立起來。",
+        learnedPatterns: ["至少先累積 5 筆以上連續紀錄"],
+        triggerWarnings: ["資料不足，暫時無法判斷最常失守的情境"],
+        updateSignals: ["策略會在資料變多後自動根據劑量、體組成、嘴饞與副作用更新"],
       };
     }
 
@@ -4409,35 +4427,53 @@ export default function SimpleTracker() {
       bestWindow = "有做 20 分鐘以上活動的日子";
     }
 
-    const learningTips = [
+    const learnedPatterns = [
       `你最常見的食慾狀態是「${appetiteTop}」`,
       `你最常見的嘴饞程度是「${cravingTop}」`,
       effectivePattern,
-      `你較容易失守的情境是：${riskWindow}`,
-      `你較容易成功的情境是：${bestWindow}`,
+      `目前較容易成功的時段／狀態：${bestWindow}`,
     ];
+
+    const triggerWarnings = [
+      `較容易失守的情境：${riskWindow}`,
+      latest?.cravingLevel === "高"
+        ? "你現在就處在高嘴饞狀態，策略上要先做防暴食，不是先追更低熱量"
+        : "目前嘴饞不是最高風險，但仍要注意外食和順手吃零食",
+      latest?.sideEffect !== "無"
+        ? `最近有 ${latest?.sideEffect}，代表這段時間更適合用舒服的飲食，而不是硬撐`
+        : "最近沒有明顯副作用，可以把注意力放回飲食結構與活動量",
+    ];
+
+    const updateSignals = [
+      `目前施打脈絡：${currentDoseSeries.dose} mg，連續 ${currentDoseSeries.shotCount} 針`,
+      `體組成判讀：${waterVsFat.title}`,
+      `減脂期判定：${waterVsFat.fatLossStage}`,
+      plateau.isPlateau ? "最近有停滯跡象，策略會偏向找卡點" : "目前沒有明顯停滯，策略會偏向維持可複製節奏",
+    ];
+
+    const coachSummary =
+      latest?.appetite === "下降"
+        ? `你最近最值得利用的是「食慾下降期」。如果把蛋白質和正餐結構顧好，這段通常是你最容易拉開差距的窗口。`
+        : latest?.cravingLevel === "高"
+          ? `你最近的主戰場不是再降多少熱量，而是先把嘴饞與失守點控制住。只要零食與外食份量收住，通常就會明顯改善。`
+          : plateau.isPlateau
+            ? `你最近比較像進入停滯，需要做的是找出隱藏熱量、活動量和量測波動，而不是一直亂改整套策略。`
+            : `你目前的策略重點是把有效模式穩定複製：相近時間量測、固定蛋白質、維持活動量，不要頻繁大改。`;
 
     return {
       summary: "AI 已開始根據你的歷史紀錄學習個人模式",
       bestWindow,
       riskWindow,
       effectivePattern,
-      learningTips,
+      learningTips: [...learnedPatterns, ...triggerWarnings.slice(0, 2)],
+      coachSummary,
+      learnedPatterns,
+      triggerWarnings,
+      updateSignals,
     };
-  }, [sortedEntries]);
+  }, [sortedEntries, latest, currentDoseSeries.dose, currentDoseSeries.shotCount, waterVsFat.title, waterVsFat.fatLossStage, plateau.isPlateau]);
 
-  const currentDoseSeries = useMemo(() => {
-    const orderedShotEntries = [...shotEntries].reverse();
-    if (!orderedShotEntries.length)
-      return { dose: "-", shotCount: 0, weeks: 0 };
-    const latestShot = orderedShotEntries[orderedShotEntries.length - 1];
-    let count = 0;
-    for (let i = orderedShotEntries.length - 1; i >= 0; i -= 1) {
-      if (orderedShotEntries[i].dose === latestShot.dose) count += 1;
-      else break;
-    }
-    return { dose: latestShot.dose, shotCount: count, weeks: count };
-  }, [shotEntries]);
+
 
   const doseEscalationPlan = useMemo(() => {
     if (!shotEntries.length) {
@@ -4721,6 +4757,68 @@ export default function SimpleTracker() {
       return [...prev, key];
     });
   };
+
+  const chartInsight = useMemo(() => {
+    const latestAvg7 = chartData.length ? chartData[chartData.length - 1].avg7 : null;
+    const validWaistRows = chartData.filter((row) => Number(row.waist) > 0);
+    const waistFirst = validWaistRows.length ? Number(validWaistRows[0].waist) : 0;
+    const waistLast = validWaistRows.length ? Number(validWaistRows[validWaistRows.length - 1].waist) : 0;
+    const waistDelta = waistFirst && waistLast ? +(waistLast - waistFirst).toFixed(1) : 0;
+    const bodyFatFirstRow = chartData.find((row) => Number(row.bodyFatPct) > 0);
+    const bodyFatLastRow = [...chartData].reverse().find((row) => Number(row.bodyFatPct) > 0);
+    const muscleRateFirstRow = chartData.find((row) => Number(row.muscleRate) > 0);
+    const muscleRateLastRow = [...chartData].reverse().find((row) => Number(row.muscleRate) > 0);
+    const bodyFatDelta = bodyFatFirstRow && bodyFatLastRow
+      ? +(Number(bodyFatLastRow.bodyFatPct) - Number(bodyFatFirstRow.bodyFatPct)).toFixed(1)
+      : 0;
+    const muscleRateDelta = muscleRateFirstRow && muscleRateLastRow
+      ? +(Number(muscleRateLastRow.muscleRate) - Number(muscleRateFirstRow.muscleRate)).toFixed(1)
+      : 0;
+
+    const bullets: string[] = [];
+    const highlights: string[] = [];
+
+    if (chartData.length < 2) {
+      return {
+        headline: "資料還不夠，先累積趨勢",
+        detail: "趨勢頁至少要有幾筆連續紀錄，分析摘要才會開始有判讀價值。",
+        bullets: ["先固定量測體重、體脂、肌肉率、水分與腰圍"],
+        highlights: ["目前資料不足"],
+      };
+    }
+
+    bullets.push(`近 7 日體重變化約 ${recent7Delta > 0 ? '-' : '+'}${Math.abs(recent7Delta)} kg（以最新區間估算）`);
+    if (latestAvg7) bullets.push(`最新 7 日移動平均約 ${latestAvg7} kg`);
+    if (latestBodyFatPct > 0) bullets.push(`最新體脂率 ${latestBodyFatPct}%`);
+    if (latestMuscleRate > 0) bullets.push(`最新肌肉率 ${latestMuscleRate}%`);
+    if (latestBodyWater > 0) bullets.push(`最新水分 ${latestBodyWater}%`);
+    if (latestWaist > 0) bullets.push(`最新腰圍 ${latestWaist} cm`);
+
+    if (waistFirst && waistLast) {
+      highlights.push(`腰圍趨勢 ${waistDelta > 0 ? '+' : ''}${waistDelta} cm`);
+    } else {
+      highlights.push("腰圍資料仍偏少，後續補齊後腹部趨勢會更準");
+    }
+
+    if (bodyFatFirstRow && bodyFatLastRow) {
+      highlights.push(`體脂率累計 ${bodyFatDelta > 0 ? '+' : ''}${bodyFatDelta}%`);
+    }
+    if (muscleRateFirstRow && muscleRateLastRow) {
+      highlights.push(`肌肉率累計 ${muscleRateDelta > 0 ? '+' : ''}${muscleRateDelta}%`);
+    }
+
+    const headline = plateau.isPlateau
+      ? "趨勢上接近停滯，先看腰圍與體組成，不要只盯體重"
+      : waterVsFat.tag === "漂亮減脂"
+        ? "趨勢偏向漂亮減脂，體重下降不只是水分"
+        : waterVsFat.tag === "水分波動"
+          ? "最近趨勢混有水分波動，先不要過度解讀單次下降"
+          : "目前趨勢仍在形成，建議一起看體重、腰圍與體組成";
+
+    const detail = `${waterVsFat.shortSummary} ${waterVsFat.longSummary} ${waterVsFat.explanation}`;
+
+    return { headline, detail, bullets, highlights };
+  }, [chartData, recent7Delta, latestBodyFatPct, latestMuscleRate, latestBodyWater, latestWaist, plateau.isPlateau, waterVsFat.tag, waterVsFat.shortSummary, waterVsFat.longSummary, waterVsFat.explanation]);
 
   const shotPattern = useMemo(() => {
     if (!latestShotDate || !sortedEntries.length) {
@@ -6550,6 +6648,12 @@ export default function SimpleTracker() {
                     unit: "%",
                     color: METRIC_COLORS.bodyWater,
                   },
+                  {
+                    key: "waist",
+                    title: "腰圍趨勢",
+                    unit: "cm",
+                    color: METRIC_COLORS.waist,
+                  },
                 ].map((metric) => (
                   <MetricLineCard
                     key={metric.key}
@@ -6574,6 +6678,8 @@ export default function SimpleTracker() {
                     <CardTitle>分析摘要</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
+                    <div className="text-base font-semibold">{chartInsight.headline}</div>
+                    <div className="text-slate-600 leading-6">{chartInsight.detail}</div>
                     <div>
                       停滯期：
                       <Badge
@@ -6585,14 +6691,17 @@ export default function SimpleTracker() {
                       </Badge>
                     </div>
                     <div>{plateau.text}</div>
-                    <div>估算體脂：{bodyFat || "-"}%</div>
-                    <div>最新肌肉率：{latestMuscleRate || "-"}%</div>
-                    <div>
-                      7日移動平均：
-                      {chartData.length
-                        ? chartData[chartData.length - 1].avg7
-                        : "-"}{" "}
-                      kg
+                    <div className="rounded-xl border p-3 space-y-2">
+                      <div className="font-medium">趨勢重點</div>
+                      {chartInsight.highlights.map((item) => (
+                        <div key={item}>• {item}</div>
+                      ))}
+                    </div>
+                    <div className="rounded-xl border p-3 space-y-2">
+                      <div className="font-medium">目前摘要</div>
+                      {chartInsight.bullets.map((item) => (
+                        <div key={item}>• {item}</div>
+                      ))}
                     </div>
                     <div>
                       BMR：{bmr || "-"} kcal（
@@ -6915,30 +7024,29 @@ export default function SimpleTracker() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>🧠 個人化 AI 學習</CardTitle>
+                    <CardTitle>🧠 個人化策略學習整合</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardContent className="space-y-3 text-sm">
                     <div className="font-medium">{personalAI.summary}</div>
-                    <div className="text-sm text-slate-600">
-                      最容易成功的時段／狀態：{personalAI.bestWindow}
+                    <div className="text-slate-600 leading-6">{personalAI.coachSummary}</div>
+                    <div className="rounded-xl border p-3 space-y-2">
+                      <div className="font-medium">目前學到的有效模式</div>
+                      {personalAI.learnedPatterns.map((tip) => (
+                        <div key={tip}>• {tip}</div>
+                      ))}
                     </div>
-                    <div className="text-sm text-slate-600">
-                      最容易失守的時段／狀態：{personalAI.riskWindow}
+                    <div className="rounded-xl border p-3 space-y-2">
+                      <div className="font-medium">現在最該防的失守點</div>
+                      {personalAI.triggerWarnings.map((tip) => (
+                        <div key={tip}>• {tip}</div>
+                      ))}
                     </div>
-                    <div className="text-sm text-slate-600">
-                      目前看起來最有效的模式：{personalAI.effectivePattern}
+                    <div className="rounded-xl border p-3 space-y-2">
+                      <div className="font-medium">系統如何依目前資料更新策略</div>
+                      {personalAI.updateSignals.map((tip) => (
+                        <div key={tip}>• {tip}</div>
+                      ))}
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>AI 學到的重點</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    {personalAI.learningTips.map((tip) => (
-                      <div key={tip}>• {tip}</div>
-                    ))}
                   </CardContent>
                 </Card>
               </div>
