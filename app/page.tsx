@@ -695,6 +695,12 @@ const WORKOUT_EQUIPMENT_LABEL: Record<WorkoutEquipment, string> = {
   kettlebell: "壺鈴",
 };
 
+const WORKOUT_EQUIPMENT_ICON: Record<WorkoutEquipment, string> = {
+  bike: "🚴",
+  treadmill: "🏃",
+  kettlebell: "🏋️",
+};
+
 function getWorkoutFocusSeed(todayStr: string) {
   if (!todayStr) return 0;
   return parseLocalDate(todayStr).getDay() % 3;
@@ -6534,11 +6540,11 @@ export default function SimpleTracker() {
       type="button"
       onClick={() => toggleWorkoutEquipment(item)}
       className={[
-        "rounded-2xl border px-3 py-3 text-sm font-medium transition active:scale-[0.98]",
+        "rounded-2xl border px-4 py-3 text-sm font-medium transition active:scale-[0.98] min-w-[112px]",
         isDark
           ? active
             ? "border-white bg-white shadow-sm ring-2 ring-white/70"
-            : "border-slate-700 bg-slate-900"
+            : "border-slate-500 bg-slate-950"
           : active
             ? "border-slate-900 bg-slate-900 text-white shadow-sm"
             : "border-slate-300 bg-white text-slate-700",
@@ -6546,14 +6552,28 @@ export default function SimpleTracker() {
       style={
         isDark
           ? {
-              color: active ? "#020617" : "#e2e8f0",
+              color: active ? "#020617" : "#f8fafc",
             }
           : undefined
       }
       aria-pressed={active}
+      aria-label={WORKOUT_EQUIPMENT_LABEL[item]}
+      title={WORKOUT_EQUIPMENT_LABEL[item]}
     >
-      <span style={isDark ? { color: active ? "#020617" : "#e2e8f0" } : undefined}>
-        {WORKOUT_EQUIPMENT_LABEL[item]}
+      <span className="flex flex-col items-center justify-center gap-1">
+        <span
+          aria-hidden="true"
+          className="text-lg leading-none"
+          style={{ color: active ? (isDark ? "#020617" : "currentColor") : isDark ? "#f8fafc" : "currentColor" }}
+        >
+          {WORKOUT_EQUIPMENT_ICON[item]}
+        </span>
+        <span
+          className="text-base leading-none font-semibold tracking-wide"
+          style={{ color: active ? (isDark ? "#020617" : "currentColor") : isDark ? "#f8fafc" : "currentColor" }}
+        >
+          {WORKOUT_EQUIPMENT_LABEL[item]}
+        </span>
       </span>
     </button>
   );
