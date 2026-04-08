@@ -1,4 +1,4 @@
-const SW_VERSION = '2026-04-08-V1'
+const SW_VERSION = '2026-04-08-V2'
 
 self.addEventListener('install', () => {
   self.skipWaiting()
