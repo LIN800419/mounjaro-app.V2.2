@@ -1857,11 +1857,6 @@ function getCompositionSnapshot(entry?: Partial<Entry> | null): CompositionSnaps
   };
 }
 
-function isCompleteCompositionEntry(entry?: Partial<Entry> | null) {
-  const snap = getCompositionSnapshot(entry);
-  return snap.weight > 0 && snap.bodyFatPct > 0 && snap.muscleRate > 0 && snap.bodyWater > 0;
-}
-
 function getWaistDeltaWithinDays(entries: Entry[], endDate: string, days: number) {
   const waistEntries = entries.filter(
     (entry) => num((entry as any).waist) > 0 && daysBetween(entry.date, endDate) >= 0 && daysBetween(entry.date, endDate) <= days,
@@ -3736,59 +3731,13 @@ export default function SimpleTracker() {
       };
     }
 
-    const validShortWindow = shortWindow.filter((entry) => isCompleteCompositionEntry(entry));
-    const validLongWindow = longWindow.filter((entry) => isCompleteCompositionEntry(entry));
-
-    if (validShortWindow.length < 2 || validLongWindow.length < 2) {
-      return {
-        tag: "觀察中",
-        title: "有效資料不足",
-        detail:
-          "短期或長期區間內缺少完整的水分、體脂率、肌肉率紀錄，先補齊完整量測再判讀會更準。",
-        confidence: "低" as const,
-        confidencePct: hasWaistSupport ? 85 : 70,
-        fatLossStage: "資料不足",
-        fatLossStageDetail:
-          "雖然區間內有紀錄，但完整有效的身體組成資料不足，暫時不進行長期判讀。",
-        fatLossStageReasons: [
-          `短期完整資料 ${validShortWindow.length} 筆`,
-          `長期完整資料 ${validLongWindow.length} 筆`,
-          hasWaistSupport ? "近 14 天腰圍已有 2 筆以上紀錄" : "近 14 天腰圍不足 2 筆",
-        ],
-        fatLossStageConfidenceText: hasWaistSupport ? "85% 可信度" : "70% 可信度",
-        waistDelta14: waist14.delta,
-        waistCount14: waist14.count,
-        waistStatus: hasWaistSupport
-          ? `近 14 天腰圍 ${waist14.delta > 0 ? "+" : ""}${waist14.delta} cm`
-          : "近 14 天腰圍資料不足（至少 2 筆）",
-        reasons: ["完整有效的身體組成資料不足"],
-        shortSummary: `短期完整資料 ${validShortWindow.length} 筆`,
-        longSummary: `長期完整資料 ${validLongWindow.length} 筆`,
-        explanation:
-          "長期判斷已改成只用完整有效紀錄；目前有效資料不夠，所以先不硬判。",
-        advice: [
-          "固定在相近時間量測體脂率、肌肉率、水分",
-          "至少讓短期有 2 筆、長期有 2 筆完整有效資料",
-          waterTargetMl ? `今日先補水約 ${waterTargetMl} ml` : "先把飲水量穩住",
-        ],
-        waterTargetMl,
-        shortTerm: null,
-        longTerm: null,
-      };
-    }
-
-    const shortBaseEntry = validShortWindow[0];
-    const shortLastEntry = validShortWindow[validShortWindow.length - 1];
-    const longBaseEntry = validLongWindow[0];
-    const longLastEntry = validLongWindow[validLongWindow.length - 1];
-
-    const shortFirst = getCompositionSnapshot(shortBaseEntry);
-    const shortLast = getCompositionSnapshot(shortLastEntry);
-    const longFirst = getCompositionSnapshot(longBaseEntry);
-    const longLast = getCompositionSnapshot(longLastEntry);
+    const shortFirst = getCompositionSnapshot(shortWindow[0]);
+    const shortLast = getCompositionSnapshot(shortWindow[shortWindow.length - 1]);
+    const longFirst = getCompositionSnapshot(longWindow[0]);
+    const longLast = getCompositionSnapshot(longWindow[longWindow.length - 1]);
 
     const shortTerm = {
-      days: Math.max(1, daysBetween(shortBaseEntry.date, shortLastEntry.date)),
+      days: Math.max(1, daysBetween(shortWindow[0].date, shortWindow[shortWindow.length - 1].date)),
       weightDelta: +(shortLast.weight - shortFirst.weight).toFixed(1),
       bodyFatPctDelta: +(shortLast.bodyFatPct - shortFirst.bodyFatPct).toFixed(1),
       muscleRateDelta: +(shortLast.muscleRate - shortFirst.muscleRate).toFixed(1),
@@ -3802,7 +3751,7 @@ export default function SimpleTracker() {
     };
 
     const longTerm = {
-      days: Math.max(1, daysBetween(longBaseEntry.date, longLastEntry.date)),
+      days: Math.max(1, daysBetween(longWindow[0].date, longWindow[longWindow.length - 1].date)),
       weightDelta: +(longLast.weight - longFirst.weight).toFixed(1),
       bodyFatPctDelta: +(longLast.bodyFatPct - longFirst.bodyFatPct).toFixed(1),
       muscleRateDelta: +(longLast.muscleRate - longFirst.muscleRate).toFixed(1),
@@ -6570,20 +6519,18 @@ export default function SimpleTracker() {
       key={item}
       type="button"
       onClick={() => toggleWorkoutEquipment(item)}
-      aria-pressed={active}
       className={[
         "rounded-2xl border px-3 py-3 text-sm font-medium transition active:scale-[0.98]",
         isDark
           ? active
-            ? "border-white bg-slate-900 shadow-sm ring-2 ring-white/70"
-            : "border-slate-700 bg-slate-900"
+            ? "border-white bg-white text-slate-950 shadow-sm ring-2 ring-white/70"
+            : "border-slate-700 bg-slate-900 text-slate-200"
           : active
             ? "border-slate-900 bg-slate-900 text-white shadow-sm"
             : "border-slate-300 bg-white text-slate-700",
       ].join(" ")}
-      style={isDark ? { backgroundColor: "rgb(15 23 42)", color: "rgb(255 255 255)" } : undefined}
     >
-      <span style={isDark ? { color: "rgb(255 255 255)" } : undefined}>{WORKOUT_EQUIPMENT_LABEL[item]}</span>
+      {WORKOUT_EQUIPMENT_LABEL[item]}
     </button>
   );
 })}
