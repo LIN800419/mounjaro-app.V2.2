@@ -995,6 +995,15 @@ function num(v: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+
 function getBMI(h: number, w: number) {
   if (!h || !w) return 0;
   const m = h / 100;
@@ -5311,6 +5320,84 @@ export default function SimpleTracker() {
     resetForm();
   };
 
+  const exportEntriesToExcel = () => {
+    if (!sortedEntries.length || typeof window === "undefined") return;
+
+    const rows = sortedEntries.map((item) => ({
+      日期: item.date || "",
+      體重_kg: item.weight || "",
+      體脂率_pct: item.bodyFatPct || "",
+      脂肪重_kg: item.fatMass || "",
+      肌肉率_pct: item.muscleRate || String(getMuscleRateFromEntry(item) || ""),
+      肌肉量_kg: item.muscleMass || "",
+      內臟脂肪: item.visceralFat || "",
+      水分_pct: item.bodyWater || "",
+      腰圍_cm: item.waist || "",
+      劑量_mg: item.dose || "",
+      是否施打日: item.isShotDay ? "是" : "否",
+      食慾: item.appetite || "",
+      嘴饞程度: item.cravingLevel || "",
+      主要副作用: item.sideEffect || "",
+      不適程度_0_5: item.sideEffectSeverity || "",
+      多重副作用: (item.sideEffects || [])
+        .map((sideEffect) => `${sideEffect.effect}(${sideEffect.severity})`)
+        .join('、'),
+      運動分鐘數: item.exerciseMin || "",
+    }));
+
+    const columns = Object.keys(rows[0] || {});
+    const tableHead = columns
+      .map((column) => `<th style="background:#f8fafc;border:1px solid #cbd5e1;padding:8px;font-weight:700;">${escapeHtml(column)}</th>`)
+      .join("");
+    const tableBody = rows
+      .map(
+        (row) =>
+          `<tr>${columns
+            .map(
+              (column) =>
+                `<td style="border:1px solid #cbd5e1;padding:8px;">${escapeHtml(row[column as keyof typeof row])}</td>`,
+            )
+            .join("")}</tr>`,
+      )
+      .join("");
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:x="urn:schemas-microsoft-com:office:excel"
+            xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="utf-8" />
+          <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        </head>
+        <body>
+          <table>
+            <tr>
+              <td colspan="${columns.length}" style="font-size:18px;font-weight:700;padding:10px 8px;">猛健樂紀錄資料匯出</td>
+            </tr>
+            <tr>
+              <td colspan="${columns.length}" style="padding:0 8px 12px 8px;color:#475569;">可直接丟給 ChatGPT 做趨勢分析、減脂期判讀、體重 / 體脂 / 腰圍 / 劑量變化分析。</td>
+            </tr>
+            <tr>${tableHead}</tr>
+            ${tableBody}
+          </table>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob(["\ufeff", html], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const todayStamp = getTodayLocalDate();
+    link.href = url;
+    link.download = `mounjaro-records-${todayStamp}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   const handleEdit = (item: Entry) => {
     setForm({
       date: item.date,
@@ -6499,6 +6586,27 @@ export default function SimpleTracker() {
                         取消
                       </Button>
                     ) : null}
+                  </div>
+
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="font-medium text-emerald-900">Excel 匯出</div>
+                        <div className="text-xs text-emerald-800">僅匯出紀錄資料，不含圖表；可用 Excel 開啟。</div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={exportEntriesToExcel}
+                        disabled={!sortedEntries.length}
+                        className="border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-100"
+                      >
+                        Excel 匯出
+                      </Button>
+                    </div>
+                    <div className="text-xs text-emerald-900">
+                      小提示：匯出的資料可直接丟給 ChatGPT，請它分析體重、體脂、腰圍、劑量與減脂趨勢。
+                    </div>
                   </div>
 
                   <div className="border-t pt-4 space-y-3">
