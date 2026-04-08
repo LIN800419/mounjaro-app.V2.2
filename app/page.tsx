@@ -4359,146 +4359,6 @@ export default function SimpleTracker() {
     return { dose: latestShot.dose, shotCount: count, weeks: count };
   }, [shotEntries]);
 
-  const strategyIntegratedSummary = useMemo(() => {
-    if (!latest) {
-      return {
-        headline: "先建立第一筆完整紀錄",
-        overview: "目前策略分頁會在你累積幾筆體重、施打、食慾、嘴饞與體組成資料後，才會開始真的變得有用。",
-        coachNotes: ["先固定記錄體重、施打、食慾、嘴饞與副作用"],
-        learnedSignals: ["目前個人化學習仍在暖機中"],
-        updateSignals: ["等累積更多紀錄後，這裡會自動改寫成你的個人策略"],
-      };
-    }
-
-    const coachNotes: string[] = [];
-    const learnedSignals: string[] = [];
-    const updateSignals: string[] = [];
-
-    if (currentDoseSeries.dose !== "-") {
-      coachNotes.push(`目前多半落在 ${currentDoseSeries.dose} mg，已連續 ${currentDoseSeries.shotCount} 針；${doseEscalationPlan.title.replace("。", "")}。`);
-    }
-
-    if (plateau.isPlateau) {
-      coachNotes.push("近兩週有停滯跡象，現在最值得檢查的是外食份量、零食、飲料與活動量，而不是只想著再餓一點。");
-      updateSignals.push("若再連續 1~2 週停滯，才更值得考慮調整劑量或熱量。");
-    } else if (weeklyLoss > 0) {
-      coachNotes.push(`目前每週約下降 ${weeklyLoss} kg，整體仍在往下，只是重點要看掉的是脂肪、水分還是肌肉。`);
-    }
-
-    if (latest.appetite === "下降") {
-      learnedSignals.push("你現在處在食慾較低的時段，最適合把蛋白質、蔬菜與水分補齊，而不是乾脆亂吃或不吃。");
-    } else if (latest.appetite === "偏餓") {
-      learnedSignals.push("你最近偏餓，代表失守風險比平常高，這時候比起硬撐，更需要先把加餐設計好。");
-    }
-
-    if (latest.cravingLevel === "高") {
-      learnedSignals.push("你這幾天嘴饞偏高，真正的策略不是意志力硬撐，而是先把茶葉蛋、毛豆、豆漿、優格這些替代品放在手邊。");
-    } else {
-      learnedSignals.push(`個人化學習目前認為：${personalAI.effectivePattern}。`);
-    }
-
-    learnedSignals.push(`最容易成功的時段／狀態：${personalAI.bestWindow}。`);
-    learnedSignals.push(`最容易失守的時段／狀態：${personalAI.riskWindow}。`);
-
-    coachNotes.push(`體組成目前判讀為「${waterVsFat.title}」；${waterVsFat.detail}`);
-    coachNotes.push(`減脂期判定：${waterVsFat.fatLossStage}，${waterVsFat.waistStatus}。`);
-
-    if (waterVsFat.tag === "肌肉警訊") {
-      updateSignals.push("接下來比起追求更低體重，更要先守住肌肉率：蛋白質分散到三餐，並保留基本阻力訓練。");
-    } else if (waterVsFat.tag === "水分波動") {
-      updateSignals.push("這一段先把量測條件與喝水量固定，不要把短期掉很快全都當成脂肪下降。");
-    } else if (waterVsFat.tag === "漂亮減脂") {
-      updateSignals.push("目前方向其實不錯，接下來最重要的是穩定複製，而不是每幾天就大改一次菜單。");
-    }
-
-    if (latest.sideEffect !== "無") {
-      updateSignals.push(`目前有 ${latest.sideEffect}，策略要先顧舒適度，再談加速減脂。`);
-    }
-
-    if (shotPattern.currentDay > 0) {
-      updateSignals.push(`施打循環目前在第 ${shotPattern.currentDay} 天；低食慾常見在 ${shotPattern.appetiteText}，高嘴饞常見在 ${shotPattern.cravingText}。`);
-    }
-
-    return {
-      headline: coachNotes[0] || "目前策略以穩定執行為主",
-      overview: `系統現在不是只看單一體重，而是會一起參考施打劑量、停滯、食慾、嘴饞、副作用、水分／體脂／肌肉判讀與腰圍變化，來更新你的策略內容。`,
-      coachNotes: Array.from(new Set(coachNotes)).slice(0, 4),
-      learnedSignals: Array.from(new Set(learnedSignals)).slice(0, 4),
-      updateSignals: Array.from(new Set(updateSignals)).slice(0, 4),
-    };
-  }, [latest, currentDoseSeries.dose, currentDoseSeries.shotCount, doseEscalationPlan.title, plateau.isPlateau, weeklyLoss, personalAI.bestWindow, personalAI.riskWindow, personalAI.effectivePattern, waterVsFat.title, waterVsFat.detail, waterVsFat.tag, waterVsFat.fatLossStage, waterVsFat.waistStatus, latest?.appetite, latest?.cravingLevel, latest?.sideEffect, shotPattern.currentDay, shotPattern.appetiteText, shotPattern.cravingText]);
-
-  const doseEscalationPlan = useMemo(() => {
-    if (!shotEntries.length) {
-      return {
-        title: "尚無施打紀錄",
-        subtitle: "先累積施打紀錄後，系統才會判斷是否適合升階",
-        nextDose: "-",
-        ready: false,
-      };
-    }
-
-    const currentDose = num(currentDoseSeries.dose);
-    const sideEffectHeavy =
-      latest &&
-      latest.sideEffect !== "無" &&
-      num(latest.sideEffectSeverity) >= 3;
-    const poorResponse =
-      plateau.isPlateau ||
-      weeklyLoss < 0.3 ||
-      latest?.appetite === "偏餓" ||
-      latest?.cravingLevel === "高";
-    const maxDoseReached = currentDose >= 15;
-    const ready =
-      currentDoseSeries.shotCount >= 4 &&
-      poorResponse &&
-      !sideEffectHeavy &&
-      !maxDoseReached;
-
-    if (maxDoseReached) {
-      return {
-        title: "已在最高常見劑量區間",
-        subtitle: `目前連續 ${currentDoseSeries.shotCount} 針為 ${currentDoseSeries.dose} mg，先觀察飲食與副作用。`,
-        nextDose: `${currentDoseSeries.dose} mg`,
-        ready: false,
-      };
-    }
-
-    if (ready) {
-      return {
-        title: "可考慮升階",
-        subtitle: `目前 ${currentDoseSeries.dose} mg 已連續 ${currentDoseSeries.shotCount} 針，且效果偏弱。`,
-        nextDose: `${currentDose + 2.5} mg`,
-        ready: true,
-      };
-    }
-
-    if (currentDoseSeries.shotCount < 4) {
-      return {
-        title: "建議先打滿 4 針再評估",
-        subtitle: `目前 ${currentDoseSeries.dose} mg 已打 ${currentDoseSeries.shotCount} 針。`,
-        nextDose: `${currentDose + 2.5} mg`,
-        ready: false,
-      };
-    }
-
-    if (sideEffectHeavy) {
-      return {
-        title: "先不要升階",
-        subtitle: "最近副作用偏明顯，先穩定再評估。",
-        nextDose: `${currentDoseSeries.dose} mg`,
-        ready: false,
-      };
-    }
-
-    return {
-      title: "目前先維持",
-      subtitle: `目前 ${currentDoseSeries.dose} mg 已連續 ${currentDoseSeries.shotCount} 針，效果尚可。`,
-      nextDose: `${currentDoseSeries.dose} mg`,
-      ready: false,
-    };
-  }, [shotEntries, currentDoseSeries, plateau.isPlateau, weeklyLoss, latest]);
-
   const penInventorySummary = useMemo(() => {
     const strength = Math.max(0, num(penInventory.penStrength));
     const totalGrids = Math.max(0, num(penInventory.totalGrids || 240));
@@ -4668,6 +4528,147 @@ export default function SimpleTracker() {
       sideEffectText: avgText(sideEffects, "尚未看出固定副作用日"),
     };
   }, [latestShotDate, sortedEntries, settings.shotInterval, shotCycleDay]);
+
+  const doseEscalationPlan = useMemo(() => {
+    if (!shotEntries.length) {
+      return {
+        title: "尚無施打紀錄",
+        subtitle: "先累積施打紀錄後，系統才會判斷是否適合升階",
+        nextDose: "-",
+        ready: false,
+      };
+    }
+
+    const currentDose = num(currentDoseSeries.dose);
+    const sideEffectHeavy =
+      latest &&
+      latest.sideEffect !== "無" &&
+      num(latest.sideEffectSeverity) >= 3;
+    const poorResponse =
+      plateau.isPlateau ||
+      weeklyLoss < 0.3 ||
+      latest?.appetite === "偏餓" ||
+      latest?.cravingLevel === "高";
+    const maxDoseReached = currentDose >= 15;
+    const ready =
+      currentDoseSeries.shotCount >= 4 &&
+      poorResponse &&
+      !sideEffectHeavy &&
+      !maxDoseReached;
+
+    if (maxDoseReached) {
+      return {
+        title: "已在最高常見劑量區間",
+        subtitle: `目前連續 ${currentDoseSeries.shotCount} 針為 ${currentDoseSeries.dose} mg，先觀察飲食與副作用。`,
+        nextDose: `${currentDoseSeries.dose} mg`,
+        ready: false,
+      };
+    }
+
+    if (ready) {
+      return {
+        title: "可考慮升階",
+        subtitle: `目前 ${currentDoseSeries.dose} mg 已連續 ${currentDoseSeries.shotCount} 針，且效果偏弱。`,
+        nextDose: `${currentDose + 2.5} mg`,
+        ready: true,
+      };
+    }
+
+    if (currentDoseSeries.shotCount < 4) {
+      return {
+        title: "建議先打滿 4 針再評估",
+        subtitle: `目前 ${currentDoseSeries.dose} mg 已打 ${currentDoseSeries.shotCount} 針。`,
+        nextDose: `${currentDose + 2.5} mg`,
+        ready: false,
+      };
+    }
+
+    if (sideEffectHeavy) {
+      return {
+        title: "先不要升階",
+        subtitle: "最近副作用偏明顯，先穩定再評估。",
+        nextDose: `${currentDoseSeries.dose} mg`,
+        ready: false,
+      };
+    }
+
+    return {
+      title: "目前先維持",
+      subtitle: `目前 ${currentDoseSeries.dose} mg 已連續 ${currentDoseSeries.shotCount} 針，效果尚可。`,
+      nextDose: `${currentDoseSeries.dose} mg`,
+      ready: false,
+    };
+  }, [shotEntries, currentDoseSeries, plateau.isPlateau, weeklyLoss, latest]);
+
+
+  const strategyIntegratedSummary = useMemo(() => {
+    if (!latest) {
+      return {
+        headline: "先建立第一筆完整紀錄",
+        overview: "目前策略分頁會在你累積幾筆體重、施打、食慾、嘴饞與體組成資料後，才會開始真的變得有用。",
+        coachNotes: ["先固定記錄體重、施打、食慾、嘴饞與副作用"],
+        learnedSignals: ["目前個人化學習仍在暖機中"],
+        updateSignals: ["等累積更多紀錄後，這裡會自動改寫成你的個人策略"],
+      };
+    }
+
+    const coachNotes: string[] = [];
+    const learnedSignals: string[] = [];
+    const updateSignals: string[] = [];
+
+    if (currentDoseSeries.dose !== "-") {
+      coachNotes.push(`目前多半落在 ${currentDoseSeries.dose} mg，已連續 ${currentDoseSeries.shotCount} 針；${doseEscalationPlan.title.replace("。", "")}。`);
+    }
+
+    if (plateau.isPlateau) {
+      coachNotes.push("近兩週有停滯跡象，現在最值得檢查的是外食份量、零食、飲料與活動量，而不是只想著再餓一點。");
+      updateSignals.push("若再連續 1~2 週停滯，才更值得考慮調整劑量或熱量。");
+    } else if (weeklyLoss > 0) {
+      coachNotes.push(`目前每週約下降 ${weeklyLoss} kg，整體仍在往下，只是重點要看掉的是脂肪、水分還是肌肉。`);
+    }
+
+    if (latest.appetite === "下降") {
+      learnedSignals.push("你現在處在食慾較低的時段，最適合把蛋白質、蔬菜與水分補齊，而不是乾脆亂吃或不吃。");
+    } else if (latest.appetite === "偏餓") {
+      learnedSignals.push("你最近偏餓，代表失守風險比平常高，這時候比起硬撐，更需要先把加餐設計好。");
+    }
+
+    if (latest.cravingLevel === "高") {
+      learnedSignals.push("你這幾天嘴饞偏高，真正的策略不是意志力硬撐，而是先把茶葉蛋、毛豆、豆漿、優格這些替代品放在手邊。");
+    } else {
+      learnedSignals.push(`個人化學習目前認為：${personalAI.effectivePattern}。`);
+    }
+
+    learnedSignals.push(`最容易成功的時段／狀態：${personalAI.bestWindow}。`);
+    learnedSignals.push(`最容易失守的時段／狀態：${personalAI.riskWindow}。`);
+
+    coachNotes.push(`體組成目前判讀為「${waterVsFat.title}」；${waterVsFat.detail}`);
+    coachNotes.push(`減脂期判定：${waterVsFat.fatLossStage}，${waterVsFat.waistStatus}。`);
+
+    if (waterVsFat.tag === "肌肉警訊") {
+      updateSignals.push("接下來比起追求更低體重，更要先守住肌肉率：蛋白質分散到三餐，並保留基本阻力訓練。");
+    } else if (waterVsFat.tag === "水分波動") {
+      updateSignals.push("這一段先把量測條件與喝水量固定，不要把短期掉很快全都當成脂肪下降。");
+    } else if (waterVsFat.tag === "漂亮減脂") {
+      updateSignals.push("目前方向其實不錯，接下來最重要的是穩定複製，而不是每幾天就大改一次菜單。");
+    }
+
+    if (latest.sideEffect !== "無") {
+      updateSignals.push(`目前有 ${latest.sideEffect}，策略要先顧舒適度，再談加速減脂。`);
+    }
+
+    if (shotPattern.currentDay > 0) {
+      updateSignals.push(`施打循環目前在第 ${shotPattern.currentDay} 天；低食慾常見在 ${shotPattern.appetiteText}，高嘴饞常見在 ${shotPattern.cravingText}。`);
+    }
+
+    return {
+      headline: coachNotes[0] || "目前策略以穩定執行為主",
+      overview: `系統現在不是只看單一體重，而是會一起參考施打劑量、停滯、食慾、嘴饞、副作用、水分／體脂／肌肉判讀與腰圍變化，來更新你的策略內容。`,
+      coachNotes: Array.from(new Set(coachNotes)).slice(0, 4),
+      learnedSignals: Array.from(new Set(learnedSignals)).slice(0, 4),
+      updateSignals: Array.from(new Set(updateSignals)).slice(0, 4),
+    };
+  }, [latest, currentDoseSeries.dose, currentDoseSeries.shotCount, doseEscalationPlan.title, plateau.isPlateau, weeklyLoss, personalAI.bestWindow, personalAI.riskWindow, personalAI.effectivePattern, waterVsFat.title, waterVsFat.detail, waterVsFat.tag, waterVsFat.fatLossStage, waterVsFat.waistStatus, latest?.appetite, latest?.cravingLevel, latest?.sideEffect, shotPattern.currentDay, shotPattern.appetiteText, shotPattern.cravingText]);
 
   const sideEffectInsight = useMemo(() => {
     const effected = sortedEntries.filter((e) => e.sideEffect !== "無");
