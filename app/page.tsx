@@ -4325,6 +4325,19 @@ export default function SimpleTracker() {
     return base;
   }, [latest]);
 
+  const currentDoseSeries = useMemo(() => {
+    const orderedShotEntries = [...shotEntries].reverse();
+    if (!orderedShotEntries.length)
+      return { dose: "-", shotCount: 0, weeks: 0 };
+    const latestShot = orderedShotEntries[orderedShotEntries.length - 1];
+    let count = 0;
+    for (let i = orderedShotEntries.length - 1; i >= 0; i -= 1) {
+      if (orderedShotEntries[i].dose === latestShot.dose) count += 1;
+      else break;
+    }
+    return { dose: latestShot.dose, shotCount: count, weeks: count };
+  }, [shotEntries]);
+
   const personalAI = useMemo(() => {
     if (sortedEntries.length < 5) {
       return {
@@ -4460,18 +4473,7 @@ export default function SimpleTracker() {
     };
   }, [sortedEntries, latest, currentDoseSeries.dose, currentDoseSeries.shotCount, waterVsFat.title, waterVsFat.fatLossStage, plateau.isPlateau]);
 
-  const currentDoseSeries = useMemo(() => {
-    const orderedShotEntries = [...shotEntries].reverse();
-    if (!orderedShotEntries.length)
-      return { dose: "-", shotCount: 0, weeks: 0 };
-    const latestShot = orderedShotEntries[orderedShotEntries.length - 1];
-    let count = 0;
-    for (let i = orderedShotEntries.length - 1; i >= 0; i -= 1) {
-      if (orderedShotEntries[i].dose === latestShot.dose) count += 1;
-      else break;
-    }
-    return { dose: latestShot.dose, shotCount: count, weeks: count };
-  }, [shotEntries]);
+
 
   const doseEscalationPlan = useMemo(() => {
     if (!shotEntries.length) {
