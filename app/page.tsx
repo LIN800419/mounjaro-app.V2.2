@@ -68,8 +68,11 @@ type SideEffectItem = {
   severity: string;
 };
 
+type DeviceSource = "omron" | "xiaomi";
+
 type Entry = {
   id: string;
+  source?: DeviceSource;
   date: string;
   weight: string;
   bodyFatPct: string;
@@ -1871,6 +1874,67 @@ function isCompleteCompositionEntry(entry?: Partial<Entry> | null) {
   return snap.weight > 0 && snap.bodyFatPct > 0 && snap.muscleRate > 0 && snap.bodyWater > 0;
 }
 
+function resolveEntrySource(entry?: Partial<Entry> | null): DeviceSource | null {
+  const explicit = (entry as any)?.source;
+  if (explicit === "omron" || explicit === "xiaomi") return explicit;
+  if (!entry) return null;
+  const hasAnyValue = [entry.weight, entry.bodyFatPct, entry.fatMass, entry.muscleRate, entry.muscleMass, entry.visceralFat, entry.bodyWater]
+    .some((value) => String(value ?? "").trim() !== "");
+  if (!hasAnyValue) return null;
+  return num(entry.bodyWater) > 0 ? "xiaomi" : "omron";
+}
+
+function getEntriesByDevice(entries: Entry[], source: DeviceSource) {
+  return entries.filter((entry) => resolveEntrySource(entry) === source);
+}
+
+function getLatestDeviceDate(entries: Entry[], source: DeviceSource) {
+  const filtered = getEntriesByDevice(entries, source);
+  if (!filtered.length) return "";
+  return [...filtered].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime())[filtered.length - 1]?.date || "";
+}
+
+function getDeviceJudgement(source: DeviceSource, entries: Entry[]) {
+  const filtered = getEntriesByDevice(entries, source).sort(
+    (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
+  );
+  if (!filtered.length) return null;
+
+  const latest = filtered[filtered.length - 1];
+  const previous = filtered.length >= 2 ? filtered[filtered.length - 2] : null;
+  const latestWeight = num(latest.weight);
+  const latestFatPct = num(latest.bodyFatPct);
+  const latestFatMass = num(latest.fatMass) || +(latestWeight * latestFatPct / 100).toFixed(1);
+  const latestMuscleRate = getMuscleRateFromEntry(latest);
+  const latestMuscleMass = num(latest.muscleMass) || +(latestWeight * latestMuscleRate / 100).toFixed(1);
+  const prevFatPct = previous ? num(previous.bodyFatPct) : 0;
+  const prevFatMass = previous ? (num(previous.fatMass) || +(num(previous.weight) * num(previous.bodyFatPct) / 100).toFixed(1)) : 0;
+  const prevMuscleRate = previous ? getMuscleRateFromEntry(previous) : 0;
+  const prevMuscleMass = previous ? (num(previous.muscleMass) || +(num(previous.weight) * getMuscleRateFromEntry(previous) / 100).toFixed(1)) : 0;
+
+  const lines = [
+    `體重 ${latestWeight ? `${latestWeight} kg` : "-"}` ,
+    `體脂 ${latestFatPct ? `${latestFatPct}%` : "-"}${prevFatPct ? `（較前次 ${latestFatPct >= prevFatPct ? "↑" : "↓"} ${Math.abs(+(latestFatPct - prevFatPct).toFixed(1))}%）` : ""}`,
+    `脂肪重 ${latestFatMass ? `${latestFatMass} kg` : "-"}${prevFatMass ? `（較前次 ${latestFatMass >= prevFatMass ? "↑" : "↓"} ${Math.abs(+(latestFatMass - prevFatMass).toFixed(1))} kg）` : ""}`,
+    `${source === "omron" ? "骨骼肌" : "肌肉"} ${latestMuscleRate ? `${latestMuscleRate}%` : "-"}${prevMuscleRate ? `（較前次 ${latestMuscleRate >= prevMuscleRate ? "↑" : "↓"} ${Math.abs(+(latestMuscleRate - prevMuscleRate).toFixed(1))}%）` : ""}`,
+    `${source === "omron" ? "骨骼肌重" : "肌肉量"} ${latestMuscleMass ? `${latestMuscleMass} kg` : "-"}${prevMuscleMass ? `（較前次 ${latestMuscleMass >= prevMuscleMass ? "↑" : "↓"} ${Math.abs(+(latestMuscleMass - prevMuscleMass).toFixed(1))} kg）` : ""}`,
+  ];
+
+  if (source === "xiaomi") {
+    lines.push(`體水 ${num(latest.bodyWater) ? `${num(latest.bodyWater)}%` : "-"}${previous && num(previous.bodyWater) ? `（較前次 ${num(latest.bodyWater) >= num(previous.bodyWater) ? "↑" : "↓"} ${Math.abs(+(num(latest.bodyWater) - num(previous.bodyWater)).toFixed(1))}%）` : ""}`);
+  } else {
+    lines.push("體水：歐姆龍未提供，短期波動請保守解讀");
+  }
+
+  return {
+    source,
+    title: source === "omron" ? "歐姆龍判讀" : "小米判讀",
+    subtitle: source === "omron" ? "依歐姆龍最近一次有效量測" : "依小米最近一次有效量測",
+    updatedAt: latest.date,
+    lines,
+  };
+}
+
 function getWaistDeltaWithinDays(entries: Entry[], endDate: string, days: number) {
   const waistEntries = entries.filter(
     (entry) => num((entry as any).waist) > 0 && daysBetween(entry.date, endDate) >= 0 && daysBetween(entry.date, endDate) <= days,
@@ -3288,7 +3352,17 @@ export default function SimpleTracker() {
     ? sortedEntries[sortedEntries.length - 1]
     : null;
 
-  const latestWeight = latest ? num(latest.weight) : 0;
+  const latestOmronEntry = useMemo(() => {
+    const filtered = getEntriesByDevice(sortedEntries, "omron");
+    return filtered.length ? filtered[filtered.length - 1] : null;
+  }, [sortedEntries]);
+
+  const latestXiaomiEntry = useMemo(() => {
+    const filtered = getEntriesByDevice(sortedEntries, "xiaomi");
+    return filtered.length ? filtered[filtered.length - 1] : null;
+  }, [sortedEntries]);
+
+  const latestWeight = latestOmronEntry ? num(latestOmronEntry.weight) : latest ? num(latest.weight) : 0;
   const latestBodyFatPct = latest ? num(latest.bodyFatPct) : 0;
   const latestFatMass = latest ? num(latest.fatMass) : 0;
   const latestMuscleRate = latest ? getMuscleRateFromEntry(latest) : 0;
@@ -5119,7 +5193,7 @@ export default function SimpleTracker() {
 
   const dashboardSummary = useMemo(() => {
     return [
-      { label: "今日體重", value: latestWeight ? `${latestWeight} kg` : "-" },
+      { label: "今日體重", value: latestWeight ? `${latestWeight} kg${latestOmronEntry ? "（歐姆龍）" : ""}` : "-" },
       { label: "BMI", value: bmi ? `${bmi}・${bmiLabel}` : "-" },
       {
         label: "下次施打",
@@ -5140,6 +5214,7 @@ export default function SimpleTracker() {
     ];
   }, [
     latestWeight,
+    latestOmronEntry,
     bmi,
     bmiLabel,
     nextShot.text,
@@ -5150,6 +5225,7 @@ export default function SimpleTracker() {
   ]);
 
 
+  const rawEntries = sortedEntries;
   const omronJudgement = useMemo(() => getDeviceJudgement("omron", rawEntries), [rawEntries]);
   const xiaomiJudgement = useMemo(() => getDeviceJudgement("xiaomi", rawEntries), [rawEntries]);
   const latestOmronDate = useMemo(() => getLatestDeviceDate(rawEntries, "omron"), [rawEntries]);
@@ -5323,16 +5399,17 @@ export default function SimpleTracker() {
 
   const add = () => {
     if (!form.weight) return;
+    const inferredSource: DeviceSource = num(form.bodyWater) > 0 ? "xiaomi" : "omron";
     if (editingId) {
       setEntries((prev) =>
         prev.map((item) =>
-          item.id === editingId ? { ...form, id: editingId } : item,
+          item.id === editingId ? { ...form, id: editingId, source: (item.source || inferredSource) } : item,
         ),
       );
       resetForm();
       return;
     }
-    setEntries((prev) => [...prev, { ...form, id: crypto.randomUUID() }]);
+    setEntries((prev) => [...prev, { ...form, id: crypto.randomUUID(), source: inferredSource }]);
     resetForm();
   };
 
@@ -5341,6 +5418,7 @@ export default function SimpleTracker() {
 
     const rows = sortedEntries.map((item) => ({
       日期: item.date || "",
+      資料來源: resolveEntrySource(item) === "omron" ? "歐姆龍" : resolveEntrySource(item) === "xiaomi" ? "小米" : "",
       體重_kg: item.weight || "",
       體脂率_pct: item.bodyFatPct || "",
       脂肪重_kg: item.fatMass || "",
@@ -6051,6 +6129,28 @@ export default function SimpleTracker() {
                   </div>
                 </div>
 
+                {(omronJudgement || xiaomiJudgement) ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {[omronJudgement, xiaomiJudgement].filter(Boolean).map((card) => (
+                      <div
+                        key={card!.source}
+                        className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>{card!.title}</div>
+                          <Badge variant="outline">{card!.updatedAt}</Badge>
+                        </div>
+                        <div className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{card!.subtitle}</div>
+                        <div className="space-y-1">
+                          {card!.lines.map((line) => (
+                            <div key={line} className={`text-[11px] leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>・{line}</div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
                 <div className={`space-y-1 rounded-xl border p-3 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
                   <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>判讀解釋</div>
                   <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-500"}`}>{waterVsFat.explanation}</div>
@@ -6713,22 +6813,6 @@ export default function SimpleTracker() {
                     ))}
                   </CardContent>
                 </Card>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  {[omronJudgement, xiaomiJudgement].filter(Boolean).map((card) => (
-                    <Card key={card!.source}>
-                      <CardHeader>
-                        <CardTitle>{card!.title}</CardTitle>
-                        <div className="text-xs text-slate-500">{card!.subtitle}｜最後更新：{card!.updatedAt}</div>
-                      </CardHeader>
-                      <CardContent className="space-y-2 text-sm">
-                        {card!.lines.map((line) => (
-                          <div key={line}>• {line}</div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
 
                 <MetricLineCard
                   title="體重趨勢"
