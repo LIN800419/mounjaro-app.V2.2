@@ -3414,15 +3414,6 @@ export default function SimpleTracker() {
   const latest = sortedEntries.length
     ? sortedEntries[sortedEntries.length - 1]
     : null;
-  const latestOmron = omronEntries.length
-    ? omronEntries[omronEntries.length - 1]
-    : null;
-  const latestXiaomi = xiaomiEntries.length
-    ? xiaomiEntries[xiaomiEntries.length - 1]
-    : null;
-  const dashboardWeight = latestOmron ? num(latestOmron.weight) : latest ? num(latest.weight) : 0;
-  const omronJudgement = useMemo(() => getDeviceJudgement("omron", rawEntries), [rawEntries]);
-  const xiaomiJudgement = useMemo(() => getDeviceJudgement("xiaomi", rawEntries), [rawEntries]);
 
   const latestWeight = latest ? num(latest.weight) : 0;
   const latestBodyFatPct = latest ? num(latest.bodyFatPct) : 0;
@@ -5255,7 +5246,7 @@ export default function SimpleTracker() {
 
   const dashboardSummary = useMemo(() => {
     return [
-      { label: "今日體重", value: dashboardWeight ? `${dashboardWeight} kg` : "-" },
+      { label: "今日體重", value: latestWeight ? `${latestWeight} kg` : "-" },
       { label: "BMI", value: bmi ? `${bmi}・${bmiLabel}` : "-" },
       {
         label: "下次施打",
@@ -5275,7 +5266,7 @@ export default function SimpleTracker() {
       },
     ];
   }, [
-    dashboardWeight,
+    latestWeight,
     bmi,
     bmiLabel,
     nextShot.text,
@@ -5482,7 +5473,13 @@ export default function SimpleTracker() {
     if (!hasXiaomi && !hasOmron) return;
 
     if (editingId && editingSource) {
-      const nextMeasure = editingSource === "omron" ? omronForm : form;
+      const nextMeasure =
+        editingSource === "omron"
+          ? (omronForm as Partial<Entry>)
+          : (form as Partial<Entry>);
+
+      if (!hasAnyMeasurement(nextMeasure)) return;
+
       setEntries((prev) =>
         prev.map((item) =>
           item.id === editingId
@@ -5500,8 +5497,14 @@ export default function SimpleTracker() {
     }
 
     const newEntries: Entry[] = [];
-    if (hasOmron) newEntries.push(buildEntryPayload("omron", omronForm as Partial<Entry>, form.isShotDay));
-    if (hasXiaomi) newEntries.push(buildEntryPayload("xiaomi", form, form.isShotDay && !hasOmron));
+    if (hasOmron)
+      newEntries.push(
+        buildEntryPayload("omron", omronForm as Partial<Entry>, form.isShotDay),
+      );
+    if (hasXiaomi)
+      newEntries.push(
+        buildEntryPayload("xiaomi", form, form.isShotDay && !hasOmron),
+      );
     setEntries((prev) => [...prev, ...newEntries]);
     resetForm();
   };
@@ -5586,7 +5589,9 @@ export default function SimpleTracker() {
   };
 
   const handleEdit = (item: Entry) => {
-    if ((item.source || "xiaomi") === "omron") {
+    const source = (item.source || "xiaomi") as MeasurementSource;
+
+    if (source === "omron") {
       setOmronForm({
         weight: item.weight || "",
         bodyFatPct: item.bodyFatPct || "",
@@ -5597,37 +5602,77 @@ export default function SimpleTracker() {
         waist: item.waist || "",
         subcutaneousFatPct: item.subcutaneousFatPct || "",
       });
+      setForm({
+        source: "xiaomi",
+        date: item.date,
+        weight: "",
+        bodyFatPct: "",
+        fatMass: "",
+        muscleRate: "",
+        muscleMass: "",
+        visceralFat: "",
+        bodyWater: "",
+        waist: "",
+        dose: item.dose,
+        appetite: item.appetite,
+        cravingLevel: item.cravingLevel,
+        sideEffect: item.sideEffect,
+        sideEffectSeverity: item.sideEffectSeverity || "0",
+        sideEffects:
+          item.sideEffects && item.sideEffects.length
+            ? item.sideEffects
+            : [
+                {
+                  effect: item.sideEffect || "無",
+                  severity: item.sideEffectSeverity || "0",
+                },
+              ],
+        exerciseMin: item.exerciseMin || "0",
+        isShotDay: Boolean(item.isShotDay),
+      });
+    } else {
+      setOmronForm({
+        weight: "",
+        bodyFatPct: "",
+        fatMass: "",
+        muscleRate: "",
+        muscleMass: "",
+        visceralFat: "",
+        waist: "",
+        subcutaneousFatPct: "",
+      });
+      setForm({
+        source: "xiaomi",
+        date: item.date,
+        weight: item.weight,
+        bodyFatPct: item.bodyFatPct || "",
+        fatMass: item.fatMass || "",
+        muscleRate: item.muscleRate || String(getMuscleRateFromEntry(item) || ""),
+        muscleMass: item.muscleMass || "",
+        visceralFat: item.visceralFat || "",
+        bodyWater: item.bodyWater || "",
+        waist: item.waist || "",
+        dose: item.dose,
+        appetite: item.appetite,
+        cravingLevel: item.cravingLevel,
+        sideEffect: item.sideEffect,
+        sideEffectSeverity: item.sideEffectSeverity || "0",
+        sideEffects:
+          item.sideEffects && item.sideEffects.length
+            ? item.sideEffects
+            : [
+                {
+                  effect: item.sideEffect || "無",
+                  severity: item.sideEffectSeverity || "0",
+                },
+              ],
+        exerciseMin: item.exerciseMin || "0",
+        isShotDay: Boolean(item.isShotDay),
+      });
     }
-    setForm({
-      source: "xiaomi",
-      date: item.date,
-      weight: item.weight,
-      bodyFatPct: item.bodyFatPct || "",
-      fatMass: item.fatMass || "",
-      muscleRate: item.muscleRate || String(getMuscleRateFromEntry(item) || ""),
-      muscleMass: item.muscleMass || "",
-      visceralFat: item.visceralFat || "",
-      bodyWater: item.bodyWater || "",
-      waist: item.waist || "",
-      dose: item.dose,
-      appetite: item.appetite,
-      cravingLevel: item.cravingLevel,
-      sideEffect: item.sideEffect,
-      sideEffectSeverity: item.sideEffectSeverity || "0",
-      sideEffects:
-        item.sideEffects && item.sideEffects.length
-          ? item.sideEffects
-          : [
-              {
-                effect: item.sideEffect || "無",
-                severity: item.sideEffectSeverity || "0",
-              },
-            ],
-      exerciseMin: item.exerciseMin || "0",
-      isShotDay: Boolean(item.isShotDay),
-    });
+
     setEditingId(item.id);
-    setEditingSource((item.source || "xiaomi") as MeasurementSource);
+    setEditingSource(source);
   };
 
   const handleDelete = (id: string) => {
@@ -5967,7 +6012,7 @@ export default function SimpleTracker() {
                       今日體重
                     </div>
                     <div className="text-2xl font-semibold">
-                      {dashboardWeight || "-"}
+                      {latestWeight || "-"}
                     </div>
                     <div className="text-xs text-slate-500">kg</div>
                   </CardContent>
@@ -6241,54 +6286,6 @@ export default function SimpleTracker() {
                   <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-500"}`}>{waterVsFat.explanation}</div>
                 </div>
 
-                {(omronJudgement || xiaomiJudgement) ? (
-                  <div className="grid gap-3">
-                    {omronJudgement ? (
-                      <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>{omronJudgement.title}</div>
-                            <div className={`text-[11px] mt-1 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{omronJudgement.subtitle}</div>
-                          </div>
-                          <Badge variant="outline">更新至 {omronJudgement.updatedAt}</Badge>
-                        </div>
-                        <div className="space-y-2">
-                          {omronJudgement.lines.map((line, index) => (
-                            <div
-                              key={`omron-${index}-${line}`}
-                              className={`rounded-lg px-2.5 py-2 text-xs leading-5 ${isDark ? "bg-slate-800 text-slate-200" : "bg-slate-50 text-slate-600"}`}
-                            >
-                              ・{line}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {xiaomiJudgement ? (
-                      <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>{xiaomiJudgement.title}</div>
-                            <div className={`text-[11px] mt-1 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{xiaomiJudgement.subtitle}</div>
-                          </div>
-                          <Badge variant="outline">更新至 {xiaomiJudgement.updatedAt}</Badge>
-                        </div>
-                        <div className="space-y-2">
-                          {xiaomiJudgement.lines.map((line, index) => (
-                            <div
-                              key={`xiaomi-${index}-${line}`}
-                              className={`rounded-lg px-2.5 py-2 text-xs leading-5 ${isDark ? "bg-slate-800 text-slate-200" : "bg-slate-50 text-slate-600"}`}
-                            >
-                              ・{line}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
                 {waterVsFat.reasons?.length ? (
                   <details className={`rounded-xl border p-3 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
                     <summary className={`cursor-pointer text-xs font-medium list-none flex items-center justify-between ${isDark ? "text-slate-100" : "text-slate-700"}`}>
@@ -6497,7 +6494,7 @@ export default function SimpleTracker() {
 
                 <div className="rounded-lg border bg-white p-2">
                   <div className="text-slate-500 text-xs">目前</div>
-                  <div className="font-semibold">{dashboardWeight || "-"} kg</div>
+                  <div className="font-semibold">{latestWeight || "-"} kg</div>
                 </div>
 
                 <div className="rounded-lg border bg-white p-2">
@@ -6825,12 +6822,12 @@ export default function SimpleTracker() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button onClick={add} className="w-full">
+                    <Button type="button" onClick={add} className="w-full">
                       <Plus className="w-4 h-4 mr-1" />
                       {editingId ? "更新紀錄" : "新增紀錄"}
                     </Button>
                     {editingId ? (
-                      <Button variant="outline" onClick={resetForm}>
+                      <Button type="button" variant="outline" onClick={resetForm}>
                         取消
                       </Button>
                     ) : null}
