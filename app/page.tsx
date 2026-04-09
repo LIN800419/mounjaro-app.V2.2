@@ -3029,8 +3029,6 @@ export default function SimpleTracker() {
                   muscleMass: String(item?.muscleMass || ""),
                   skeletalMuscleRate: String(item?.skeletalMuscleRate || ""),
                   skeletalMuscleMass: String(item?.skeletalMuscleMass || ""),
-                  skeletalMuscleRate: String(item?.skeletalMuscleRate || ""),
-                  skeletalMuscleMass: String(item?.skeletalMuscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
                   bodyWater: String(item?.bodyWater || item?.water || ""),
                   waist: String(item?.waist || ""),
