@@ -5330,7 +5330,21 @@ export default function SimpleTracker() {
     else setXiaomiForm((prev) => updater(prev));
   };
 
-  const addSideEffectField = (source: DeviceSource) => {
+  const updateSharedForms = (
+    updater: (prev: Omit<Entry, "id">) => Omit<Entry, "id">,
+  ) => {
+    setXiaomiForm((prev) => updater(prev));
+    setOmronForm((prev) => updater(prev));
+  };
+
+  const addSideEffectField = (source?: DeviceSource) => {
+    if (!source) {
+      updateSharedForms((prev) => ({
+        ...prev,
+        sideEffects: [...prev.sideEffects, { effect: "無", severity: "0" }],
+      }));
+      return;
+    }
     updateDeviceForm(source, (prev) => ({
       ...prev,
       sideEffects: [...prev.sideEffects, { effect: "無", severity: "0" }],
@@ -5338,12 +5352,12 @@ export default function SimpleTracker() {
   };
 
   const updateSideEffectField = (
-    source: DeviceSource,
+    source: DeviceSource | undefined,
     index: number,
     field: "effect" | "severity",
     value: string,
   ) => {
-    updateDeviceForm(source, (prev) => {
+    const applyUpdate = (prev: Omit<Entry, "id">) => {
       const nextSideEffects = prev.sideEffects.map((item, i) =>
         i === index ? { ...item, [field]: value } : item,
       );
@@ -5356,11 +5370,16 @@ export default function SimpleTracker() {
         sideEffect: (firstActive?.effect || "無") as SideEffect,
         sideEffectSeverity: String(firstActive?.severity || "0"),
       };
-    });
+    };
+    if (!source) {
+      updateSharedForms(applyUpdate);
+      return;
+    }
+    updateDeviceForm(source, applyUpdate);
   };
 
-  const removeSideEffectField = (source: DeviceSource, index: number) => {
-    updateDeviceForm(source, (prev) => {
+  const removeSideEffectField = (source: DeviceSource | undefined, index: number) => {
+    const applyUpdate = (prev: Omit<Entry, "id">) => {
       const nextSideEffects =
         prev.sideEffects.length === 1
           ? [{ effect: "無", severity: "0" } as SideEffectItem]
@@ -5374,7 +5393,12 @@ export default function SimpleTracker() {
         sideEffect: (firstActive?.effect || "無") as SideEffect,
         sideEffectSeverity: String(firstActive?.severity || "0"),
       };
-    });
+    };
+    if (!source) {
+      updateSharedForms(applyUpdate);
+      return;
+    }
+    updateDeviceForm(source, applyUpdate);
   };
 
   const resetForm = (source?: DeviceSource) => {
@@ -6407,309 +6431,70 @@ export default function SimpleTracker() {
                 <CardHeader>
                   <CardTitle>{editingId ? "編輯紀錄" : "新增紀錄"}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-1 gap-3">
-                    <div className="space-y-2">
-                      <Label>日期</Label>
-                      <Input
-                        type="date"
-                        value={xiaomiForm.date}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, date: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>體重 (kg)</Label>
-                      <Input
-                        placeholder="體重"
-                        value={xiaomiForm.weight}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, weight: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>體脂率 (%)</Label>
-                      <Input
-                        placeholder="例如 32.5"
-                        value={xiaomiForm.bodyFatPct}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, bodyFatPct: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>脂肪重 (kg)</Label>
-                      <Input
-                        placeholder="例如 15.7"
-                        value={xiaomiForm.fatMass}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, fatMass: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>肌肉率 (%)</Label>
-                      <Input
-                        placeholder="例如 52.1"
-                        value={xiaomiForm.muscleRate}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, muscleRate: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>肌肉量 (kg)</Label>
-                      <Input
-                        placeholder="例如 54.2"
-                        value={xiaomiForm.muscleMass}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, muscleMass: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>內臟脂肪</Label>
-                      <Input
-                        placeholder="例如 12"
-                        value={xiaomiForm.visceralFat}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, visceralFat: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>水分 (%)</Label>
-                      <Input
-                        placeholder="例如 46.8"
-                        value={xiaomiForm.bodyWater}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, bodyWater: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>腰圍 (cm)</Label>
-                      <Input
-                        placeholder="例如 96.5"
-                        value={xiaomiForm.waist}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, waist: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3">
-                    <div className="space-y-2">
-                      <Label>劑量</Label>
-                      <Select
-                        value={xiaomiForm.dose}
-                        onValueChange={(v) => setXiaomiForm({ ...xiaomiForm, dose: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="2.5">2.5 mg</SelectItem>
-                          <SelectItem value="5">5 mg</SelectItem>
-                          <SelectItem value="7.5">7.5 mg</SelectItem>
-                          <SelectItem value="10">10 mg</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>運動分鐘數</Label>
-                      <Input
-                        placeholder="例如 30"
-                        value={xiaomiForm.exerciseMin}
-                        onChange={(e) =>
-                          setXiaomiForm({ ...xiaomiForm, exerciseMin: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between border rounded-xl p-3">
-                    <div>
-                      <div className="font-medium">本次為施打日</div>
-                      <div className="text-xs text-slate-500">
-                        勾選後，這筆紀錄才會被拿來計算下次施打日
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={xiaomiForm.isShotDay}
-                      onChange={(e) =>
-                        setXiaomiForm({ ...xiaomiForm, isShotDay: e.target.checked })
-                      }
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3">
-                    <div className="space-y-2">
-                      <Label>食慾</Label>
-                      <Select
-                        value={xiaomiForm.appetite}
-                        onValueChange={(v: Appetite) =>
-                          setXiaomiForm({ ...xiaomiForm, appetite: v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="下降">下降</SelectItem>
-                          <SelectItem value="正常">正常</SelectItem>
-                          <SelectItem value="偏餓">偏餓</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>嘴饞程度</Label>
-                      <Select
-                        value={xiaomiForm.cravingLevel}
-                        onValueChange={(v: CravingLevel) =>
-                          setXiaomiForm({ ...xiaomiForm, cravingLevel: v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="低">低</SelectItem>
-                          <SelectItem value="中">中</SelectItem>
-                          <SelectItem value="高">高</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label>副作用</Label>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => addSideEffectField("xiaomi")}
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          新增
-                        </Button>
-                      </div>
-
-                      <div className="space-y-3">
-                        {xiaomiForm.sideEffects.map((item, index) => (
-                          <div
-                            key={index}
-                            className="rounded-xl border border-slate-200 bg-white p-3 space-y-3"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="text-sm font-medium text-slate-600">
-                                副作用 {index + 1}
-                              </div>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => removeSideEffectField("xiaomi", index)}
-                              >
-                                刪除
-                              </Button>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>副作用項目</Label>
-                              <Select
-                                value={item.effect}
-                                onValueChange={(v: SideEffect) =>
-                                  updateSideEffectField("xiaomi", index, "effect", v)
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="無">無</SelectItem>
-                                  <SelectItem value="噁心">噁心</SelectItem>
-                                  <SelectItem value="便秘">便秘</SelectItem>
-                                  <SelectItem value="腹脹">腹脹</SelectItem>
-                                  <SelectItem value="腹瀉">腹瀉</SelectItem>
-                                  <SelectItem value="胃食道逆流">
-                                    胃食道逆流
-                                  </SelectItem>
-                                  <SelectItem value="頭暈">頭暈</SelectItem>
-                                  <SelectItem value="疲倦">疲倦</SelectItem>
-                                  <SelectItem value="注射部位不適">
-                                    注射部位不適
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>不適程度（0~5）</Label>
-                              <Input
-                                placeholder="0~5"
-                                value={item.severity}
-                                onChange={(e) =>
-                                  updateSideEffectField("xiaomi", index, "severity", e.target.value)
-                                }
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button onClick={() => addDeviceEntry("xiaomi")} className="w-full">
-                      <Plus className="w-4 h-4 mr-1" />
-                      {editingId && editingSource === "xiaomi" ? "更新小米紀錄" : "新增小米紀錄"}
-                    </Button>
-                    {editingId ? (
-                      <Button variant="outline" onClick={() => resetForm("xiaomi")}>
-                        取消
-                      </Button>
-                    ) : null}
-                  </div>
-
+                <CardContent className="space-y-4">
                   <div className="rounded-xl border p-4 space-y-3 bg-slate-50 border-slate-200">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-semibold">歐姆龍紀錄</div>
-                        <div className="text-xs text-slate-500">歐姆龍無體水分欄位，主供體重 / 體脂 / 骨骼肌 / 內臟脂肪紀錄。</div>
+                        <div className="text-xs text-slate-500">主供體重、體脂、骨骼肌、內臟脂肪紀錄。</div>
                       </div>
                       <Badge variant="secondary">歐姆龍</Badge>
                     </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2"><Label>體重 (kg)</Label><Input placeholder="例如 100.8" value={omronForm.weight} onChange={(e) => setOmronForm({ ...omronForm, weight: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>體脂率 (%)</Label><Input placeholder="例如 30.3" value={omronForm.bodyFatPct} onChange={(e) => setOmronForm({ ...omronForm, bodyFatPct: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>體脂重 (kg)</Label><Input placeholder="例如 30.5" value={omronForm.fatMass} onChange={(e) => setOmronForm({ ...omronForm, fatMass: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>骨骼肌率 (%)</Label><Input placeholder="例如 29.9" value={omronForm.muscleRate} onChange={(e) => setOmronForm({ ...omronForm, muscleRate: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>骨骼肌重 (kg)</Label><Input placeholder="例如 30.1" value={omronForm.muscleMass} onChange={(e) => setOmronForm({ ...omronForm, muscleMass: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>內臟脂肪</Label><Input placeholder="例如 20.5" value={omronForm.visceralFat} onChange={(e) => setOmronForm({ ...omronForm, visceralFat: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>腰圍 (cm)</Label><Input placeholder="例如 96.5" value={omronForm.waist} onChange={(e) => setOmronForm({ ...omronForm, waist: e.target.value })} /></div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border p-4 space-y-3 bg-white border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold">小米紀錄</div>
+                        <div className="text-xs text-slate-500">可記錄體水分，延續原本的水分 / 體脂 / 肌肉判讀。</div>
+                      </div>
+                      <Badge variant="outline">小米</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2"><Label>體重 (kg)</Label><Input placeholder="體重" value={xiaomiForm.weight} onChange={(e) => setXiaomiForm({ ...xiaomiForm, weight: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>體脂率 (%)</Label><Input placeholder="例如 32.5" value={xiaomiForm.bodyFatPct} onChange={(e) => setXiaomiForm({ ...xiaomiForm, bodyFatPct: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>脂肪重 (kg)</Label><Input placeholder="例如 15.7" value={xiaomiForm.fatMass} onChange={(e) => setXiaomiForm({ ...xiaomiForm, fatMass: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>肌肉率 (%)</Label><Input placeholder="例如 52.1" value={xiaomiForm.muscleRate} onChange={(e) => setXiaomiForm({ ...xiaomiForm, muscleRate: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>肌肉量 (kg)</Label><Input placeholder="例如 54.2" value={xiaomiForm.muscleMass} onChange={(e) => setXiaomiForm({ ...xiaomiForm, muscleMass: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>內臟脂肪</Label><Input placeholder="例如 12" value={xiaomiForm.visceralFat} onChange={(e) => setXiaomiForm({ ...xiaomiForm, visceralFat: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>水分 (%)</Label><Input placeholder="例如 46.8" value={xiaomiForm.bodyWater} onChange={(e) => setXiaomiForm({ ...xiaomiForm, bodyWater: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>腰圍 (cm)</Label><Input placeholder="例如 96.5" value={xiaomiForm.waist} onChange={(e) => setXiaomiForm({ ...xiaomiForm, waist: e.target.value })} /></div>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4 space-y-3">
+                    <div>
+                      <div className="font-semibold">共用欄位</div>
+                      <div className="text-xs text-slate-500">照原本順序放在下面，會同步套用到歐姆龍與小米新增紀錄。</div>
+                    </div>
+
                     <div className="grid grid-cols-1 gap-3">
                       <div className="space-y-2">
                         <Label>日期</Label>
-                        <Input type="date" value={omronForm.date} onChange={(e) => setOmronForm({ ...omronForm, date: e.target.value })} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>體重 (kg)</Label>
-                        <Input placeholder="例如 100.8" value={omronForm.weight} onChange={(e) => setOmronForm({ ...omronForm, weight: e.target.value })} />
+                        <Input
+                          type="date"
+                          value={xiaomiForm.date}
+                          onChange={(e) => updateSharedForms((prev) => ({ ...prev, date: e.target.value }))}
+                        />
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2"><Label>體脂率 (%)</Label><Input value={omronForm.bodyFatPct} onChange={(e) => setOmronForm({ ...omronForm, bodyFatPct: e.target.value })} /></div>
-                      <div className="space-y-2"><Label>體脂重 (kg)</Label><Input value={omronForm.fatMass} onChange={(e) => setOmronForm({ ...omronForm, fatMass: e.target.value })} /></div>
-                      <div className="space-y-2"><Label>骨骼肌率 (%)</Label><Input value={omronForm.muscleRate} onChange={(e) => setOmronForm({ ...omronForm, muscleRate: e.target.value })} /></div>
-                      <div className="space-y-2"><Label>骨骼肌重 (kg)</Label><Input value={omronForm.muscleMass} onChange={(e) => setOmronForm({ ...omronForm, muscleMass: e.target.value })} /></div>
-                      <div className="space-y-2"><Label>內臟脂肪</Label><Input value={omronForm.visceralFat} onChange={(e) => setOmronForm({ ...omronForm, visceralFat: e.target.value })} /></div>
-                      <div className="space-y-2"><Label>腰圍 (cm)</Label><Input value={omronForm.waist} onChange={(e) => setOmronForm({ ...omronForm, waist: e.target.value })} /></div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>劑量</Label>
-                        <Select value={omronForm.dose} onValueChange={(v) => setOmronForm({ ...omronForm, dose: v })}>
+                        <Select
+                          value={xiaomiForm.dose}
+                          onValueChange={(v) => updateSharedForms((prev) => ({ ...prev, dose: v }))}
+                        >
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="2.5">2.5 mg</SelectItem>
@@ -6719,24 +6504,127 @@ export default function SimpleTracker() {
                           </SelectContent>
                         </Select>
                       </div>
+
                       <div className="space-y-2">
                         <Label>運動分鐘數</Label>
-                        <Input value={omronForm.exerciseMin} onChange={(e) => setOmronForm({ ...omronForm, exerciseMin: e.target.value })} />
+                        <Input
+                          placeholder="例如 30"
+                          value={xiaomiForm.exerciseMin}
+                          onChange={(e) => updateSharedForms((prev) => ({ ...prev, exerciseMin: e.target.value }))}
+                        />
                       </div>
                     </div>
-                    <div className="flex items-center justify-between border rounded-xl p-3 bg-white">
+
+                    <div className="flex items-center justify-between border rounded-xl p-3">
                       <div>
                         <div className="font-medium">本次為施打日</div>
                         <div className="text-xs text-slate-500">勾選後，這筆紀錄才會被拿來計算下次施打日</div>
                       </div>
-                      <input type="checkbox" checked={omronForm.isShotDay} onChange={(e) => setOmronForm({ ...omronForm, isShotDay: e.target.checked })} />
+                      <input
+                        type="checkbox"
+                        checked={xiaomiForm.isShotDay}
+                        onChange={(e) => updateSharedForms((prev) => ({ ...prev, isShotDay: e.target.checked }))}
+                      />
                     </div>
-                    <div className="flex gap-2">
-                      <Button onClick={() => addDeviceEntry("omron")} className="w-full">
-                        <Plus className="w-4 h-4 mr-1" />
-                        {editingId && editingSource === "omron" ? "更新歐姆龍紀錄" : "新增歐姆龍紀錄"}
-                      </Button>
-                      {editingId && editingSource === "omron" ? <Button variant="outline" onClick={() => resetForm("omron")}>取消</Button> : null}
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>食慾</Label>
+                        <Select
+                          value={xiaomiForm.appetite}
+                          onValueChange={(v: Appetite) => updateSharedForms((prev) => ({ ...prev, appetite: v }))}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="下降">下降</SelectItem>
+                            <SelectItem value="正常">正常</SelectItem>
+                            <SelectItem value="偏餓">偏餓</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>嘴饞程度</Label>
+                        <Select
+                          value={xiaomiForm.cravingLevel}
+                          onValueChange={(v: CravingLevel) => updateSharedForms((prev) => ({ ...prev, cravingLevel: v }))}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="低">低</SelectItem>
+                            <SelectItem value="中">中</SelectItem>
+                            <SelectItem value="高">高</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label>副作用</Label>
+                        <Button type="button" size="sm" onClick={() => addSideEffectField()}>
+                          <Plus className="w-4 h-4 mr-1" />新增
+                        </Button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {xiaomiForm.sideEffects.map((item, index) => (
+                          <div key={index} className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-medium text-slate-600">副作用 {index + 1}</div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => removeSideEffectField(undefined, index)}
+                                disabled={xiaomiForm.sideEffects.length === 1}
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />刪除
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              <div className="space-y-2">
+                                <Label>項目</Label>
+                                <Select value={item.effect} onValueChange={(v: SideEffect) => updateSideEffectField(undefined, index, "effect", v)}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="無">無</SelectItem>
+                                    <SelectItem value="噁心">噁心</SelectItem>
+                                    <SelectItem value="便秘">便秘</SelectItem>
+                                    <SelectItem value="腹脹">腹脹</SelectItem>
+                                    <SelectItem value="腹瀉">腹瀉</SelectItem>
+                                    <SelectItem value="胃食道逆流">胃食道逆流</SelectItem>
+                                    <SelectItem value="頭暈">頭暈</SelectItem>
+                                    <SelectItem value="疲倦">疲倦</SelectItem>
+                                    <SelectItem value="注射部位不適">注射部位不適</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>嚴重度（0~5）</Label>
+                                <Input value={item.severity} onChange={(e) => updateSideEffectField(undefined, index, "severity", e.target.value)} />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="flex gap-2">
+                        <Button onClick={() => addDeviceEntry("omron")} className="w-full">
+                          <Plus className="w-4 h-4 mr-1" />
+                          {editingId && editingSource === "omron" ? "更新歐姆龍紀錄" : "新增歐姆龍紀錄"}
+                        </Button>
+                        {editingId && editingSource === "omron" ? <Button variant="outline" onClick={() => resetForm("omron")}>取消</Button> : null}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={() => addDeviceEntry("xiaomi")} className="w-full">
+                          <Plus className="w-4 h-4 mr-1" />
+                          {editingId && editingSource === "xiaomi" ? "更新小米紀錄" : "新增小米紀錄"}
+                        </Button>
+                        {editingId ? <Button variant="outline" onClick={() => resetForm("xiaomi")}>取消</Button> : null}
+                      </div>
                     </div>
                   </div>
 
