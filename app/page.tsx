@@ -3316,7 +3316,7 @@ export default function SimpleTracker() {
   const latestDeviceSwitchEntry = useMemo(() => {
     const switched = sortedEntries.filter((entry) => entry.isDeviceSwitchDay);
     return switched.length ? switched[switched.length - 1] : null;
-  }, [sortedEntries]);
+  }, [compositionEntries]);
 
   const deviceSwitchDate = latestDeviceSwitchEntry?.date || "";
   const currentDevice: DeviceType = (latestDeviceSwitchEntry?.deviceType || "xiaomi") as DeviceType;
@@ -3376,7 +3376,7 @@ export default function SimpleTracker() {
     const days = daysBetween(first.date, last.date);
     if (!days) return 0;
     return +(((num(first.weight) - num(last.weight)) / days) * 7).toFixed(2);
-  }, [sortedEntries]);
+  }, [compositionEntries]);
 
   const recent7Delta = useMemo(() => {
     if (sortedEntries.length < 2) return 0;
@@ -5037,13 +5037,13 @@ export default function SimpleTracker() {
   };
 
   const weeklySummary = useMemo(() => {
-    if (!sortedEntries.length) {
+    if (!compositionEntries.length) {
       return buildPeriodSummary("本週", []);
     }
 
-    const latestEntry = sortedEntries[sortedEntries.length - 1];
+    const latestEntry = compositionEntries[compositionEntries.length - 1];
     const weekStart = getWeekStart(latestEntry.date);
-    const windowEntries = sortedEntries.filter(
+    const windowEntries = compositionEntries.filter(
       (entry) =>
         daysBetween(weekStart, entry.date) >= 0 &&
         daysBetween(entry.date, latestEntry.date) >= 0,
@@ -5055,7 +5055,7 @@ export default function SimpleTracker() {
   const summaryYearOptions = useMemo(() => {
     const years = Array.from(
       new Set(
-        sortedEntries
+        compositionEntries
           .map((entry) => entry.date.split("-")[0])
           .filter(Boolean),
       ),
@@ -5063,14 +5063,14 @@ export default function SimpleTracker() {
 
     if (!years.length && selectedSummaryYear) return [selectedSummaryYear];
     return years;
-  }, [sortedEntries, selectedSummaryYear]);
+  }, [compositionEntries, selectedSummaryYear]);
 
   const monthSummary = useMemo(() => {
     if (!selectedSummaryYear || !selectedSummaryMonth) {
       return buildPeriodSummary("月份", []);
     }
 
-    const windowEntries = sortedEntries.filter((entry) => {
+    const windowEntries = compositionEntries.filter((entry) => {
       const [year, month] = entry.date.split("-");
       return year === selectedSummaryYear && month === selectedSummaryMonth;
     });
@@ -5079,10 +5079,10 @@ export default function SimpleTracker() {
       `${selectedSummaryYear} 年 ${Number(selectedSummaryMonth)} 月`,
       windowEntries,
     );
-  }, [sortedEntries, selectedSummaryYear, selectedSummaryMonth]);
+  }, [compositionEntries, selectedSummaryYear, selectedSummaryMonth]);
 
   const overallSummary = useMemo(() => {
-    return buildPeriodSummary("整體", sortedEntries);
+    return buildPeriodSummary("整體", compositionEntries);
   }, [sortedEntries]);
 
 
