@@ -3313,10 +3313,10 @@ export default function SimpleTracker() {
     );
   }, [entries]);
 
-  const latestDeviceSwitchEntry = useMemo(() => {
+  const latestDeviceSwitchEntry = useMemo<Entry | null>(() => {
     const switched = sortedEntries.filter((entry) => entry.isDeviceSwitchDay);
     return switched.length ? switched[switched.length - 1] : null;
-  }, [compositionEntries]);
+  }, [sortedEntries]);
 
   const deviceSwitchDate = latestDeviceSwitchEntry?.date || "";
   const currentDevice: DeviceType = (latestDeviceSwitchEntry?.deviceType || "xiaomi") as DeviceType;
