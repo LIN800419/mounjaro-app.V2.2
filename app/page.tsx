@@ -5473,13 +5473,7 @@ export default function SimpleTracker() {
     if (!hasXiaomi && !hasOmron) return;
 
     if (editingId && editingSource) {
-      const nextMeasure =
-        editingSource === "omron"
-          ? (omronForm as Partial<Entry>)
-          : (form as Partial<Entry>);
-
-      if (!hasAnyMeasurement(nextMeasure)) return;
-
+      const nextMeasure = editingSource === "omron" ? omronForm : form;
       setEntries((prev) =>
         prev.map((item) =>
           item.id === editingId
@@ -5497,14 +5491,8 @@ export default function SimpleTracker() {
     }
 
     const newEntries: Entry[] = [];
-    if (hasOmron)
-      newEntries.push(
-        buildEntryPayload("omron", omronForm as Partial<Entry>, form.isShotDay),
-      );
-    if (hasXiaomi)
-      newEntries.push(
-        buildEntryPayload("xiaomi", form, form.isShotDay && !hasOmron),
-      );
+    if (hasOmron) newEntries.push(buildEntryPayload("omron", omronForm as Partial<Entry>, form.isShotDay));
+    if (hasXiaomi) newEntries.push(buildEntryPayload("xiaomi", form, form.isShotDay && !hasOmron));
     setEntries((prev) => [...prev, ...newEntries]);
     resetForm();
   };
@@ -5589,9 +5577,7 @@ export default function SimpleTracker() {
   };
 
   const handleEdit = (item: Entry) => {
-    const source = (item.source || "xiaomi") as MeasurementSource;
-
-    if (source === "omron") {
+    if ((item.source || "xiaomi") === "omron") {
       setOmronForm({
         weight: item.weight || "",
         bodyFatPct: item.bodyFatPct || "",
@@ -5602,77 +5588,37 @@ export default function SimpleTracker() {
         waist: item.waist || "",
         subcutaneousFatPct: item.subcutaneousFatPct || "",
       });
-      setForm({
-        source: "xiaomi",
-        date: item.date,
-        weight: "",
-        bodyFatPct: "",
-        fatMass: "",
-        muscleRate: "",
-        muscleMass: "",
-        visceralFat: "",
-        bodyWater: "",
-        waist: "",
-        dose: item.dose,
-        appetite: item.appetite,
-        cravingLevel: item.cravingLevel,
-        sideEffect: item.sideEffect,
-        sideEffectSeverity: item.sideEffectSeverity || "0",
-        sideEffects:
-          item.sideEffects && item.sideEffects.length
-            ? item.sideEffects
-            : [
-                {
-                  effect: item.sideEffect || "無",
-                  severity: item.sideEffectSeverity || "0",
-                },
-              ],
-        exerciseMin: item.exerciseMin || "0",
-        isShotDay: Boolean(item.isShotDay),
-      });
-    } else {
-      setOmronForm({
-        weight: "",
-        bodyFatPct: "",
-        fatMass: "",
-        muscleRate: "",
-        muscleMass: "",
-        visceralFat: "",
-        waist: "",
-        subcutaneousFatPct: "",
-      });
-      setForm({
-        source: "xiaomi",
-        date: item.date,
-        weight: item.weight,
-        bodyFatPct: item.bodyFatPct || "",
-        fatMass: item.fatMass || "",
-        muscleRate: item.muscleRate || String(getMuscleRateFromEntry(item) || ""),
-        muscleMass: item.muscleMass || "",
-        visceralFat: item.visceralFat || "",
-        bodyWater: item.bodyWater || "",
-        waist: item.waist || "",
-        dose: item.dose,
-        appetite: item.appetite,
-        cravingLevel: item.cravingLevel,
-        sideEffect: item.sideEffect,
-        sideEffectSeverity: item.sideEffectSeverity || "0",
-        sideEffects:
-          item.sideEffects && item.sideEffects.length
-            ? item.sideEffects
-            : [
-                {
-                  effect: item.sideEffect || "無",
-                  severity: item.sideEffectSeverity || "0",
-                },
-              ],
-        exerciseMin: item.exerciseMin || "0",
-        isShotDay: Boolean(item.isShotDay),
-      });
     }
-
+    setForm({
+      source: "xiaomi",
+      date: item.date,
+      weight: item.weight,
+      bodyFatPct: item.bodyFatPct || "",
+      fatMass: item.fatMass || "",
+      muscleRate: item.muscleRate || String(getMuscleRateFromEntry(item) || ""),
+      muscleMass: item.muscleMass || "",
+      visceralFat: item.visceralFat || "",
+      bodyWater: item.bodyWater || "",
+      waist: item.waist || "",
+      dose: item.dose,
+      appetite: item.appetite,
+      cravingLevel: item.cravingLevel,
+      sideEffect: item.sideEffect,
+      sideEffectSeverity: item.sideEffectSeverity || "0",
+      sideEffects:
+        item.sideEffects && item.sideEffects.length
+          ? item.sideEffects
+          : [
+              {
+                effect: item.sideEffect || "無",
+                severity: item.sideEffectSeverity || "0",
+              },
+            ],
+      exerciseMin: item.exerciseMin || "0",
+      isShotDay: Boolean(item.isShotDay),
+    });
     setEditingId(item.id);
-    setEditingSource(source);
+    setEditingSource((item.source || "xiaomi") as MeasurementSource);
   };
 
   const handleDelete = (id: string) => {
@@ -6822,12 +6768,12 @@ export default function SimpleTracker() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button type="button" onClick={add} className="w-full">
+                    <Button onClick={add} className="w-full">
                       <Plus className="w-4 h-4 mr-1" />
                       {editingId ? "更新紀錄" : "新增紀錄"}
                     </Button>
                     {editingId ? (
-                      <Button type="button" variant="outline" onClick={resetForm}>
+                      <Button variant="outline" onClick={resetForm}>
                         取消
                       </Button>
                     ) : null}
