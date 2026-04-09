@@ -68,8 +68,11 @@ type SideEffectItem = {
   severity: string;
 };
 
+type DeviceSource = "omron" | "xiaomi";
+
 type Entry = {
   id: string;
+  source?: DeviceSource;
   date: string;
   weight: string;
   bodyFatPct: string;
@@ -1849,90 +1852,55 @@ function getMuscleRateFromEntry(entry?: Partial<Entry> | null) {
   return getMuscleRateValue(num(entry.weight), num(entry.muscleMass));
 }
 
-type DeviceKind = "omron" | "xiaomi";
 
-function inferDeviceFromEntry(entry?: Partial<Entry> | null): DeviceKind {
-  if (!entry) return "omron";
-  return num(entry.bodyWater) > 0 ? "xiaomi" : "omron";
+function inferEntrySource(entry?: Partial<Entry> | null): DeviceSource {
+  if ((entry as any)?.source === "omron" || (entry as any)?.source === "xiaomi") return (entry as any).source as DeviceSource;
+  return num((entry as any)?.bodyWater) > 0 ? "xiaomi" : "omron";
 }
 
-function getDeviceEntries(entries: Entry[], device: DeviceKind) {
-  return entries.filter((entry) => inferDeviceFromEntry(entry) === device);
+function getLatestDeviceEntry(entries: Entry[], source: DeviceSource) {
+  const filtered = entries.filter((entry) => inferEntrySource(entry) === source);
+  return filtered.length ? filtered[filtered.length - 1] : null;
 }
 
-function getLatestDeviceDate(entries: Entry[], device: DeviceKind) {
-  const filtered = getDeviceEntries(entries, device);
-  if (!filtered.length) return "";
-  return filtered[filtered.length - 1]?.date || "";
+function getLatestDeviceDate(entries: Entry[], source: DeviceSource) {
+  const latest = getLatestDeviceEntry(entries, source);
+  return latest?.date || "";
 }
 
-function getDeviceJudgement(device: DeviceKind, entries: Entry[]) {
-  const filtered = getDeviceEntries(entries, device);
-  if (!filtered.length) {
-    return {
-      hasData: false,
-      title: device === "omron" ? "歐姆龍暫無資料" : "小米暫無資料",
-      detail:
-        device === "omron"
-          ? "尚無歐姆龍紀錄，暫不進行設備判讀。"
-          : "尚無小米紀錄，暫不進行設備判讀。",
-      bullets: [] as string[],
-    };
-  }
-
-  const last = filtered[filtered.length - 1];
-  const prev = filtered.length >= 2 ? filtered[filtered.length - 2] : null;
-  const weight = num(last.weight);
-  const fatPct = num(last.bodyFatPct);
-  const muscleRate = getMuscleRateFromEntry(last);
-  const water = num(last.bodyWater);
-  const fatMass = num(last.fatMass) || (weight && fatPct ? +((weight * fatPct) / 100).toFixed(1) : 0);
-  const muscleMass = num(last.muscleMass) || (weight && muscleRate ? +((weight * muscleRate) / 100).toFixed(1) : 0);
-
-  const fatDelta = prev ? +(fatPct - num(prev.bodyFatPct)).toFixed(1) : 0;
-  const muscleDelta = prev ? +(muscleRate - getMuscleRateFromEntry(prev)).toFixed(1) : 0;
-  const waterDelta = prev ? +(water - num(prev.bodyWater)).toFixed(1) : 0;
-
-  const bullets: string[] = [];
-  if (device === "omron") {
-    bullets.push(`體脂率 ${fatPct ? `${fatPct}%` : "-"}｜脂肪重 ${fatMass ? `${fatMass} kg` : "-"}`);
-    bullets.push(`骨骼肌率 ${muscleRate ? `${muscleRate}%` : "-"}｜骨骼肌重 ${muscleMass ? `${muscleMass} kg` : "-"}`);
-    if (prev) {
-      bullets.push(`相較前次：體脂 ${fatDelta > 0 ? '+' : ''}${fatDelta}%｜骨骼肌 ${muscleDelta > 0 ? '+' : ''}${muscleDelta}%`);
-    }
-    return {
-      hasData: true,
-      title: "歐姆龍判讀",
-      detail: prev
-        ? (fatDelta <= -0.3 && muscleDelta >= -0.2
-            ? "近期較像脂肪下降、肌肉大致守住。"
-            : muscleDelta <= -0.3 && fatDelta >= -0.1
-              ? "近期要注意骨骼肌下滑，先優先保肌。"
-              : "近期有波動，歐姆龍未提供體水分，請保守解讀短期變化。")
-        : "已有歐姆龍資料，待後續累積更多紀錄後可更準確判讀。",
-      bullets,
-    };
-  }
-
-  bullets.push(`體脂率 ${fatPct ? `${fatPct}%` : "-"}｜肌肉率 ${muscleRate ? `${muscleRate}%` : "-"}`);
-  bullets.push(`體水分 ${water ? `${water}%` : "-"}`);
+function getDeviceJudgement(source: DeviceSource, entries: Entry[]) {
+  const deviceEntries = entries.filter((entry) => inferEntrySource(entry) === source);
+  if (!deviceEntries.length) return null;
+  const latest = deviceEntries[deviceEntries.length - 1];
+  const prev = deviceEntries.length >= 2 ? deviceEntries[deviceEntries.length - 2] : null;
+  const weight = num(latest.weight);
+  const bodyFat = num(latest.bodyFatPct);
+  const muscle = num(latest.muscleMass);
+  const weightDelta = prev ? +(weight - num(prev.weight)).toFixed(1) : 0;
+  const fatDelta = prev ? +(bodyFat - num(prev.bodyFatPct)).toFixed(1) : 0;
+  const muscleDelta = prev ? +(muscle - num(prev.muscleMass)).toFixed(1) : 0;
+  const lines: string[] = [];
   if (prev) {
-    bullets.push(`相較前次：水分 ${waterDelta > 0 ? '+' : ''}${waterDelta}%｜體脂 ${fatDelta > 0 ? '+' : ''}${fatDelta}%｜肌肉 ${muscleDelta > 0 ? '+' : ''}${muscleDelta}%`);
+    lines.push(`體重：${weightDelta > 0 ? "+" : ""}${weightDelta} kg`);
+    lines.push(`體脂率：${fatDelta > 0 ? "+" : ""}${fatDelta}%`);
+    if (muscle > 0 || num(prev.muscleMass) > 0) lines.push(`肌肉量：${muscleDelta > 0 ? "+" : ""}${muscleDelta} kg`);
+  } else {
+    lines.push("目前僅有 1 筆資料，先累積第 2 筆再看變化。");
+  }
+  if (source === "omron") {
+    lines.push("歐姆龍未提供體水分，短期波動請保守解讀。");
+  } else {
+    const water = num(latest.bodyWater);
+    if (water > 0) lines.push(`體水分：${water}%`);
   }
   return {
-    hasData: true,
-    title: "小米判讀",
-    detail: prev
-      ? (waterDelta <= -0.8 && fatDelta >= 0
-          ? "近期較像水分先下降，短期體脂波動先保守看。"
-          : fatDelta <= -0.3 && muscleDelta >= -0.2
-            ? "近期較像正常減脂，肌肉率暫時有守住。"
-            : "近期數值有波動，建議再觀察 3~7 天趨勢。")
-      : "已有小米資料，待後續累積更多紀錄後可更準確判讀。",
-    bullets,
+    source,
+    title: source === "omron" ? "歐姆龍判讀" : "小米判讀",
+    subtitle: source === "omron" ? "依歐姆龍最近有效紀錄" : "依小米最近有效紀錄",
+    updatedAt: latest.date,
+    lines,
   };
 }
-
 
 type CompositionSnapshot = {
   weight: number;
@@ -2933,6 +2901,20 @@ export default function SimpleTracker() {
     isShotDay: false,
   });
 
+  const createEmptyMeasurementForm = () => ({
+    weight: "",
+    bodyFatPct: "",
+    fatMass: "",
+    muscleRate: "",
+    muscleMass: "",
+    visceralFat: "",
+    bodyWater: "",
+    waist: "",
+  });
+
+  const [omronForm, setOmronForm] = useState(createEmptyMeasurementForm);
+  const [xiaomiForm, setXiaomiForm] = useState(createEmptyMeasurementForm);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [penStrength, setPenStrength] = useState("10");
   const [targetDose, setTargetDose] = useState("2.5");
@@ -3101,6 +3083,7 @@ export default function SimpleTracker() {
                   sideEffects: normalizedSideEffects,
                   exerciseMin: item?.exerciseMin || "0",
                   isShotDay: Boolean(item?.isShotDay),
+                  source: (item?.source as DeviceSource) || undefined,
                 };
               })
             : [];
@@ -3227,6 +3210,7 @@ export default function SimpleTracker() {
                   sideEffects: fallbackSideEffects,
                   exerciseMin: String(item?.exerciseMin || "0"),
                   isShotDay: Boolean(item?.isShotDay),
+                  source: (item?.source as DeviceSource) || undefined,
                 };
               })
             : localEntries;
@@ -3368,13 +3352,13 @@ export default function SimpleTracker() {
     );
   }, [entries]);
 
+  const rawEntries = sortedEntries;
+  const latestOmronEntry = useMemo(() => getLatestDeviceEntry(sortedEntries, "omron"), [sortedEntries]);
+  const latestXiaomiEntry = useMemo(() => getLatestDeviceEntry(sortedEntries, "xiaomi"), [sortedEntries]);
+
   const latest = sortedEntries.length
     ? sortedEntries[sortedEntries.length - 1]
     : null;
-  const omronEntries = useMemo(() => getDeviceEntries(sortedEntries, "omron"), [sortedEntries]);
-  const xiaomiEntries = useMemo(() => getDeviceEntries(sortedEntries, "xiaomi"), [sortedEntries]);
-  const latestOmronEntry = omronEntries.length ? omronEntries[omronEntries.length - 1] : null;
-  const latestXiaomiEntry = xiaomiEntries.length ? xiaomiEntries[xiaomiEntries.length - 1] : null;
 
   const latestWeight = latestOmronEntry ? num(latestOmronEntry.weight) : latest ? num(latest.weight) : 0;
   const latestBodyFatPct = latest ? num(latest.bodyFatPct) : 0;
@@ -5238,10 +5222,10 @@ export default function SimpleTracker() {
   ]);
 
 
-  const omronJudgement = useMemo(() => getDeviceJudgement("omron", sortedEntries), [sortedEntries]);
-  const xiaomiJudgement = useMemo(() => getDeviceJudgement("xiaomi", sortedEntries), [sortedEntries]);
-  const latestOmronDate = useMemo(() => getLatestDeviceDate(sortedEntries, "omron"), [sortedEntries]);
-  const latestXiaomiDate = useMemo(() => getLatestDeviceDate(sortedEntries, "xiaomi"), [sortedEntries]);
+  const omronJudgement = useMemo(() => getDeviceJudgement("omron", rawEntries), [rawEntries]);
+  const xiaomiJudgement = useMemo(() => getDeviceJudgement("xiaomi", rawEntries), [rawEntries]);
+  const latestOmronDate = useMemo(() => getLatestDeviceDate(rawEntries, "omron"), [rawEntries]);
+  const latestXiaomiDate = useMemo(() => getLatestDeviceDate(rawEntries, "xiaomi"), [rawEntries]);
 
   const chartSourceNotes = useMemo(() => {
     return [
@@ -5386,6 +5370,11 @@ export default function SimpleTracker() {
     });
   };
 
+  const resetMeasurementForms = () => {
+    setOmronForm(createEmptyMeasurementForm());
+    setXiaomiForm(createEmptyMeasurementForm());
+  };
+
   const resetForm = () => {
     setForm({
       date: today,
@@ -5406,22 +5395,57 @@ export default function SimpleTracker() {
       exerciseMin: "0",
       isShotDay: false,
     });
+    resetMeasurementForms();
     setEditingId(null);
   };
 
-  const add = () => {
-    if (!form.weight) return;
+  const buildEntryFromMeasurement = (measurement: ReturnType<typeof createEmptyMeasurementForm>, source: DeviceSource, id?: string): Entry => {
+    const weight = measurement.weight;
+    const bodyFatPct = measurement.bodyFatPct;
+    const fatMass = measurement.fatMass || (num(weight) > 0 && num(bodyFatPct) > 0 ? ((num(weight) * num(bodyFatPct)) / 100).toFixed(1) : "");
+    const muscleRate = measurement.muscleRate;
+    const muscleMass = measurement.muscleMass || (num(weight) > 0 && num(muscleRate) > 0 ? ((num(weight) * num(muscleRate)) / 100).toFixed(1) : "");
+    return {
+      id: id || crypto.randomUUID(),
+      source,
+      date: form.date,
+      weight,
+      bodyFatPct,
+      fatMass: String(fatMass || ""),
+      muscleRate,
+      muscleMass: String(muscleMass || ""),
+      visceralFat: measurement.visceralFat,
+      bodyWater: source === "xiaomi" ? measurement.bodyWater : "",
+      waist: measurement.waist,
+      dose: form.dose,
+      appetite: form.appetite,
+      cravingLevel: form.cravingLevel,
+      sideEffect: form.sideEffect,
+      sideEffectSeverity: form.sideEffectSeverity,
+      sideEffects: form.sideEffects,
+      exerciseMin: form.exerciseMin,
+      isShotDay: form.isShotDay,
+    };
+  };
+
+  const add = (source?: DeviceSource) => {
+    const activeSource = source || (num(xiaomiForm.bodyWater) > 0 ? "xiaomi" : "omron");
+    const measurement = activeSource === "omron" ? omronForm : xiaomiForm;
+    if (!measurement.weight) return;
+
     if (editingId) {
       setEntries((prev) =>
         prev.map((item) =>
-          item.id === editingId ? { ...form, id: editingId } : item,
+          item.id === editingId ? buildEntryFromMeasurement(measurement, activeSource, editingId) : item,
         ),
       );
       resetForm();
       return;
     }
-    setEntries((prev) => [...prev, { ...form, id: crypto.randomUUID() }]);
-    resetForm();
+
+    setEntries((prev) => [...prev, buildEntryFromMeasurement(measurement, activeSource)]);
+    if (activeSource === "omron") setOmronForm(createEmptyMeasurementForm());
+    if (activeSource === "xiaomi") setXiaomiForm(createEmptyMeasurementForm());
   };
 
   const exportEntriesToExcel = () => {
@@ -5429,6 +5453,7 @@ export default function SimpleTracker() {
 
     const rows = sortedEntries.map((item) => ({
       日期: item.date || "",
+      資料來源: inferEntrySource(item) === "omron" ? "歐姆龍" : "小米",
       體重_kg: item.weight || "",
       體脂率_pct: item.bodyFatPct || "",
       脂肪重_kg: item.fatMass || "",
@@ -5503,15 +5528,16 @@ export default function SimpleTracker() {
   };
 
   const handleEdit = (item: Entry) => {
+    const source = inferEntrySource(item);
     setForm({
       date: item.date,
-      weight: item.weight,
-      bodyFatPct: item.bodyFatPct || "",
-      fatMass: item.fatMass || "",
-      muscleRate: item.muscleRate || String(getMuscleRateFromEntry(item) || ""),
-      muscleMass: item.muscleMass || "",
-      visceralFat: item.visceralFat || "",
-      bodyWater: item.bodyWater || "",
+      weight: "",
+      bodyFatPct: "",
+      fatMass: "",
+      muscleRate: "",
+      muscleMass: "",
+      visceralFat: "",
+      bodyWater: "",
       waist: item.waist || "",
       dose: item.dose,
       appetite: item.appetite,
@@ -5530,6 +5556,23 @@ export default function SimpleTracker() {
       exerciseMin: item.exerciseMin || "0",
       isShotDay: Boolean(item.isShotDay),
     });
+    const measurement = {
+      weight: item.weight,
+      bodyFatPct: item.bodyFatPct || "",
+      fatMass: item.fatMass || "",
+      muscleRate: item.muscleRate || String(getMuscleRateFromEntry(item) || ""),
+      muscleMass: item.muscleMass || "",
+      visceralFat: item.visceralFat || "",
+      bodyWater: item.bodyWater || "",
+      waist: item.waist || "",
+    };
+    if (source === "omron") {
+      setOmronForm(measurement);
+      setXiaomiForm(createEmptyMeasurementForm());
+    } else {
+      setXiaomiForm(measurement);
+      setOmronForm(createEmptyMeasurementForm());
+    }
     setEditingId(item.id);
   };
 
@@ -5870,7 +5913,7 @@ export default function SimpleTracker() {
                       今日體重
                     </div>
                     <div className="text-2xl font-semibold">
-                      {latestWeight ? latestWeight : "-"}
+                      {latestWeight || "-"}
                     </div>
                     <div className="text-xs text-slate-500">kg</div>
                   </CardContent>
@@ -6081,7 +6124,23 @@ export default function SimpleTracker() {
                       {waterVsFat.fatLossStage}
                     </Badge>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="grid gap-3 md:grid-cols-2">
+                  {[omronJudgement, xiaomiJudgement].filter(Boolean).map((card) => (
+                    <div key={card!.source} className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>{card!.title}</div>
+                        <span className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{card!.updatedAt}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {card!.lines.map((line) => (
+                          <div key={line} className={`text-[11px] leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>• {line}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{waterVsFat.fatLossStageConfidenceText}</Badge>
                     <span className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{waterVsFat.waistStatus}</span>
                   </div>
@@ -6122,38 +6181,6 @@ export default function SimpleTracker() {
                 <div className="text-sm font-medium">{waterVsFat.title}</div>
                 <div className="text-sm text-slate-500">
                   {waterVsFat.detail}
-                </div>
-
-                <div className="grid grid-cols-1 gap-3">
-                  <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/60 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-medium text-slate-500">{omronJudgement.title}</div>
-                      <Badge variant="outline">{latestOmronDate || "尚無資料"}</Badge>
-                    </div>
-                    <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>{omronJudgement.detail}</div>
-                    {omronJudgement.bullets?.length ? (
-                      <div className="space-y-1">
-                        {omronJudgement.bullets.map((item, index) => (
-                          <div key={`omron-${index}`} className={`text-[11px] leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>・{item}</div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/60 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-medium text-slate-500">{xiaomiJudgement.title}</div>
-                      <Badge variant="outline">{latestXiaomiDate || "尚無資料"}</Badge>
-                    </div>
-                    <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>{xiaomiJudgement.detail}</div>
-                    {xiaomiJudgement.bullets?.length ? (
-                      <div className="space-y-1">
-                        {xiaomiJudgement.bullets.map((item, index) => (
-                          <div key={`xiaomi-${index}`} className={`text-[11px] leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>・{item}</div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
                 </div>
 
                 <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/70 border-slate-700" : "bg-slate-50"}`}>
@@ -6384,7 +6411,7 @@ export default function SimpleTracker() {
 
                 <div className="rounded-lg border bg-white p-2">
                   <div className="text-slate-500 text-xs">目前</div>
-                  <div className="font-semibold">{latestWeight ? latestWeight : "-"} kg</div>
+                  <div className="font-semibold">{latestWeight || "-"} kg</div>
                 </div>
 
                 <div className="rounded-lg border bg-white p-2">
@@ -6447,380 +6474,120 @@ export default function SimpleTracker() {
                 <CardHeader>
                   <CardTitle>{editingId ? "編輯紀錄" : "新增紀錄"}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-1 gap-3">
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>日期</Label>
-                      <Input
-                        type="date"
-                        value={form.date}
-                        onChange={(e) =>
-                          setForm({ ...form, date: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>體重 (kg)</Label>
-                      <Input
-                        placeholder="體重"
-                        value={form.weight}
-                        onChange={(e) =>
-                          setForm({ ...form, weight: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>體脂率 (%)</Label>
-                      <Input
-                        placeholder="例如 32.5"
-                        value={form.bodyFatPct}
-                        onChange={(e) =>
-                          setForm({ ...form, bodyFatPct: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>脂肪重 (kg)</Label>
-                      <Input
-                        placeholder="例如 15.7"
-                        value={form.fatMass}
-                        onChange={(e) =>
-                          setForm({ ...form, fatMass: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>肌肉率 (%)</Label>
-                      <Input
-                        placeholder="例如 52.1"
-                        value={form.muscleRate}
-                        onChange={(e) =>
-                          setForm({ ...form, muscleRate: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>肌肉量 (kg)</Label>
-                      <Input
-                        placeholder="例如 54.2"
-                        value={form.muscleMass}
-                        onChange={(e) =>
-                          setForm({ ...form, muscleMass: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>內臟脂肪</Label>
-                      <Input
-                        placeholder="例如 12"
-                        value={form.visceralFat}
-                        onChange={(e) =>
-                          setForm({ ...form, visceralFat: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>水分 (%)</Label>
-                      <Input
-                        placeholder="例如 46.8"
-                        value={form.bodyWater}
-                        onChange={(e) =>
-                          setForm({ ...form, bodyWater: e.target.value })
-                        }
-                      />
+                      <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
                     </div>
                     <div className="space-y-2">
                       <Label>腰圍 (cm)</Label>
-                      <Input
-                        placeholder="例如 96.5"
-                        value={form.waist}
-                        onChange={(e) =>
-                          setForm({ ...form, waist: e.target.value })
-                        }
-                      />
+                      <Input placeholder="例如 96.5" value={form.waist} onChange={(e) => setForm({ ...form, waist: e.target.value })} />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="rounded-xl border p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-semibold">歐姆龍紀錄</div>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setOmronForm(createEmptyMeasurementForm())}>清空</Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2"><Label>體重 (kg)</Label><Input value={omronForm.weight} onChange={(e) => setOmronForm({ ...omronForm, weight: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>體脂率 (%)</Label><Input value={omronForm.bodyFatPct} onChange={(e) => setOmronForm({ ...omronForm, bodyFatPct: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>體脂重 (kg)</Label><Input value={omronForm.fatMass} onChange={(e) => setOmronForm({ ...omronForm, fatMass: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>骨骼肌率 (%)</Label><Input value={omronForm.muscleRate} onChange={(e) => setOmronForm({ ...omronForm, muscleRate: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>骨骼肌重 (kg)</Label><Input value={omronForm.muscleMass} onChange={(e) => setOmronForm({ ...omronForm, muscleMass: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>內臟脂肪</Label><Input value={omronForm.visceralFat} onChange={(e) => setOmronForm({ ...omronForm, visceralFat: e.target.value })} /></div>
+                    </div>
+                    <Button type="button" onClick={() => add("omron")}>{editingId ? "更新歐姆龍紀錄" : "新增歐姆龍紀錄"}</Button>
+                  </div>
+
+                  <div className="rounded-xl border p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-semibold">小米紀錄</div>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setXiaomiForm(createEmptyMeasurementForm())}>清空</Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2"><Label>體重 (kg)</Label><Input value={xiaomiForm.weight} onChange={(e) => setXiaomiForm({ ...xiaomiForm, weight: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>體脂率 (%)</Label><Input value={xiaomiForm.bodyFatPct} onChange={(e) => setXiaomiForm({ ...xiaomiForm, bodyFatPct: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>脂肪重 (kg)</Label><Input value={xiaomiForm.fatMass} onChange={(e) => setXiaomiForm({ ...xiaomiForm, fatMass: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>肌肉率 (%)</Label><Input value={xiaomiForm.muscleRate} onChange={(e) => setXiaomiForm({ ...xiaomiForm, muscleRate: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>肌肉量 (kg)</Label><Input value={xiaomiForm.muscleMass} onChange={(e) => setXiaomiForm({ ...xiaomiForm, muscleMass: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>內臟脂肪</Label><Input value={xiaomiForm.visceralFat} onChange={(e) => setXiaomiForm({ ...xiaomiForm, visceralFat: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>水分 (%)</Label><Input value={xiaomiForm.bodyWater} onChange={(e) => setXiaomiForm({ ...xiaomiForm, bodyWater: e.target.value })} /></div>
+                    </div>
+                    <Button type="button" onClick={() => add("xiaomi")}>{editingId ? "更新小米紀錄" : "新增小米紀錄"}</Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>劑量</Label>
-                      <Select
-                        value={form.dose}
-                        onValueChange={(v) => setForm({ ...form, dose: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Select value={form.dose} onValueChange={(v) => setForm({ ...form, dose: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="2.5">2.5 mg</SelectItem>
-                          <SelectItem value="5">5 mg</SelectItem>
-                          <SelectItem value="7.5">7.5 mg</SelectItem>
-                          <SelectItem value="10">10 mg</SelectItem>
+                          {["2.5", "5", "7.5", "10", "12.5", "15"].map((dose) => (
+                            <SelectItem key={dose} value={dose}>{dose} mg</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
-
                     <div className="space-y-2">
                       <Label>運動分鐘數</Label>
-                      <Input
-                        placeholder="例如 30"
-                        value={form.exerciseMin}
-                        onChange={(e) =>
-                          setForm({ ...form, exerciseMin: e.target.value })
-                        }
-                      />
+                      <Input value={form.exerciseMin} onChange={(e) => setForm({ ...form, exerciseMin: e.target.value })} />
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between border rounded-xl p-3">
-                    <div>
-                      <div className="font-medium">本次為施打日</div>
-                      <div className="text-xs text-slate-500">
-                        勾選後，這筆紀錄才會被拿來計算下次施打日
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={form.isShotDay}
-                      onChange={(e) =>
-                        setForm({ ...form, isShotDay: e.target.checked })
-                      }
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>食慾</Label>
-                      <Select
-                        value={form.appetite}
-                        onValueChange={(v: Appetite) =>
-                          setForm({ ...form, appetite: v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Select value={form.appetite} onValueChange={(v) => setForm({ ...form, appetite: v as Appetite })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="下降">下降</SelectItem>
-                          <SelectItem value="正常">正常</SelectItem>
-                          <SelectItem value="偏餓">偏餓</SelectItem>
+                          {["下降", "正常", "偏餓"].map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
-
                     <div className="space-y-2">
                       <Label>嘴饞程度</Label>
-                      <Select
-                        value={form.cravingLevel}
-                        onValueChange={(v: CravingLevel) =>
-                          setForm({ ...form, cravingLevel: v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Select value={form.cravingLevel} onValueChange={(v) => setForm({ ...form, cravingLevel: v as CravingLevel })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="低">低</SelectItem>
-                          <SelectItem value="中">中</SelectItem>
-                          <SelectItem value="高">高</SelectItem>
+                          {["低", "中", "高"].map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label>副作用</Label>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={addSideEffectField}
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          新增
-                        </Button>
-                      </div>
-
-                      <div className="space-y-3">
-                        {form.sideEffects.map((item, index) => (
-                          <div
-                            key={index}
-                            className="rounded-xl border border-slate-200 bg-white p-3 space-y-3"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="text-sm font-medium text-slate-600">
-                                副作用 {index + 1}
-                              </div>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => removeSideEffectField(index)}
-                              >
-                                刪除
-                              </Button>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>副作用項目</Label>
-                              <Select
-                                value={item.effect}
-                                onValueChange={(v: SideEffect) =>
-                                  updateSideEffectField(index, "effect", v)
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="無">無</SelectItem>
-                                  <SelectItem value="噁心">噁心</SelectItem>
-                                  <SelectItem value="便秘">便秘</SelectItem>
-                                  <SelectItem value="腹脹">腹脹</SelectItem>
-                                  <SelectItem value="腹瀉">腹瀉</SelectItem>
-                                  <SelectItem value="胃食道逆流">
-                                    胃食道逆流
-                                  </SelectItem>
-                                  <SelectItem value="頭暈">頭暈</SelectItem>
-                                  <SelectItem value="疲倦">疲倦</SelectItem>
-                                  <SelectItem value="注射部位不適">
-                                    注射部位不適
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>不適程度（0~5）</Label>
-                              <Input
-                                placeholder="0~5"
-                                value={item.severity}
-                                onChange={(e) =>
-                                  updateSideEffectField(
-                                    index,
-                                    "severity",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <Button onClick={add} className="w-full">
-                      <Plus className="w-4 h-4 mr-1" />
-                      {editingId ? "更新紀錄" : "新增紀錄"}
-                    </Button>
-                    {editingId ? (
-                      <Button variant="outline" onClick={resetForm}>
-                        取消
-                      </Button>
-                    ) : null}
+                  <div className="flex items-center gap-2">
+                    <input id="isShotDay" type="checkbox" checked={form.isShotDay} onChange={(e) => setForm({ ...form, isShotDay: e.target.checked })} />
+                    <Label htmlFor="isShotDay">今日為施打日</Label>
                   </div>
 
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-2">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div className="font-medium text-emerald-900">Excel 匯出</div>
-                        <div className="text-xs text-emerald-800">僅匯出紀錄資料，不含圖表；可用 Excel 開啟。</div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={exportEntriesToExcel}
-                        disabled={!sortedEntries.length}
-                        className="border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-100"
-                      >
-                        Excel 匯出
-                      </Button>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label>副作用</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={addSideEffectField}>新增副作用</Button>
                     </div>
-                    <div className="text-xs text-emerald-900">
-                      小提示：匯出的資料可直接丟給 ChatGPT，請它分析體重、體脂、腰圍、劑量與減脂趨勢。
-                    </div>
-                  </div>
-
-                  <div className="border-t pt-4 space-y-3">
-                    <div className="text-sm font-medium">歷史紀錄</div>
-                    {sortedEntries.length === 0 ? (
-                      <div className="text-sm text-slate-500">
-                        目前還沒有紀錄
-                      </div>
-                    ) : (
-                      [...sortedEntries].reverse().map((item) => (
-                        <div
-                          key={item.id}
-                          className="rounded-xl border p-3 space-y-2"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="text-sm space-y-1">
-                              <div className="font-medium">
-                                {item.date} ・ {item.dose} mg{" "}
-                                {item.isShotDay ? "・ 施打日" : ""}
-                              </div>
-                              <div>體重：{item.weight} kg</div>
-                              <div>
-                                體脂：{item.bodyFatPct || "-"}%｜脂肪重：
-                                {item.fatMass || "-"} kg｜肌肉率：
-                                {getMuscleRateFromEntry(item) || "-"}%｜肌肉量：
-                                {item.muscleMass || "-"} kg
-                              </div>
-                              <div>
-                                內臟脂肪：{item.visceralFat || "-"}｜水分：
-                                {item.bodyWater || "-"}%｜腰圍：{item.waist || "-"} cm
-                              </div>
-                              <div>
-                                食慾：{item.appetite}｜嘴饞：{item.cravingLevel}
-                              </div>
-                              <div>
-                                副作用：
-                                {item.sideEffects && item.sideEffects.length
-                                  ? item.sideEffects
-                                      .map(
-                                        (se) =>
-                                          `${se.effect}（${se.severity || 0}/5）`,
-                                      )
-                                      .join("、")
-                                  : `${item.sideEffect}（${item.sideEffectSeverity || 0}/5）`}
-                                ｜ 運動：{item.exerciseMin || 0} 分鐘
-                              </div>
-                              {item.isShotDay ? (
-                                <div className="text-emerald-600">
-                                  💉 施打日
-                                </div>
-                              ) : null}
-                            </div>
-
-                            <div className="flex gap-2">
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => handleEdit(item)}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => handleDelete(item.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
+                    {form.sideEffects.map((item, index) => (
+                      <div key={index} className="grid grid-cols-[1fr_120px_40px] gap-2 items-end">
+                        <div className="space-y-2">
+                          <Select value={item.effect} onValueChange={(v) => updateSideEffectField(index, "effect", v)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {["無","噁心","便秘","腹脹","腹瀉","胃食道逆流","頭暈","疲倦","注射部位不適"].map((effect) => <SelectItem key={effect} value={effect}>{effect}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </div>
-                      ))
-                    )}
+                        <div className="space-y-2"><Input placeholder="0~5" value={item.severity} onChange={(e) => updateSideEffectField(index, "severity", e.target.value)} /></div>
+                        <Button type="button" variant="outline" size="icon" onClick={() => removeSideEffectField(index)}><Trash2 className="w-4 h-4" /></Button>
+                      </div>
+                    ))}
                   </div>
+
+                  {editingId ? <Button variant="outline" onClick={resetForm}>取消編輯</Button> : null}
                 </CardContent>
               </Card>
             </TabsContent>
-
             <TabsContent value="chart">
               <div className="grid gap-4 grid-cols-1">
                 <Card>
@@ -6833,22 +6600,6 @@ export default function SimpleTracker() {
                     ))}
                   </CardContent>
                 </Card>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  {[omronJudgement, xiaomiJudgement].filter(Boolean).map((card) => (
-                    <Card key={card!.source}>
-                      <CardHeader>
-                        <CardTitle>{card!.title}</CardTitle>
-                        <div className="text-xs text-slate-500">{card!.subtitle}｜最後更新：{card!.updatedAt}</div>
-                      </CardHeader>
-                      <CardContent className="space-y-2 text-sm">
-                        {card!.lines.map((line) => (
-                          <div key={line}>• {line}</div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
 
                 <MetricLineCard
                   title="體重趨勢"
