@@ -1849,85 +1849,87 @@ function getMuscleRateFromEntry(entry?: Partial<Entry> | null) {
   return getMuscleRateValue(num(entry.weight), num(entry.muscleMass));
 }
 
-function getEntryDevice(entry?: Partial<Entry> | null): "omron" | "xiaomi" | null {
-  if (!entry) return null;
-  return num((entry as any).bodyWater) > 0 ? "xiaomi" : "omron";
+type DeviceKind = "omron" | "xiaomi";
+
+function inferDeviceFromEntry(entry?: Partial<Entry> | null): DeviceKind {
+  if (!entry) return "omron";
+  return num(entry.bodyWater) > 0 ? "xiaomi" : "omron";
 }
 
-function getLatestDeviceEntry(entries: Entry[], device: "omron" | "xiaomi") {
-  const matched = [...entries]
-    .filter((entry) => getEntryDevice(entry) === device)
-    .sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
-  return matched.length ? matched[matched.length - 1] : null;
+function getDeviceEntries(entries: Entry[], device: DeviceKind) {
+  return entries.filter((entry) => inferDeviceFromEntry(entry) === device);
 }
 
-function getLatestDeviceDate(entries: Entry[], device: "omron" | "xiaomi") {
-  return getLatestDeviceEntry(entries, device)?.date || "";
+function getLatestDeviceDate(entries: Entry[], device: DeviceKind) {
+  const filtered = getDeviceEntries(entries, device);
+  if (!filtered.length) return "";
+  return filtered[filtered.length - 1]?.date || "";
 }
 
-function getDeviceJudgement(device: "omron" | "xiaomi", entries: Entry[]) {
-  const matched = [...entries]
-    .filter((entry) => getEntryDevice(entry) === device)
-    .sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
-
-  if (!matched.length) return null;
-
-  const latest = matched[matched.length - 1];
-  const previous = matched.length >= 2 ? matched[matched.length - 2] : null;
-
-  const latestWeight = num(latest.weight);
-  const latestBodyFatPct = num(latest.bodyFatPct);
-  const latestFatMass = num(latest.fatMass);
-  const latestMuscleRate = getMuscleRateFromEntry(latest);
-  const latestMuscleMass = num(latest.muscleMass);
-  const latestVisceralFat = num(latest.visceralFat);
-  const latestBodyWater = num(latest.bodyWater);
-
-  const prevWeight = num(previous?.weight);
-  const prevBodyFatPct = num(previous?.bodyFatPct);
-  const prevFatMass = num(previous?.fatMass);
-  const prevMuscleRate = getMuscleRateFromEntry(previous);
-  const prevMuscleMass = num(previous?.muscleMass);
-  const prevVisceralFat = num(previous?.visceralFat);
-  const prevBodyWater = num(previous?.bodyWater);
-
-  const lines: string[] = [];
-
-  if (previous) {
-    lines.push(
-      `體重 ${getMetricTrendLabel(latestWeight, prevWeight, true)} kg｜體脂率 ${getMetricTrendLabel(latestBodyFatPct, prevBodyFatPct, true)}%`
-    );
-    if (latestFatMass || prevFatMass) {
-      lines.push(`脂肪重 ${getMetricTrendLabel(latestFatMass, prevFatMass, true)} kg`);
-    }
-    lines.push(
-      `${device === "omron" ? "骨骼肌" : "肌肉"}率 ${getMetricTrendLabel(latestMuscleRate, prevMuscleRate)}%｜${device === "omron" ? "骨骼肌" : "肌肉"}量 ${getMetricTrendLabel(latestMuscleMass, prevMuscleMass)} kg`
-    );
-    if (latestVisceralFat || prevVisceralFat) {
-      lines.push(`內臟脂肪 ${getMetricTrendLabel(latestVisceralFat, prevVisceralFat, true)}`);
-    }
-    if (device === "xiaomi") {
-      lines.push(`水分 ${getMetricTrendLabel(latestBodyWater, prevBodyWater)}%`);
-    } else {
-      lines.push("歐姆龍未提供體水分，短期波動請保守解讀。");
-    }
-  } else {
-    lines.push(`最新體重 ${latestWeight || "-"} kg`);
-    lines.push(`最新體脂率 ${latestBodyFatPct || "-"}%`);
-    lines.push(`${device === "omron" ? "最新骨骼肌率" : "最新肌肉率"} ${latestMuscleRate || "-"}%`);
-    if (device === "xiaomi") {
-      lines.push(`最新水分 ${latestBodyWater || "-"}%`);
-    } else {
-      lines.push("目前僅有 1 筆歐姆龍資料，先累積更多紀錄再看趨勢。");
-    }
+function getDeviceJudgement(device: DeviceKind, entries: Entry[]) {
+  const filtered = getDeviceEntries(entries, device);
+  if (!filtered.length) {
+    return {
+      hasData: false,
+      title: device === "omron" ? "歐姆龍暫無資料" : "小米暫無資料",
+      detail:
+        device === "omron"
+          ? "尚無歐姆龍紀錄，暫不進行設備判讀。"
+          : "尚無小米紀錄，暫不進行設備判讀。",
+      bullets: [] as string[],
+    };
   }
 
+  const last = filtered[filtered.length - 1];
+  const prev = filtered.length >= 2 ? filtered[filtered.length - 2] : null;
+  const weight = num(last.weight);
+  const fatPct = num(last.bodyFatPct);
+  const muscleRate = getMuscleRateFromEntry(last);
+  const water = num(last.bodyWater);
+  const fatMass = num(last.fatMass) || (weight && fatPct ? +((weight * fatPct) / 100).toFixed(1) : 0);
+  const muscleMass = num(last.muscleMass) || (weight && muscleRate ? +((weight * muscleRate) / 100).toFixed(1) : 0);
+
+  const fatDelta = prev ? +(fatPct - num(prev.bodyFatPct)).toFixed(1) : 0;
+  const muscleDelta = prev ? +(muscleRate - getMuscleRateFromEntry(prev)).toFixed(1) : 0;
+  const waterDelta = prev ? +(water - num(prev.bodyWater)).toFixed(1) : 0;
+
+  const bullets: string[] = [];
+  if (device === "omron") {
+    bullets.push(`體脂率 ${fatPct ? `${fatPct}%` : "-"}｜脂肪重 ${fatMass ? `${fatMass} kg` : "-"}`);
+    bullets.push(`骨骼肌率 ${muscleRate ? `${muscleRate}%` : "-"}｜骨骼肌重 ${muscleMass ? `${muscleMass} kg` : "-"}`);
+    if (prev) {
+      bullets.push(`相較前次：體脂 ${fatDelta > 0 ? '+' : ''}${fatDelta}%｜骨骼肌 ${muscleDelta > 0 ? '+' : ''}${muscleDelta}%`);
+    }
+    return {
+      hasData: true,
+      title: "歐姆龍判讀",
+      detail: prev
+        ? (fatDelta <= -0.3 && muscleDelta >= -0.2
+            ? "近期較像脂肪下降、肌肉大致守住。"
+            : muscleDelta <= -0.3 && fatDelta >= -0.1
+              ? "近期要注意骨骼肌下滑，先優先保肌。"
+              : "近期有波動，歐姆龍未提供體水分，請保守解讀短期變化。")
+        : "已有歐姆龍資料，待後續累積更多紀錄後可更準確判讀。",
+      bullets,
+    };
+  }
+
+  bullets.push(`體脂率 ${fatPct ? `${fatPct}%` : "-"}｜肌肉率 ${muscleRate ? `${muscleRate}%` : "-"}`);
+  bullets.push(`體水分 ${water ? `${water}%` : "-"}`);
+  if (prev) {
+    bullets.push(`相較前次：水分 ${waterDelta > 0 ? '+' : ''}${waterDelta}%｜體脂 ${fatDelta > 0 ? '+' : ''}${fatDelta}%｜肌肉 ${muscleDelta > 0 ? '+' : ''}${muscleDelta}%`);
+  }
   return {
-    source: device,
-    title: device === "omron" ? "歐姆龍判讀" : "小米判讀",
-    subtitle: device === "omron" ? "依歐姆龍資料" : "依小米資料",
-    updatedAt: latest.date,
-    lines,
+    hasData: true,
+    title: "小米判讀",
+    detail: prev
+      ? (waterDelta <= -0.8 && fatDelta >= 0
+          ? "近期較像水分先下降，短期體脂波動先保守看。"
+          : fatDelta <= -0.3 && muscleDelta >= -0.2
+            ? "近期較像正常減脂，肌肉率暫時有守住。"
+            : "近期數值有波動，建議再觀察 3~7 天趨勢。")
+      : "已有小米資料，待後續累積更多紀錄後可更準確判讀。",
+    bullets,
   };
 }
 
@@ -3369,11 +3371,12 @@ export default function SimpleTracker() {
   const latest = sortedEntries.length
     ? sortedEntries[sortedEntries.length - 1]
     : null;
+  const omronEntries = useMemo(() => getDeviceEntries(sortedEntries, "omron"), [sortedEntries]);
+  const xiaomiEntries = useMemo(() => getDeviceEntries(sortedEntries, "xiaomi"), [sortedEntries]);
+  const latestOmronEntry = omronEntries.length ? omronEntries[omronEntries.length - 1] : null;
+  const latestXiaomiEntry = xiaomiEntries.length ? xiaomiEntries[xiaomiEntries.length - 1] : null;
 
-  const latestOmronEntry = useMemo(() => getLatestDeviceEntry(sortedEntries, "omron"), [sortedEntries]);
-  const latestXiaomiEntry = useMemo(() => getLatestDeviceEntry(sortedEntries, "xiaomi"), [sortedEntries]);
-  const dashboardWeight = latestOmronEntry ? num(latestOmronEntry.weight) : latest ? num(latest.weight) : 0;
-  const latestWeight = dashboardWeight;
+  const latestWeight = latestOmronEntry ? num(latestOmronEntry.weight) : latest ? num(latest.weight) : 0;
   const latestBodyFatPct = latest ? num(latest.bodyFatPct) : 0;
   const latestFatMass = latest ? num(latest.fatMass) : 0;
   const latestMuscleRate = latest ? getMuscleRateFromEntry(latest) : 0;
@@ -3384,7 +3387,7 @@ export default function SimpleTracker() {
   const bmi = getBMI(num(settings.height), latestWeight);
   const bmiLabel = getBMILabel(bmi);
   const bmrMifflin = getBMR(
-    dashboardWeight,
+    latestWeight,
     num(settings.height),
     num(settings.age),
     settings.sex,
@@ -5204,7 +5207,7 @@ export default function SimpleTracker() {
 
   const dashboardSummary = useMemo(() => {
     return [
-      { label: "今日體重", value: dashboardWeight ? `${dashboardWeight} kg` : "-" },
+      { label: "今日體重", value: latestWeight ? `${latestWeight} kg` : "-" },
       { label: "BMI", value: bmi ? `${bmi}・${bmiLabel}` : "-" },
       {
         label: "下次施打",
@@ -5235,10 +5238,10 @@ export default function SimpleTracker() {
   ]);
 
 
-  const omronJudgement = useMemo(() => getDeviceJudgement("omron", entries), [entries]);
-  const xiaomiJudgement = useMemo(() => getDeviceJudgement("xiaomi", entries), [entries]);
-  const latestOmronDate = useMemo(() => getLatestDeviceDate(entries, "omron"), [entries]);
-  const latestXiaomiDate = useMemo(() => getLatestDeviceDate(entries, "xiaomi"), [entries]);
+  const omronJudgement = useMemo(() => getDeviceJudgement("omron", sortedEntries), [sortedEntries]);
+  const xiaomiJudgement = useMemo(() => getDeviceJudgement("xiaomi", sortedEntries), [sortedEntries]);
+  const latestOmronDate = useMemo(() => getLatestDeviceDate(sortedEntries, "omron"), [sortedEntries]);
+  const latestXiaomiDate = useMemo(() => getLatestDeviceDate(sortedEntries, "xiaomi"), [sortedEntries]);
 
   const chartSourceNotes = useMemo(() => {
     return [
@@ -5867,11 +5870,9 @@ export default function SimpleTracker() {
                       今日體重
                     </div>
                     <div className="text-2xl font-semibold">
-                      {dashboardWeight || "-"}
+                      {latestWeight ? latestWeight : "-"}
                     </div>
-                    <div className="text-xs text-slate-500">
-                      kg{latestOmronEntry ? "｜歐姆龍優先" : ""}
-                    </div>
+                    <div className="text-xs text-slate-500">kg</div>
                   </CardContent>
                 </Card>
 
@@ -6123,6 +6124,38 @@ export default function SimpleTracker() {
                   {waterVsFat.detail}
                 </div>
 
+                <div className="grid grid-cols-1 gap-3">
+                  <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/60 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-medium text-slate-500">{omronJudgement.title}</div>
+                      <Badge variant="outline">{latestOmronDate || "尚無資料"}</Badge>
+                    </div>
+                    <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>{omronJudgement.detail}</div>
+                    {omronJudgement.bullets?.length ? (
+                      <div className="space-y-1">
+                        {omronJudgement.bullets.map((item, index) => (
+                          <div key={`omron-${index}`} className={`text-[11px] leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>・{item}</div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/60 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-medium text-slate-500">{xiaomiJudgement.title}</div>
+                      <Badge variant="outline">{latestXiaomiDate || "尚無資料"}</Badge>
+                    </div>
+                    <div className={`text-xs leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>{xiaomiJudgement.detail}</div>
+                    {xiaomiJudgement.bullets?.length ? (
+                      <div className="space-y-1">
+                        {xiaomiJudgement.bullets.map((item, index) => (
+                          <div key={`xiaomi-${index}`} className={`text-[11px] leading-5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>・{item}</div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
                 <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/70 border-slate-700" : "bg-slate-50"}`}>
                   <div>
                     <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>短期判斷</div>
@@ -6175,39 +6208,6 @@ export default function SimpleTracker() {
                         </div>
                       ))}
                     </div>
-                  </div>
-                ) : null}
-
-                {[omronJudgement, xiaomiJudgement].filter(Boolean).length ? (
-                  <div className="space-y-3">
-                    {[omronJudgement, xiaomiJudgement].filter(Boolean).map((card) => (
-                      <div
-                        key={card!.source}
-                        className={`rounded-xl border p-3 ${isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-slate-200"}`}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className={`text-xs font-medium ${isDark ? "text-slate-100" : "text-slate-700"}`}>
-                            {card!.title}
-                          </div>
-                          <div className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                            最後更新：{card!.updatedAt}
-                          </div>
-                        </div>
-                        <div className={`mt-2 text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                          {card!.subtitle}
-                        </div>
-                        <div className="mt-3 space-y-2">
-                          {card!.lines.map((line) => (
-                            <div
-                              key={line}
-                              className={`rounded-lg px-2.5 py-2 text-xs leading-5 ${isDark ? "bg-slate-800 text-slate-200" : "bg-slate-50 text-slate-600"}`}
-                            >
-                              ・{line}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 ) : null}
               </CardContent>
@@ -6384,7 +6384,7 @@ export default function SimpleTracker() {
 
                 <div className="rounded-lg border bg-white p-2">
                   <div className="text-slate-500 text-xs">目前</div>
-                  <div className="font-semibold">{dashboardWeight || "-"} kg</div>
+                  <div className="font-semibold">{latestWeight ? latestWeight : "-"} kg</div>
                 </div>
 
                 <div className="rounded-lg border bg-white p-2">
@@ -6833,6 +6833,22 @@ export default function SimpleTracker() {
                     ))}
                   </CardContent>
                 </Card>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {[omronJudgement, xiaomiJudgement].filter(Boolean).map((card) => (
+                    <Card key={card!.source}>
+                      <CardHeader>
+                        <CardTitle>{card!.title}</CardTitle>
+                        <div className="text-xs text-slate-500">{card!.subtitle}｜最後更新：{card!.updatedAt}</div>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        {card!.lines.map((line) => (
+                          <div key={line}>• {line}</div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
 
                 <MetricLineCard
                   title="體重趨勢"
