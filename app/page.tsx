@@ -5091,28 +5091,36 @@ export default function SimpleTracker() {
       [];
     if (!sortedEntries.length || !latest) return alerts;
 
-    const latestEntry = sortedEntries[sortedEntries.length - 1];
-    const prevEntry =
+    const latestWeightEntry = sortedEntries[sortedEntries.length - 1];
+    const prevWeightEntry =
       sortedEntries.length >= 2
         ? sortedEntries[sortedEntries.length - 2]
         : null;
+    const latestCompEntry = compositionEntries.length
+      ? compositionEntries[compositionEntries.length - 1]
+      : null;
+    const prevCompEntry =
+      compositionEntries.length >= 2
+        ? compositionEntries[compositionEntries.length - 2]
+        : null;
+
     const todayHasLog = sortedEntries.some((entry) => entry.date === today);
-    const sevenDayEntries = sortedEntries.filter((entry) => {
-      const diff = daysBetween(entry.date, latestEntry.date);
+    const sevenDayWeightEntries = sortedEntries.filter((entry) => {
+      const diff = daysBetween(entry.date, latestWeightEntry.date);
       return diff >= 0 && diff <= 7;
     });
 
-    if (!todayHasLog && daysBetween(latestEntry.date, today) >= 2) {
+    if (!todayHasLog && daysBetween(latestWeightEntry.date, today) >= 2) {
       alerts.push({
         level: "中",
         title: "有一段時間沒記錄",
-        detail: `最近一筆是 ${latestEntry.date}，建議補上體重與施打資訊。`,
+        detail: `最近一筆是 ${latestWeightEntry.date}，建議補上體重與施打資訊。`,
       });
     }
 
-    if (prevEntry) {
+    if (prevWeightEntry) {
       const weightJump = +(
-        num(latestEntry.weight) - num(prevEntry.weight)
+        num(latestWeightEntry.weight) - num(prevWeightEntry.weight)
       ).toFixed(1);
       if (weightJump >= 1.2) {
         alerts.push({
@@ -5121,25 +5129,31 @@ export default function SimpleTracker() {
           detail: `最近兩筆增加 ${weightJump} kg，先看聚餐、鹽分與水分波動。`,
         });
       }
+    }
 
-      const muscleDrop = +(
-        num(latestEntry.muscleMass) - num(prevEntry.muscleMass)
-      ).toFixed(1);
+    if (latestCompEntry && prevCompEntry) {
+      const latestCompMuscle = getMuscleMassFromEntry(latestCompEntry);
+      const prevCompMuscle = getMuscleMassFromEntry(prevCompEntry);
+      const muscleDrop = +(latestCompMuscle - prevCompMuscle).toFixed(1);
       const fatPctMove = +(
-        num(latestEntry.bodyFatPct) - num(prevEntry.bodyFatPct)
+        num(latestCompEntry.bodyFatPct) - num(prevCompEntry.bodyFatPct)
       ).toFixed(1);
+
       if (muscleDrop <= -0.5 && fatPctMove >= 0) {
         alerts.push({
           level: "高",
-          title: "可能有掉肌肉風險",
-          detail: `肌肉量下降 ${Math.abs(muscleDrop)} kg，體脂沒有同步改善。`,
+          title: currentDevice === "omron" ? "可能有骨骼肌流失風險" : "可能有掉肌肉風險",
+          detail:
+            currentDevice === "omron"
+              ? `骨骼肌重下降 ${Math.abs(muscleDrop)} kg，體脂沒有同步改善。`
+              : `肌肉量下降 ${Math.abs(muscleDrop)} kg，體脂沒有同步改善。`,
         });
       }
     }
 
-    if (sevenDayEntries.length >= 2) {
-      const first = sevenDayEntries[0];
-      const last = sevenDayEntries[sevenDayEntries.length - 1];
+    if (sevenDayWeightEntries.length >= 2) {
+      const first = sevenDayWeightEntries[0];
+      const last = sevenDayWeightEntries[sevenDayWeightEntries.length - 1];
       const weekWeightDelta = +(num(last.weight) - num(first.weight)).toFixed(
         1,
       );
@@ -5161,7 +5175,7 @@ export default function SimpleTracker() {
     }
 
     return alerts.slice(0, 4);
-  }, [sortedEntries, latest, today, shotStatus.overdueDays]);
+  }, [sortedEntries, compositionEntries, latest, today, shotStatus.overdueDays, currentDevice]);
 
   const dashboardSummary = useMemo(() => {
     return [
