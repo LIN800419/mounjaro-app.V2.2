@@ -1845,6 +1845,14 @@ function getMuscleRateValue(weight: number, muscleMass: number) {
   return +((muscleMass / weight) * 100).toFixed(1);
 }
 
+
+function getMuscleRateFromEntry(entry?: Partial<Entry> | null) {
+  if (!entry) return 0;
+  const direct = num((entry as any).muscleRate);
+  if (direct > 0) return direct;
+  return getMuscleRateValue(num(entry.weight), num(entry.muscleMass));
+}
+
 function createBaseForm(date: string, source: DeviceSource): Omit<Entry, "id"> {
   return {
     source,
