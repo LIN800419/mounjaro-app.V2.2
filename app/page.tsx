@@ -5527,6 +5527,8 @@ export default function SimpleTracker() {
                 },
               ],
         exerciseMin: latest?.exerciseMin || "0",
+        deviceType: form.deviceType || "xiaomi",
+        isDeviceSwitchDay: false,
         isShotDay: true,
       },
     ]);
