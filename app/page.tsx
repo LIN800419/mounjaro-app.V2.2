@@ -3386,6 +3386,20 @@ export default function SimpleTracker() {
   const latestWaist = latestPrimaryEntry ? num(latestPrimaryEntry.waist) : 0;
   const omronJudge = useMemo(() => buildDeviceJudge(sortedEntries, "omron"), [sortedEntries]);
   const xiaomiJudge = useMemo(() => buildDeviceJudge(sortedEntries, "xiaomi"), [sortedEntries]);
+
+  const groupedHistoryEntries = useMemo(() => {
+    const groups = new Map<string, { date: string; omron?: Entry; xiaomi?: Entry; shared?: Entry }>();
+    [...sortedEntries].reverse().forEach((entry) => {
+      const dateKey = entry.date;
+      const existing = groups.get(dateKey) || { date: dateKey };
+      const source = (entry.source || "xiaomi") as DeviceSource;
+      if (source === "omron") existing.omron = existing.omron || entry;
+      else existing.xiaomi = existing.xiaomi || entry;
+      existing.shared = existing.shared || entry;
+      groups.set(dateKey, existing);
+    });
+    return Array.from(groups.values());
+  }, [sortedEntries]);
   const bmi = getBMI(num(settings.height), latestWeight);
   const bmiLabel = getBMILabel(bmi);
   const bmrMifflin = getBMR(
@@ -5502,9 +5516,31 @@ export default function SimpleTracker() {
 
   const handleEdit = (item: Entry) => {
     const source = (item.source || "xiaomi") as DeviceSource;
+    const normalizedSideEffects =
+      item.sideEffects && item.sideEffects.length
+        ? item.sideEffects
+        : [
+            {
+              effect: item.sideEffect || "無",
+              severity: item.sideEffectSeverity || "0",
+            },
+          ];
+
+    const sharedPatch = {
+      date: item.date,
+      dose: item.dose,
+      appetite: item.appetite,
+      cravingLevel: item.cravingLevel,
+      sideEffect: item.sideEffect,
+      sideEffectSeverity: item.sideEffectSeverity || "0",
+      sideEffects: normalizedSideEffects,
+      exerciseMin: item.exerciseMin || "0",
+      isShotDay: Boolean(item.isShotDay),
+    };
+
     const nextForm = {
       source,
-      date: item.date,
+      ...sharedPatch,
       weight: item.weight,
       bodyFatPct: item.bodyFatPct || "",
       fatMass: item.fatMass || "",
@@ -5513,25 +5549,13 @@ export default function SimpleTracker() {
       visceralFat: item.visceralFat || "",
       bodyWater: item.bodyWater || "",
       waist: item.waist || "",
-      dose: item.dose,
-      appetite: item.appetite,
-      cravingLevel: item.cravingLevel,
-      sideEffect: item.sideEffect,
-      sideEffectSeverity: item.sideEffectSeverity || "0",
-      sideEffects:
-        item.sideEffects && item.sideEffects.length
-          ? item.sideEffects
-          : [
-              {
-                effect: item.sideEffect || "無",
-                severity: item.sideEffectSeverity || "0",
-              },
-            ],
-      exerciseMin: item.exerciseMin || "0",
-      isShotDay: Boolean(item.isShotDay),
     };
-    if (source === "omron") setOmronForm(nextForm);
-    else setXiaomiForm(nextForm);
+
+    setXiaomiForm((prev) => ({ ...prev, ...sharedPatch }));
+    setOmronForm((prev) => ({ ...prev, ...sharedPatch }));
+
+    if (source === "omron") setOmronForm((prev) => ({ ...prev, ...nextForm }));
+    else setXiaomiForm((prev) => ({ ...prev, ...nextForm }));
     setEditingId(item.id);
     setEditingSource(source);
   };
@@ -6651,73 +6675,79 @@ export default function SimpleTracker() {
 
                   <div className="border-t pt-4 space-y-3">
                     <div className="text-sm font-medium">歷史紀錄</div>
-                    {sortedEntries.length === 0 ? (
+                    {groupedHistoryEntries.length === 0 ? (
                       <div className="text-sm text-slate-500">
                         目前還沒有紀錄
                       </div>
                     ) : (
-                      [...sortedEntries].reverse().map((item) => (
-                        <div
-                          key={item.id}
-                          className="rounded-xl border p-3 space-y-2"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="text-sm space-y-1">
-                              <div className="font-medium">
-                                {item.date} ・ {getEntrySourceLabel(item.source)} ・ {item.dose} mg {item.isShotDay ? "・ 施打日" : ""}
-                              </div>
-                              <div>體重：{item.weight} kg</div>
-                              <div>
-                                體脂：{item.bodyFatPct || "-"}%｜脂肪重：
-                                {item.fatMass || "-"} kg｜肌肉率：
-                                {getMuscleRateFromEntry(item) || "-"}%｜肌肉量：
-                                {item.muscleMass || "-"} kg
-                              </div>
-                              <div>
-                                內臟脂肪：{item.visceralFat || "-"}｜水分：
-                                {item.bodyWater || "-"}%｜腰圍：{item.waist || "-"} cm
-                              </div>
-                              <div>
-                                食慾：{item.appetite}｜嘴饞：{item.cravingLevel}
-                              </div>
-                              <div>
-                                副作用：
-                                {item.sideEffects && item.sideEffects.length
-                                  ? item.sideEffects
-                                      .map(
-                                        (se) =>
-                                          `${se.effect}（${se.severity || 0}/5）`,
-                                      )
-                                      .join("、")
-                                  : `${item.sideEffect}（${item.sideEffectSeverity || 0}/5）`}
-                                ｜ 運動：{item.exerciseMin || 0} 分鐘
-                              </div>
-                              {item.isShotDay ? (
-                                <div className="text-emerald-600">
-                                  💉 施打日
+                      groupedHistoryEntries.map((group) => {
+                        const shared = group.shared;
+                        const deviceItems = [group.omron, group.xiaomi].filter(Boolean) as Entry[];
+                        return (
+                          <div
+                            key={group.date}
+                            className="rounded-xl border p-3 space-y-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="text-sm space-y-1">
+                                <div className="font-medium">
+                                  {group.date} ・ {shared?.dose || "-"} mg {shared?.isShotDay ? "・ 施打日" : ""}
                                 </div>
-                              ) : null}
+                                <div>
+                                  食慾：{shared?.appetite || "-"}｜嘴饞：{shared?.cravingLevel || "-"}
+                                </div>
+                                <div>
+                                  副作用：
+                                  {shared?.sideEffects && shared.sideEffects.length
+                                    ? shared.sideEffects
+                                        .map((se) => `${se.effect}（${se.severity || 0}/5）`)
+                                        .join("、")
+                                    : `${shared?.sideEffect || "無"}（${shared?.sideEffectSeverity || 0}/5）`}
+                                  ｜ 運動：{shared?.exerciseMin || 0} 分鐘
+                                </div>
+                                {shared?.isShotDay ? (
+                                  <div className="text-emerald-600">
+                                    💉 施打日
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
 
-                            <div className="flex gap-2">
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => handleEdit(item)}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => handleDelete(item.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                            <div className="space-y-2">
+                              {deviceItems.map((item) => (
+                                <div key={item.id} className="rounded-lg border bg-slate-50 p-3 flex items-start justify-between gap-3">
+                                  <div className="text-sm space-y-1">
+                                    <div className="font-medium">{getEntrySourceLabel(item.source)}</div>
+                                    <div>體重：{item.weight || "-"} kg</div>
+                                    <div>
+                                      體脂：{item.bodyFatPct || "-"}%｜脂肪重：{item.fatMass || "-"} kg｜肌肉率：{getMuscleRateFromEntry(item) || "-"}%｜肌肉量：{item.muscleMass || "-"} kg
+                                    </div>
+                                    <div>
+                                      內臟脂肪：{item.visceralFat || "-"}｜水分：{item.bodyWater || "-"}%｜腰圍：{item.waist || "-"} cm
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      onClick={() => handleEdit(item)}
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      onClick={() => handleDelete(item.id)}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </CardContent>
