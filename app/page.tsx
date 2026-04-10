@@ -4760,8 +4760,8 @@ export default function SimpleTracker() {
         const weightValue = num(e.weight);
         const bodyFatPctValue = isCompositionActive ? num(e.bodyFatPct) : 0;
         const fatMassValue = isCompositionActive ? num(e.fatMass) : 0;
-        const muscleRateValue = isCompositionActive ? getDisplayMuscleRateFromEntry(e, currentDevice) : 0;
-        const muscleMassValue = isCompositionActive ? getDisplayMuscleMassFromEntry(e, currentDevice) : 0;
+        const muscleRateValue = isCompositionActive ? getMuscleRateFromEntry(e) : 0;
+        const muscleMassValue = isCompositionActive ? getMuscleMassFromEntry(e) : 0;
         const visceralFatValue = isCompositionActive ? num(e.visceralFat) : 0;
         const bodyWaterValue = isCompositionActive ? num(e.bodyWater) : 0;
 
