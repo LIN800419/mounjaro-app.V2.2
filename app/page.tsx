@@ -1867,6 +1867,54 @@ function getMuscleMassFromEntry(entry?: Partial<Entry> | null) {
   return num((entry as any).muscleMass);
 }
 
+type GroupedEntry = {
+  date: string;
+  common: Entry;
+  xiaomi?: Entry;
+  omron?: Entry;
+};
+
+type BackfillableMetricKey = "weight" | "bodyFatPct" | "fatMass";
+
+function buildOmronBackfilledMetricMap(
+  groupedEntries: GroupedEntry[],
+  metric: BackfillableMetricKey,
+) {
+  const map = new Map<string, string>();
+
+  const firstOmronDate = groupedEntries.find((group) => {
+    const value = metric === "weight" ? num(group.omron?.weight) : num(group.omron?.[metric]);
+    return value > 0;
+  })?.date;
+
+  if (!firstOmronDate) {
+    groupedEntries.forEach((group) => {
+      const xiaomiValue = metric === "weight" ? group.xiaomi?.weight : group.xiaomi?.[metric];
+      if (num(xiaomiValue) > 0) {
+        map.set(group.date, String(xiaomiValue));
+      }
+    });
+    return map;
+  }
+
+  groupedEntries.forEach((group) => {
+    if (group.date < firstOmronDate) {
+      const xiaomiValue = metric === "weight" ? group.xiaomi?.weight : group.xiaomi?.[metric];
+      if (num(xiaomiValue) > 0) {
+        map.set(group.date, String(xiaomiValue));
+      }
+      return;
+    }
+
+    const omronValue = metric === "weight" ? group.omron?.weight : group.omron?.[metric];
+    if (num(omronValue) > 0) {
+      map.set(group.date, String(omronValue));
+    }
+  });
+
+  return map;
+}
+
 
 type CompositionSnapshot = {
   weight: number;
@@ -3430,6 +3478,71 @@ export default function SimpleTracker() {
     })) as Entry[];
   }, [groupedEntriesByDate, currentDevice]);
 
+  const omronBackfilledWeightMap = useMemo(
+    () => buildOmronBackfilledMetricMap(groupedEntriesByDate as GroupedEntry[], "weight"),
+    [groupedEntriesByDate],
+  );
+
+  const omronBackfilledBodyFatPctMap = useMemo(
+    () => buildOmronBackfilledMetricMap(groupedEntriesByDate as GroupedEntry[], "bodyFatPct"),
+    [groupedEntriesByDate],
+  );
+
+  const omronBackfilledFatMassMap = useMemo(
+    () => buildOmronBackfilledMetricMap(groupedEntriesByDate as GroupedEntry[], "fatMass"),
+    [groupedEntriesByDate],
+  );
+
+  const omronTrendEntries = useMemo(() => {
+    return groupedEntriesByDate
+      .map((group) => {
+        const weight = omronBackfilledWeightMap.get(group.date) || "";
+        const bodyFatPct = omronBackfilledBodyFatPctMap.get(group.date) || "";
+        const fatMass = omronBackfilledFatMassMap.get(group.date) || "";
+        const hasTrendMetric = num(weight) > 0 || num(bodyFatPct) > 0 || num(fatMass) > 0;
+        if (!hasTrendMetric) return null;
+
+        const measurement = group.omron || group.xiaomi || group.common;
+
+        return {
+          ...measurement,
+          weight,
+          bodyFatPct,
+          fatMass,
+          waist: group.common.waist || measurement.waist,
+          dose: group.common.dose || measurement.dose,
+          appetite: group.common.appetite || measurement.appetite,
+          cravingLevel: group.common.cravingLevel || measurement.cravingLevel,
+          sideEffect: group.common.sideEffect || measurement.sideEffect,
+          sideEffectSeverity:
+            group.common.sideEffectSeverity || measurement.sideEffectSeverity,
+          sideEffects:
+            group.common.sideEffects && group.common.sideEffects.length
+              ? group.common.sideEffects
+              : measurement.sideEffects,
+          exerciseMin: group.common.exerciseMin || measurement.exerciseMin,
+          isShotDay: group.common.isShotDay || measurement.isShotDay,
+          isDeviceSwitchDay:
+            group.common.isDeviceSwitchDay || measurement.isDeviceSwitchDay,
+          deviceType: "omron" as DeviceType,
+        } as Entry;
+      })
+      .filter(Boolean) as Entry[];
+  }, [
+    groupedEntriesByDate,
+    omronBackfilledWeightMap,
+    omronBackfilledBodyFatPctMap,
+    omronBackfilledFatMassMap,
+  ]);
+
+  const trendWeightEntries = useMemo(() => {
+    return currentDevice === "omron" ? omronTrendEntries : commonWeightEntries;
+  }, [currentDevice, omronTrendEntries, commonWeightEntries]);
+
+  const trendCompositionEntries = useMemo(() => {
+    return currentDevice === "omron" ? omronTrendEntries : compositionEntries;
+  }, [currentDevice, omronTrendEntries, compositionEntries]);
+
   const latest = compositionEntries.length
     ? compositionEntries[compositionEntries.length - 1]
     : null;
@@ -4863,9 +4976,15 @@ export default function SimpleTracker() {
       groupedEntriesByDate.map((group, i) => {
         const deviceEntry =
           currentDevice === "omron" ? group.omron : group.xiaomi;
-        const weightValue = num(group.common.weight);
-        const bodyFatPctValue = num(deviceEntry?.bodyFatPct);
-        const fatMassValue = num(deviceEntry?.fatMass);
+        const weightValue = currentDevice === "omron"
+          ? num(omronBackfilledWeightMap.get(group.date))
+          : num(group.common.weight);
+        const bodyFatPctValue = currentDevice === "omron"
+          ? num(omronBackfilledBodyFatPctMap.get(group.date))
+          : num(deviceEntry?.bodyFatPct);
+        const fatMassValue = currentDevice === "omron"
+          ? num(omronBackfilledFatMassMap.get(group.date))
+          : num(deviceEntry?.fatMass);
         const muscleRateValue = getMuscleRateFromEntry(deviceEntry);
         const muscleMassValue = getMuscleMassFromEntry(deviceEntry);
         const visceralFatValue = num(deviceEntry?.visceralFat);
@@ -4876,7 +4995,7 @@ export default function SimpleTracker() {
           date: fmtDate(group.date),
           rawDate: group.date,
           weight: weightValue > 0 ? weightValue : null,
-          avg7: weightValue > 0 ? getSevenDayAverage(commonWeightEntries, i) : null,
+          avg7: weightValue > 0 ? getSevenDayAverage(trendWeightEntries, i) : null,
           goal: num(settings.goal) || null,
           bodyFatPct: bodyFatPctValue > 0 ? bodyFatPctValue : null,
           fatMass: fatMassValue > 0 ? fatMassValue : null,
@@ -4887,7 +5006,7 @@ export default function SimpleTracker() {
           waist: num(group.common.waist) > 0 ? num(group.common.waist) : null,
         };
       }),
-    [groupedEntriesByDate, commonWeightEntries, currentDevice, settings.goal],
+    [groupedEntriesByDate, trendWeightEntries, currentDevice, settings.goal],
   );
 
   const chartData = useMemo(() => {
@@ -5162,33 +5281,33 @@ export default function SimpleTracker() {
   };
 
   const weeklySummary = useMemo(() => {
-    if (!compositionEntries.length && !commonWeightEntries.length) {
+    if (!trendCompositionEntries.length && !trendWeightEntries.length) {
       return buildPeriodSummary("本週", [], []);
     }
 
     const latestDate =
-      compositionEntries[compositionEntries.length - 1]?.date ||
-      commonWeightEntries[commonWeightEntries.length - 1]?.date ||
+      trendCompositionEntries[trendCompositionEntries.length - 1]?.date ||
+      trendWeightEntries[trendWeightEntries.length - 1]?.date ||
       "";
     const weekStart = latestDate ? getWeekStart(latestDate) : "";
-    const compositionWindowEntries = compositionEntries.filter(
+    const compositionWindowEntries = trendCompositionEntries.filter(
       (entry) =>
         daysBetween(weekStart, entry.date) >= 0 &&
         daysBetween(entry.date, latestDate) >= 0,
     );
-    const weightWindowEntries = commonWeightEntries.filter(
+    const weightWindowEntries = trendWeightEntries.filter(
       (entry) =>
         daysBetween(weekStart, entry.date) >= 0 &&
         daysBetween(entry.date, latestDate) >= 0,
     );
 
     return buildPeriodSummary("本週", compositionWindowEntries, weightWindowEntries);
-  }, [compositionEntries, commonWeightEntries]);
+  }, [trendCompositionEntries, trendWeightEntries]);
 
   const summaryYearOptions = useMemo(() => {
     const years = Array.from(
       new Set(
-        commonWeightEntries
+        trendWeightEntries
           .map((entry) => entry.date.split("-")[0])
           .filter(Boolean),
       ),
@@ -5196,18 +5315,18 @@ export default function SimpleTracker() {
 
     if (!years.length && selectedSummaryYear) return [selectedSummaryYear];
     return years;
-  }, [commonWeightEntries, selectedSummaryYear]);
+  }, [trendWeightEntries, selectedSummaryYear]);
 
   const monthSummary = useMemo(() => {
     if (!selectedSummaryYear || !selectedSummaryMonth) {
       return buildPeriodSummary("月份", [], []);
     }
 
-    const compositionWindowEntries = compositionEntries.filter((entry) => {
+    const compositionWindowEntries = trendCompositionEntries.filter((entry) => {
       const [year, month] = entry.date.split("-");
       return year === selectedSummaryYear && month === selectedSummaryMonth;
     });
-    const weightWindowEntries = commonWeightEntries.filter((entry) => {
+    const weightWindowEntries = trendWeightEntries.filter((entry) => {
       const [year, month] = entry.date.split("-");
       return year === selectedSummaryYear && month === selectedSummaryMonth;
     });
@@ -5217,11 +5336,11 @@ export default function SimpleTracker() {
       compositionWindowEntries,
       weightWindowEntries,
     );
-  }, [compositionEntries, commonWeightEntries, selectedSummaryYear, selectedSummaryMonth]);
+  }, [trendCompositionEntries, trendWeightEntries, selectedSummaryYear, selectedSummaryMonth]);
 
   const overallSummary = useMemo(() => {
-    return buildPeriodSummary("整體", compositionEntries, commonWeightEntries);
-  }, [compositionEntries, commonWeightEntries]);
+    return buildPeriodSummary("整體", trendCompositionEntries, trendWeightEntries);
+  }, [trendCompositionEntries, trendWeightEntries]);
 
 
   const anomalyAlerts = useMemo(() => {
