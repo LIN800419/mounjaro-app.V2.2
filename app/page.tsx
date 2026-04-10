@@ -3340,16 +3340,93 @@ export default function SimpleTracker() {
 
   const currentDevice: DeviceType = analysisDevice;
 
+  const groupedEntriesByDate = useMemo(() => {
+    const map = new Map<
+      string,
+      { date: string; common: Entry; xiaomi?: Entry; omron?: Entry }
+    >();
+
+    sortedEntries.forEach((entry) => {
+      const existing = map.get(entry.date);
+      if (existing) {
+        const common = {
+          ...existing.common,
+          weight: entry.weight || existing.common.weight,
+          waist: entry.waist || existing.common.waist,
+          dose: entry.dose || existing.common.dose,
+          appetite: entry.appetite || existing.common.appetite,
+          cravingLevel: entry.cravingLevel || existing.common.cravingLevel,
+          sideEffect: entry.sideEffect || existing.common.sideEffect,
+          sideEffectSeverity: entry.sideEffectSeverity || existing.common.sideEffectSeverity,
+          sideEffects:
+            entry.sideEffects && entry.sideEffects.length
+              ? entry.sideEffects
+              : existing.common.sideEffects,
+          exerciseMin: entry.exerciseMin || existing.common.exerciseMin,
+          isShotDay: entry.isShotDay || existing.common.isShotDay,
+          isDeviceSwitchDay: entry.isDeviceSwitchDay || existing.common.isDeviceSwitchDay,
+        };
+        map.set(entry.date, {
+          date: entry.date,
+          common,
+          xiaomi: entry.deviceType === "xiaomi" ? entry : existing.xiaomi,
+          omron: entry.deviceType === "omron" ? entry : existing.omron,
+        });
+      } else {
+        map.set(entry.date, {
+          date: entry.date,
+          common: entry,
+          xiaomi: entry.deviceType === "xiaomi" ? entry : undefined,
+          omron: entry.deviceType === "omron" ? entry : undefined,
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
+    );
+  }, [sortedEntries]);
+
   const compositionEntries = useMemo(() => {
-    return sortedEntries.filter((entry) => entry.deviceType === currentDevice);
-  }, [sortedEntries, currentDevice]);
+    return groupedEntriesByDate
+      .map((group) => {
+        const measurement =
+          currentDevice === "omron" ? group.omron : group.xiaomi;
+        if (!measurement) return null;
+
+        return {
+          ...measurement,
+          weight: group.common.weight || measurement.weight,
+          waist: group.common.waist || measurement.waist,
+          dose: group.common.dose || measurement.dose,
+          appetite: group.common.appetite || measurement.appetite,
+          cravingLevel: group.common.cravingLevel || measurement.cravingLevel,
+          sideEffect: group.common.sideEffect || measurement.sideEffect,
+          sideEffectSeverity:
+            group.common.sideEffectSeverity || measurement.sideEffectSeverity,
+          sideEffects:
+            group.common.sideEffects && group.common.sideEffects.length
+              ? group.common.sideEffects
+              : measurement.sideEffects,
+          exerciseMin: group.common.exerciseMin || measurement.exerciseMin,
+          isShotDay: group.common.isShotDay || measurement.isShotDay,
+          isDeviceSwitchDay:
+            group.common.isDeviceSwitchDay || measurement.isDeviceSwitchDay,
+          deviceType: currentDevice,
+        } as Entry;
+      })
+      .filter(Boolean) as Entry[];
+  }, [groupedEntriesByDate, currentDevice]);
 
   const latest = compositionEntries.length
     ? compositionEntries[compositionEntries.length - 1]
     : null;
   const latestComposition = latest;
 
-  const latestWeight = latest ? num(latest.weight) : 0;
+  const latestWeight = groupedEntriesByDate.length
+    ? num(groupedEntriesByDate[groupedEntriesByDate.length - 1].common.weight)
+    : 0;
   const latestBodyFatPct = latestComposition ? num(latestComposition.bodyFatPct) : 0;
   const latestFatMass = latestComposition ? num(latestComposition.fatMass) : 0;
   const latestMuscleRate = latestComposition ? getMuscleRateFromEntry(latestComposition) : 0;
@@ -5068,7 +5145,7 @@ export default function SimpleTracker() {
     );
 
     return buildPeriodSummary("本週", windowEntries);
-  }, [sortedEntries]);
+  }, [compositionEntries]);
 
   const summaryYearOptions = useMemo(() => {
     const years = Array.from(
@@ -5101,7 +5178,7 @@ export default function SimpleTracker() {
 
   const overallSummary = useMemo(() => {
     return buildPeriodSummary("整體", compositionEntries);
-  }, [sortedEntries]);
+  }, [compositionEntries]);
 
 
   const anomalyAlerts = useMemo(() => {
@@ -5389,17 +5466,55 @@ export default function SimpleTracker() {
 
   const add = () => {
     if (!form.weight) return;
+
+    const applyCommonFields = (item: Entry): Entry => ({
+      ...item,
+      weight: form.weight || item.weight,
+      waist: form.waist || item.waist,
+      dose: form.dose,
+      appetite: form.appetite,
+      cravingLevel: form.cravingLevel,
+      sideEffect: form.sideEffect,
+      sideEffectSeverity: form.sideEffectSeverity,
+      sideEffects: form.sideEffects,
+      exerciseMin: form.exerciseMin,
+      isShotDay: form.isShotDay,
+      isDeviceSwitchDay:
+        item.deviceType === form.deviceType ? form.isDeviceSwitchDay : item.isDeviceSwitchDay,
+    });
+
     if (editingId) {
       setEntries((prev) =>
         prev.map((item) =>
-          item.id === editingId ? { ...form, id: editingId } : item,
+          item.id === editingId
+            ? { ...form, id: editingId }
+            : item.date === form.date
+              ? applyCommonFields(item)
+              : item,
         ),
       );
-      resetForm(form.isDeviceSwitchDay ? form.deviceType : currentDevice);
+      resetForm(currentDevice);
       return;
     }
-    setEntries((prev) => [...prev, { ...form, id: crypto.randomUUID() }]);
-    resetForm(form.isDeviceSwitchDay ? form.deviceType : currentDevice);
+
+    setEntries((prev) => {
+      let foundSameDevice = false;
+      const next = prev.map((item) => {
+        if (item.date === form.date && item.deviceType === form.deviceType) {
+          foundSameDevice = true
+          return { ...item, ...form, id: item.id };
+        }
+        if (item.date === form.date) {
+          return applyCommonFields(item);
+        }
+        return item;
+      });
+      if (!foundSameDevice) {
+        next.push({ ...form, id: crypto.randomUUID() });
+      }
+      return next;
+    });
+    resetForm(currentDevice);
   };
 
   const exportEntriesToExcel = () => {
@@ -6753,76 +6868,99 @@ export default function SimpleTracker() {
 
                   <div className="border-t pt-4 space-y-3">
                     <div className="text-sm font-medium">歷史紀錄</div>
-                    {sortedEntries.length === 0 ? (
+                    {groupedEntriesByDate.length === 0 ? (
                       <div className="text-sm text-slate-500">
                         目前還沒有紀錄
                       </div>
                     ) : (
-                      [...sortedEntries].reverse().map((item) => (
+                      [...groupedEntriesByDate].reverse().map((group) => (
                         <div
-                          key={item.id}
-                          className="rounded-xl border p-3 space-y-2"
+                          key={group.date}
+                          className="rounded-xl border p-3 space-y-3"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="text-sm space-y-1">
                               <div className="font-medium">
-                                {item.date} ・ {item.dose} mg{" "}
-                                {item.isShotDay ? "・ 施打日" : ""}
-                              </div>
-                              <div>體重：{item.weight} kg</div>
-                              <div>
-                                體脂：{item.bodyFatPct || "-"}%｜脂肪重：
-                                {item.fatMass || "-"} kg｜{item.deviceType === "omron" ? "骨骼肌率" : "肌肉率"}：
-                                {getMuscleRateFromEntry(item) || "-"}%｜{item.deviceType === "omron" ? "骨骼肌重" : "肌肉量"}：
-                                {getMuscleMassFromEntry(item) || "-"} kg
+                                {group.date} ・ {group.common.dose} mg{" "}
+                                {group.common.isShotDay ? "・ 施打日" : ""}
                               </div>
                               <div>
-                                內臟脂肪：{item.visceralFat || "-"}｜水分：
-                                {item.bodyWater || "-"}%｜腰圍：{item.waist || "-"} cm
+                                共通資料｜體重：{group.common.weight || "-"} kg｜腰圍：
+                                {group.common.waist || "-"} cm
                               </div>
                               <div>
-                                食慾：{item.appetite}｜嘴饞：{item.cravingLevel}
+                                食慾：{group.common.appetite}｜嘴饞：{group.common.cravingLevel}
                               </div>
                               <div>
                                 副作用：
-                                {item.sideEffects && item.sideEffects.length
-                                  ? item.sideEffects
+                                {group.common.sideEffects && group.common.sideEffects.length
+                                  ? group.common.sideEffects
                                       .map(
                                         (se) =>
                                           `${se.effect}（${se.severity || 0}/5）`,
                                       )
                                       .join("、")
-                                  : `${item.sideEffect}（${item.sideEffectSeverity || 0}/5）`}
-                                ｜ 運動：{item.exerciseMin || 0} 分鐘
+                                  : `${group.common.sideEffect}（${group.common.sideEffectSeverity || 0}/5）`}
+                                ｜ 運動：{group.common.exerciseMin || 0} 分鐘
                               </div>
-                              {item.isShotDay ? (
-                                <div className="text-emerald-600">
-                                  💉 施打日
-                                </div>
+                              {group.common.isShotDay ? (
+                                <div className="text-emerald-600">💉 施打日</div>
                               ) : null}
                             </div>
+                          </div>
 
-                            <div className="flex gap-2">
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => handleEdit(item)}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => handleDelete(item.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
+                          <div className="space-y-2">
+                            {group.xiaomi ? (
+                              <div className="rounded-lg border bg-slate-50 p-3 text-sm space-y-1">
+                                <div className="font-medium text-slate-700">小米資料</div>
+                                <div>
+                                  體脂：{group.xiaomi.bodyFatPct || "-"}%｜脂肪重：
+                                  {group.xiaomi.fatMass || "-"} kg｜肌肉率：
+                                  {group.xiaomi.muscleRate || "-"}%｜肌肉量：
+                                  {group.xiaomi.muscleMass || "-"} kg
+                                </div>
+                                <div>
+                                  內臟脂肪：{group.xiaomi.visceralFat || "-"}｜水分：
+                                  {group.xiaomi.bodyWater || "-"}%
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                  <Button size="icon" variant="outline" onClick={() => handleEdit(group.xiaomi!)}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button size="icon" variant="outline" onClick={() => handleDelete(group.xiaomi!.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {group.omron ? (
+                              <div className="rounded-lg border bg-slate-50 p-3 text-sm space-y-1">
+                                <div className="font-medium text-slate-700">歐姆龍資料</div>
+                                <div>
+                                  體脂：{group.omron.bodyFatPct || "-"}%｜脂肪重：
+                                  {group.omron.fatMass || "-"} kg｜骨骼肌率：
+                                  {group.omron.skeletalMuscleRate || "-"}%｜骨骼肌重：
+                                  {group.omron.skeletalMuscleMass || "-"} kg
+                                </div>
+                                <div>
+                                  內臟脂肪：{group.omron.visceralFat || "-"}｜水分：
+                                  {group.omron.bodyWater || "-"}%
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                  <Button size="icon" variant="outline" onClick={() => handleEdit(group.omron!)}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button size="icon" variant="outline" onClick={() => handleDelete(group.omron!.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       ))
-                    )}
-                  </div>
+                    )}                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
