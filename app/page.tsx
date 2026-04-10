@@ -3502,13 +3502,20 @@ export default function SimpleTracker() {
         const hasTrendMetric = num(weight) > 0 || num(bodyFatPct) > 0 || num(fatMass) > 0;
         if (!hasTrendMetric) return null;
 
-        const measurement = group.omron || group.xiaomi || group.common;
+        const omronMeasurement = group.omron;
+        const measurement = omronMeasurement || group.common;
 
         return {
           ...measurement,
           weight,
           bodyFatPct,
           fatMass,
+          muscleRate: omronMeasurement?.muscleRate || "",
+          muscleMass: omronMeasurement?.muscleMass || "",
+          skeletalMuscleRate: omronMeasurement?.skeletalMuscleRate || "",
+          skeletalMuscleMass: omronMeasurement?.skeletalMuscleMass || "",
+          visceralFat: omronMeasurement?.visceralFat || "",
+          bodyWater: omronMeasurement?.bodyWater || "",
           waist: group.common.waist || measurement.waist,
           dose: group.common.dose || measurement.dose,
           appetite: group.common.appetite || measurement.appetite,
