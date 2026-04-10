@@ -1937,6 +1937,20 @@ function isCompleteCompositionEntry(entry?: Partial<Entry> | null) {
   return snap.weight > 0 && snap.bodyFatPct > 0 && snap.muscleRate > 0 && snap.bodyWater > 0;
 }
 
+function isCompleteDualValidationGroup(group?: GroupedEntry | null) {
+  if (!group) return false;
+
+  return (
+    num(group.xiaomi?.weight) > 0 &&
+    num(group.xiaomi?.bodyFatPct) > 0 &&
+    num(group.xiaomi?.fatMass) > 0 &&
+    num(group.xiaomi?.bodyWater) > 0 &&
+    num(group.omron?.weight) > 0 &&
+    num(group.omron?.bodyFatPct) > 0 &&
+    num(group.omron?.fatMass) > 0
+  );
+}
+
 function getWaistDeltaWithinDays(entries: Entry[], endDate: string, days: number) {
   const waistEntries = entries.filter(
     (entry) => num((entry as any).waist) > 0 && daysBetween(entry.date, endDate) >= 0 && daysBetween(entry.date, endDate) <= days,
@@ -5373,25 +5387,35 @@ export default function SimpleTracker() {
         return diff >= 0 && diff <= days;
       });
 
-      const findFirstValid = (picker: (group: GroupedEntry) => number) =>
-        windowGroups.find((group) => picker(group) > 0) || null;
-      const findLastValid = (picker: (group: GroupedEntry) => number) =>
-        [...windowGroups].reverse().find((group) => picker(group) > 0) || null;
+      const comparableGroups = windowGroups.filter((group) =>
+        isCompleteDualValidationGroup(group),
+      );
+      const baseGroup = comparableGroups[0] || null;
+      const latestComparableGroup = comparableGroups[comparableGroups.length - 1] || null;
+
+      if (!baseGroup || !latestComparableGroup || comparableGroups.length < 2) {
+        return buildEmptyState(
+          mode === "short" ? "短期資料不足" : "中期資料不足",
+          `最近 ${days} 天至少需要 2 筆小米與歐姆龍皆完整的共同紀錄，才能做趨勢交互驗證。`,
+        );
+      }
 
       const metricDefs = [
-        { label: "小米體重", first: findFirstValid((g) => num(g.xiaomi?.weight)), last: findLastValid((g) => num(g.xiaomi?.weight)), read: (g: GroupedEntry) => num(g.xiaomi?.weight), threshold: 0.3 },
-        { label: "小米體脂率", first: findFirstValid((g) => num(g.xiaomi?.bodyFatPct)), last: findLastValid((g) => num(g.xiaomi?.bodyFatPct)), read: (g: GroupedEntry) => num(g.xiaomi?.bodyFatPct), threshold: 0.3 },
-        { label: "小米體脂重", first: findFirstValid((g) => num(g.xiaomi?.fatMass)), last: findLastValid((g) => num(g.xiaomi?.fatMass)), read: (g: GroupedEntry) => num(g.xiaomi?.fatMass), threshold: 0.3 },
-        { label: "歐姆龍體重", first: findFirstValid((g) => num(g.omron?.weight)), last: findLastValid((g) => num(g.omron?.weight)), read: (g: GroupedEntry) => num(g.omron?.weight), threshold: 0.3 },
-        { label: "歐姆龍體脂率", first: findFirstValid((g) => num(g.omron?.bodyFatPct)), last: findLastValid((g) => num(g.omron?.bodyFatPct)), read: (g: GroupedEntry) => num(g.omron?.bodyFatPct), threshold: 0.3 },
-        { label: "歐姆龍體脂重", first: findFirstValid((g) => num(g.omron?.fatMass)), last: findLastValid((g) => num(g.omron?.fatMass)), read: (g: GroupedEntry) => num(g.omron?.fatMass), threshold: 0.3 },
+        { label: "小米體重", read: (g: GroupedEntry) => num(g.xiaomi?.weight), threshold: 0.3 },
+        { label: "小米體脂率", read: (g: GroupedEntry) => num(g.xiaomi?.bodyFatPct), threshold: 0.3 },
+        { label: "小米體脂重", read: (g: GroupedEntry) => num(g.xiaomi?.fatMass), threshold: 0.3 },
+        { label: "歐姆龍體重", read: (g: GroupedEntry) => num(g.omron?.weight), threshold: 0.3 },
+        { label: "歐姆龍體脂率", read: (g: GroupedEntry) => num(g.omron?.bodyFatPct), threshold: 0.3 },
+        { label: "歐姆龍體脂重", read: (g: GroupedEntry) => num(g.omron?.fatMass), threshold: 0.3 },
       ];
 
       const metrics = metricDefs.map((metric) => {
-        if (!metric.first || !metric.last) {
+        const firstValue = metric.read(baseGroup);
+        const lastValue = metric.read(latestComparableGroup);
+        if (!(firstValue > 0 && lastValue > 0)) {
           return { label: metric.label, delta: 0, trend: "資料不足", available: false };
         }
-        const delta = +(metric.read(metric.last) - metric.read(metric.first)).toFixed(1);
+        const delta = +(lastValue - firstValue).toFixed(1);
         return {
           label: metric.label,
           delta,
@@ -5400,19 +5424,17 @@ export default function SimpleTracker() {
         };
       });
 
-      const waterFirst = findFirstValid((g) => num(g.xiaomi?.bodyWater));
-      const waterLast = findLastValid((g) => num(g.xiaomi?.bodyWater));
-      const waterAvailable = !!(waterFirst && waterLast);
+      const waterAvailable = num(baseGroup.xiaomi?.bodyWater) > 0 && num(latestComparableGroup.xiaomi?.bodyWater) > 0;
       const waterDelta = waterAvailable
-        ? +(num(waterLast?.xiaomi?.bodyWater) - num(waterFirst?.xiaomi?.bodyWater)).toFixed(1)
+        ? +(num(latestComparableGroup.xiaomi?.bodyWater) - num(baseGroup.xiaomi?.bodyWater)).toFixed(1)
         : 0;
       const waterTrend = waterAvailable ? getTrend(waterDelta, 0.5) : "資料不足";
 
       const availableMetricCount = metrics.filter((item) => item.available).length;
-      if (availableMetricCount < 3) {
+      if (availableMetricCount < 6) {
         return buildEmptyState(
           mode === "short" ? "短期資料不足" : "中期資料不足",
-          `最近 ${days} 天至少需要更多小米與歐姆龍有效紀錄，才能做趨勢交互驗證。`,
+          `最近 ${days} 天的共同起點資料還不夠完整，暫時不做雙設備趨勢交互驗證。`,
         );
       }
 
@@ -6873,19 +6895,18 @@ export default function SimpleTracker() {
                   anomalyAlerts.map((alert) => (
                     <div
                       key={`${alert.title}-${alert.detail}`}
-                      className={`rounded-xl border p-3 ${alert.level === "高" ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}
+                      className={`rounded-xl border p-3 ${alert.level === "高" ? "border-red-200 bg-red-50/95" : "border-amber-200 bg-amber-50/95"}`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium">{alert.title}</div>
+                        <div className={`font-medium ${alert.level === "高" ? "text-red-900" : "text-amber-900"}`}>{alert.title}</div>
                         <Badge
-                          variant={
-                            alert.level === "高" ? "destructive" : "secondary"
-                          }
+                          className={alert.level === "高" ? "border-red-300 bg-red-100 text-red-900" : "border-amber-300 bg-amber-100 text-amber-900"}
+                          variant="outline"
                         >
                           {alert.level}
                         </Badge>
                       </div>
-                      <div className="mt-1 text-slate-600">{alert.detail}</div>
+                      <div className={`mt-1 ${alert.level === "高" ? "text-red-800" : "text-amber-800"}`}>{alert.detail}</div>
                     </div>
                   ))
                 ) : (
@@ -7320,8 +7341,7 @@ export default function SimpleTracker() {
                                 {group.common.isShotDay ? "・ 施打日" : ""}
                               </div>
                               <div>
-                                共通資料｜體重：{group.common.weight || "-"} kg｜腰圍：
-                                {group.common.waist || "-"} cm
+                                共通資料｜腰圍：{group.common.waist || "-"} cm
                               </div>
                               <div>
                                 食慾：{group.common.appetite}｜嘴饞：{group.common.cravingLevel}
@@ -7349,7 +7369,8 @@ export default function SimpleTracker() {
                               <div className="rounded-lg border bg-slate-50 p-3 text-sm space-y-1">
                                 <div className="font-medium text-slate-700">小米資料</div>
                                 <div>
-                                  體脂：{group.xiaomi.bodyFatPct || "-"}%｜脂肪重：
+                                  體重：{group.xiaomi.weight || "-"} kg｜體脂：
+                                  {group.xiaomi.bodyFatPct || "-"}%｜脂肪重：
                                   {group.xiaomi.fatMass || "-"} kg｜肌肉率：
                                   {group.xiaomi.muscleRate || "-"}%｜肌肉量：
                                   {group.xiaomi.muscleMass || "-"} kg
@@ -7373,7 +7394,8 @@ export default function SimpleTracker() {
                               <div className="rounded-lg border bg-slate-50 p-3 text-sm space-y-1">
                                 <div className="font-medium text-slate-700">歐姆龍資料</div>
                                 <div>
-                                  體脂：{group.omron.bodyFatPct || "-"}%｜脂肪重：
+                                  體重：{group.omron.weight || "-"} kg｜體脂：
+                                  {group.omron.bodyFatPct || "-"}%｜脂肪重：
                                   {group.omron.fatMass || "-"} kg｜骨骼肌率：
                                   {group.omron.skeletalMuscleRate || "-"}%｜骨骼肌重：
                                   {group.omron.skeletalMuscleMass || "-"} kg
