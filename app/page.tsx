@@ -2047,12 +2047,12 @@ const COMPOSITE_METRICS = [
 ] as const;
 
 const METRIC_COLORS: Record<string, string> = {
-  weight: "#e2e8f0",
+  weight: "#facc15",
   bodyFatPct: "#7c3aed",
   fatMass: "#dc2626",
   muscleRate: "#059669",
   muscleMass: "#ea580c",
-  visceralFat: "#cbd5e1",
+  visceralFat: "#ff00cc",
   bodyWater: "#0284c7",
   waist: "#0f766e",
 };
