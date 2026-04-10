@@ -5511,7 +5511,27 @@ export default function SimpleTracker() {
   };
 
   const add = () => {
-    if (!form.weight) return;
+    const hasAnyMeaningfulInput =
+      !!(
+        form.weight ||
+        form.bodyFatPct ||
+        form.fatMass ||
+        form.muscleRate ||
+        form.muscleMass ||
+        form.skeletalMuscleRate ||
+        form.skeletalMuscleMass ||
+        form.visceralFat ||
+        form.bodyWater ||
+        form.waist ||
+        num(form.exerciseMin) > 0 ||
+        form.isShotDay ||
+        form.appetite !== "正常" ||
+        form.cravingLevel !== "中" ||
+        form.sideEffect !== "無" ||
+        form.sideEffects.some((se) => se.effect !== "無" || num(se.severity) > 0)
+      );
+
+    if (!hasAnyMeaningfulInput) return;
 
     const applyCommonFields = (item: Entry): Entry => ({
       ...item,
@@ -5530,25 +5550,34 @@ export default function SimpleTracker() {
     });
 
     if (editingId) {
-      setEntries((prev) =>
-        prev.map((item) =>
+      setEntries((prev) => {
+        const sameDateSharedWeight =
+          form.weight ||
+          prev.find((item) => item.date === form.date && item.id !== editingId)?.weight ||
+          "";
+
+        return prev.map((item) =>
           item.id === editingId
-            ? { ...form, id: editingId }
+            ? { ...form, weight: form.weight || sameDateSharedWeight, id: editingId }
             : item.date === form.date
               ? applyCommonFields(item)
               : item,
-        ),
-      );
+        );
+      });
       resetForm(currentDevice, form.dose);
       return;
     }
 
     setEntries((prev) => {
+      const sameDateEntries = prev.filter((item) => item.date === form.date);
+      const sharedWeight =
+        form.weight || sameDateEntries.find((item) => item.weight)?.weight || "";
+
       let foundSameDevice = false;
       const next = prev.map((item) => {
         if (item.date === form.date && item.deviceType === form.deviceType) {
-          foundSameDevice = true
-          return { ...item, ...form, id: item.id };
+          foundSameDevice = true;
+          return { ...item, ...form, weight: form.weight || item.weight || sharedWeight, id: item.id };
         }
         if (item.date === form.date) {
           return applyCommonFields(item);
@@ -5556,7 +5585,7 @@ export default function SimpleTracker() {
         return item;
       });
       if (!foundSameDevice) {
-        next.push({ ...form, id: crypto.randomUUID() });
+        next.push({ ...form, weight: sharedWeight, id: crypto.randomUUID() });
       }
       return next;
     });
