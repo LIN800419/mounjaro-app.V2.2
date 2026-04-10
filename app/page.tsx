@@ -1867,6 +1867,54 @@ function getMuscleMassFromEntry(entry?: Partial<Entry> | null) {
   return num((entry as any).muscleMass);
 }
 
+type GroupedEntry = {
+  date: string;
+  common: Entry;
+  xiaomi?: Entry;
+  omron?: Entry;
+};
+
+type BackfillableMetricKey = "weight" | "bodyFatPct" | "fatMass";
+
+function buildOmronBackfilledMetricMap(
+  groupedEntries: GroupedEntry[],
+  metric: BackfillableMetricKey,
+) {
+  const map = new Map<string, string>();
+
+  const firstOmronDate = groupedEntries.find((group) => {
+    const value = metric === "weight" ? num(group.omron?.weight) : num(group.omron?.[metric]);
+    return value > 0;
+  })?.date;
+
+  if (!firstOmronDate) {
+    groupedEntries.forEach((group) => {
+      const xiaomiValue = metric === "weight" ? group.xiaomi?.weight : group.xiaomi?.[metric];
+      if (num(xiaomiValue) > 0) {
+        map.set(group.date, String(xiaomiValue));
+      }
+    });
+    return map;
+  }
+
+  groupedEntries.forEach((group) => {
+    if (group.date < firstOmronDate) {
+      const xiaomiValue = metric === "weight" ? group.xiaomi?.weight : group.xiaomi?.[metric];
+      if (num(xiaomiValue) > 0) {
+        map.set(group.date, String(xiaomiValue));
+      }
+      return;
+    }
+
+    const omronValue = metric === "weight" ? group.omron?.weight : group.omron?.[metric];
+    if (num(omronValue) > 0) {
+      map.set(group.date, String(omronValue));
+    }
+  });
+
+  return map;
+}
+
 
 type CompositionSnapshot = {
   weight: number;
@@ -3430,6 +3478,71 @@ export default function SimpleTracker() {
     })) as Entry[];
   }, [groupedEntriesByDate, currentDevice]);
 
+  const omronBackfilledWeightMap = useMemo(
+    () => buildOmronBackfilledMetricMap(groupedEntriesByDate as GroupedEntry[], "weight"),
+    [groupedEntriesByDate],
+  );
+
+  const omronBackfilledBodyFatPctMap = useMemo(
+    () => buildOmronBackfilledMetricMap(groupedEntriesByDate as GroupedEntry[], "bodyFatPct"),
+    [groupedEntriesByDate],
+  );
+
+  const omronBackfilledFatMassMap = useMemo(
+    () => buildOmronBackfilledMetricMap(groupedEntriesByDate as GroupedEntry[], "fatMass"),
+    [groupedEntriesByDate],
+  );
+
+  const omronTrendEntries = useMemo(() => {
+    return groupedEntriesByDate
+      .map((group) => {
+        const weight = omronBackfilledWeightMap.get(group.date) || "";
+        const bodyFatPct = omronBackfilledBodyFatPctMap.get(group.date) || "";
+        const fatMass = omronBackfilledFatMassMap.get(group.date) || "";
+        const hasTrendMetric = num(weight) > 0 || num(bodyFatPct) > 0 || num(fatMass) > 0;
+        if (!hasTrendMetric) return null;
+
+        const measurement = group.omron || group.xiaomi || group.common;
+
+        return {
+          ...measurement,
+          weight,
+          bodyFatPct,
+          fatMass,
+          waist: group.common.waist || measurement.waist,
+          dose: group.common.dose || measurement.dose,
+          appetite: group.common.appetite || measurement.appetite,
+          cravingLevel: group.common.cravingLevel || measurement.cravingLevel,
+          sideEffect: group.common.sideEffect || measurement.sideEffect,
+          sideEffectSeverity:
+            group.common.sideEffectSeverity || measurement.sideEffectSeverity,
+          sideEffects:
+            group.common.sideEffects && group.common.sideEffects.length
+              ? group.common.sideEffects
+              : measurement.sideEffects,
+          exerciseMin: group.common.exerciseMin || measurement.exerciseMin,
+          isShotDay: group.common.isShotDay || measurement.isShotDay,
+          isDeviceSwitchDay:
+            group.common.isDeviceSwitchDay || measurement.isDeviceSwitchDay,
+          deviceType: "omron" as DeviceType,
+        } as Entry;
+      })
+      .filter(Boolean) as Entry[];
+  }, [
+    groupedEntriesByDate,
+    omronBackfilledWeightMap,
+    omronBackfilledBodyFatPctMap,
+    omronBackfilledFatMassMap,
+  ]);
+
+  const trendWeightEntries = useMemo(() => {
+    return currentDevice === "omron" ? omronTrendEntries : commonWeightEntries;
+  }, [currentDevice, omronTrendEntries, commonWeightEntries]);
+
+  const trendCompositionEntries = useMemo(() => {
+    return currentDevice === "omron" ? omronTrendEntries : compositionEntries;
+  }, [currentDevice, omronTrendEntries, compositionEntries]);
+
   const latest = compositionEntries.length
     ? compositionEntries[compositionEntries.length - 1]
     : null;
@@ -4863,9 +4976,15 @@ export default function SimpleTracker() {
       groupedEntriesByDate.map((group, i) => {
         const deviceEntry =
           currentDevice === "omron" ? group.omron : group.xiaomi;
-        const weightValue = num(group.common.weight);
-        const bodyFatPctValue = num(deviceEntry?.bodyFatPct);
-        const fatMassValue = num(deviceEntry?.fatMass);
+        const weightValue = currentDevice === "omron"
+          ? num(omronBackfilledWeightMap.get(group.date))
+          : num(group.common.weight);
+        const bodyFatPctValue = currentDevice === "omron"
+          ? num(omronBackfilledBodyFatPctMap.get(group.date))
+          : num(deviceEntry?.bodyFatPct);
+        const fatMassValue = currentDevice === "omron"
+          ? num(omronBackfilledFatMassMap.get(group.date))
+          : num(deviceEntry?.fatMass);
         const muscleRateValue = getMuscleRateFromEntry(deviceEntry);
         const muscleMassValue = getMuscleMassFromEntry(deviceEntry);
         const visceralFatValue = num(deviceEntry?.visceralFat);
@@ -4876,7 +4995,7 @@ export default function SimpleTracker() {
           date: fmtDate(group.date),
           rawDate: group.date,
           weight: weightValue > 0 ? weightValue : null,
-          avg7: weightValue > 0 ? getSevenDayAverage(commonWeightEntries, i) : null,
+          avg7: weightValue > 0 ? getSevenDayAverage(trendWeightEntries, i) : null,
           goal: num(settings.goal) || null,
           bodyFatPct: bodyFatPctValue > 0 ? bodyFatPctValue : null,
           fatMass: fatMassValue > 0 ? fatMassValue : null,
@@ -4887,7 +5006,7 @@ export default function SimpleTracker() {
           waist: num(group.common.waist) > 0 ? num(group.common.waist) : null,
         };
       }),
-    [groupedEntriesByDate, commonWeightEntries, currentDevice, settings.goal],
+    [groupedEntriesByDate, trendWeightEntries, currentDevice, settings.goal],
   );
 
   const chartData = useMemo(() => {
@@ -5162,33 +5281,33 @@ export default function SimpleTracker() {
   };
 
   const weeklySummary = useMemo(() => {
-    if (!compositionEntries.length && !commonWeightEntries.length) {
+    if (!trendCompositionEntries.length && !trendWeightEntries.length) {
       return buildPeriodSummary("本週", [], []);
     }
 
     const latestDate =
-      compositionEntries[compositionEntries.length - 1]?.date ||
-      commonWeightEntries[commonWeightEntries.length - 1]?.date ||
+      trendCompositionEntries[trendCompositionEntries.length - 1]?.date ||
+      trendWeightEntries[trendWeightEntries.length - 1]?.date ||
       "";
     const weekStart = latestDate ? getWeekStart(latestDate) : "";
-    const compositionWindowEntries = compositionEntries.filter(
+    const compositionWindowEntries = trendCompositionEntries.filter(
       (entry) =>
         daysBetween(weekStart, entry.date) >= 0 &&
         daysBetween(entry.date, latestDate) >= 0,
     );
-    const weightWindowEntries = commonWeightEntries.filter(
+    const weightWindowEntries = trendWeightEntries.filter(
       (entry) =>
         daysBetween(weekStart, entry.date) >= 0 &&
         daysBetween(entry.date, latestDate) >= 0,
     );
 
     return buildPeriodSummary("本週", compositionWindowEntries, weightWindowEntries);
-  }, [compositionEntries, commonWeightEntries]);
+  }, [trendCompositionEntries, trendWeightEntries]);
 
   const summaryYearOptions = useMemo(() => {
     const years = Array.from(
       new Set(
-        commonWeightEntries
+        trendWeightEntries
           .map((entry) => entry.date.split("-")[0])
           .filter(Boolean),
       ),
@@ -5196,18 +5315,18 @@ export default function SimpleTracker() {
 
     if (!years.length && selectedSummaryYear) return [selectedSummaryYear];
     return years;
-  }, [commonWeightEntries, selectedSummaryYear]);
+  }, [trendWeightEntries, selectedSummaryYear]);
 
   const monthSummary = useMemo(() => {
     if (!selectedSummaryYear || !selectedSummaryMonth) {
       return buildPeriodSummary("月份", [], []);
     }
 
-    const compositionWindowEntries = compositionEntries.filter((entry) => {
+    const compositionWindowEntries = trendCompositionEntries.filter((entry) => {
       const [year, month] = entry.date.split("-");
       return year === selectedSummaryYear && month === selectedSummaryMonth;
     });
-    const weightWindowEntries = commonWeightEntries.filter((entry) => {
+    const weightWindowEntries = trendWeightEntries.filter((entry) => {
       const [year, month] = entry.date.split("-");
       return year === selectedSummaryYear && month === selectedSummaryMonth;
     });
@@ -5217,376 +5336,191 @@ export default function SimpleTracker() {
       compositionWindowEntries,
       weightWindowEntries,
     );
-  }, [compositionEntries, commonWeightEntries, selectedSummaryYear, selectedSummaryMonth]);
+  }, [trendCompositionEntries, trendWeightEntries, selectedSummaryYear, selectedSummaryMonth]);
 
   const overallSummary = useMemo(() => {
-    return buildPeriodSummary("整體", compositionEntries, commonWeightEntries);
-  }, [compositionEntries, commonWeightEntries]);
+    return buildPeriodSummary("整體", trendCompositionEntries, trendWeightEntries);
+  }, [trendCompositionEntries, trendWeightEntries]);
 
+  const monthCrossValidation = useMemo(() => {
+    const emptyState = {
+      level: "資料不足",
+      title: "交互驗證資料不足",
+      summary: "至少需要該月份內的小米與歐姆龍有效紀錄，才會進行雙設備交互驗證。",
+      confidence: "低",
+      badgeTone: "slate",
+      reasons: ["請先累積該月份的小米與歐姆龍紀錄"],
+      details: [] as string[],
+      caution: [] as string[],
+    };
 
-type CrossValidationCardTone = "default" | "success" | "warning" | "danger";
-type TrendDirection = "down" | "flat" | "up" | "no-data";
-type CrossValidationMetric = {
-  label: string;
-  direction: TrendDirection;
-  deltaText: string;
-};
-type CrossValidationBlock = {
-  label: string;
-  title: string;
-  summary: string;
-  confidence: string;
-  confidencePct: number;
-  tone: CrossValidationCardTone;
-  phase: "未進入" | "過渡期" | "已進入";
-  phaseScore: number;
-  phaseMaxScore: number;
-  consistencyScore: number;
-  consistencyMaxScore: number;
-  signals: string[];
-  cautions: string[];
-  metrics: CrossValidationMetric[];
-};
+    if (!selectedSummaryYear || !selectedSummaryMonth) return emptyState;
 
-  const crossValidationAnchorDate = useMemo(() => {
-    return groupedEntriesByDate[groupedEntriesByDate.length - 1]?.date || "";
-  }, [groupedEntriesByDate]);
-
-  const getTrendDirection = (delta: number, threshold: number): TrendDirection => {
-    if (!Number.isFinite(delta)) return "no-data";
-    if (delta <= -threshold) return "down";
-    if (delta >= threshold) return "up";
-    return "flat";
-  };
-
-  const getTrendLabel = (direction: TrendDirection) => {
-    if (direction === "down") return "下降";
-    if (direction === "up") return "上升";
-    if (direction === "flat") return "持平";
-    return "資料不足";
-  };
-
-  const getTrendArrow = (direction: TrendDirection) => {
-    if (direction === "down") return "↓";
-    if (direction === "up") return "↑";
-    if (direction === "flat") return "→";
-    return "-";
-  };
-
-  const buildCrossValidationWindow = (
-    label: string,
-    daySpan: number,
-  ): CrossValidationBlock => {
-    if (!crossValidationAnchorDate) {
-      return {
-        label,
-        title: "資料不足",
-        summary: "尚無可用的雙設備資料。",
-        confidence: "待建立",
-        confidencePct: 0,
-        tone: "default",
-        phase: "未進入",
-        phaseScore: 0,
-        phaseMaxScore: 5,
-        consistencyScore: 0,
-        consistencyMaxScore: 6,
-        signals: [],
-        cautions: ["請先累積小米與歐姆龍量測資料"],
-        metrics: [],
-      };
-    }
-
-    const windowGroups = groupedEntriesByDate.filter((group) => {
-      const diff = daysBetween(group.date, crossValidationAnchorDate);
-      return diff >= 0 && diff <= daySpan;
+    const monthGroups = groupedEntriesByDate.filter((group) => {
+      const [year, month] = group.date.split("-");
+      return year === selectedSummaryYear && month === selectedSummaryMonth;
     });
 
-    const xiaomiWeightEntries = windowGroups.filter((group) => num(group.xiaomi?.weight) > 0);
-    const xiaomiBodyFatEntries = windowGroups.filter(
-      (group) => num(group.xiaomi?.bodyFatPct) > 0 || num(group.xiaomi?.fatMass) > 0,
-    );
-    const xiaomiWaterEntries = windowGroups.filter((group) => num(group.xiaomi?.bodyWater) > 0);
+    const findFirstValid = (rows: GroupedEntry[], picker: (group: GroupedEntry) => number) =>
+      rows.find((group) => picker(group) > 0) || null;
+    const findLastValid = (rows: GroupedEntry[], picker: (group: GroupedEntry) => number) =>
+      [...rows].reverse().find((group) => picker(group) > 0) || null;
 
-    const omronWeightEntries = windowGroups.filter((group) => num(group.omron?.weight) > 0);
-    const omronBodyFatEntries = windowGroups.filter(
-      (group) => num(group.omron?.bodyFatPct) > 0 || num(group.omron?.fatMass) > 0,
-    );
+    const xiaomiWeightFirst = findFirstValid(monthGroups, (group) => num(group.xiaomi?.weight));
+    const xiaomiWeightLast = findLastValid(monthGroups, (group) => num(group.xiaomi?.weight));
+    const omronWeightFirst = findFirstValid(monthGroups, (group) => num(group.omron?.weight));
+    const omronWeightLast = findLastValid(monthGroups, (group) => num(group.omron?.weight));
+    const omronBodyFatFirst = findFirstValid(monthGroups, (group) => num(group.omron?.bodyFatPct));
+    const omronBodyFatLast = findLastValid(monthGroups, (group) => num(group.omron?.bodyFatPct));
+    const omronFatMassFirst = findFirstValid(monthGroups, (group) => num(group.omron?.fatMass));
+    const omronFatMassLast = findLastValid(monthGroups, (group) => num(group.omron?.fatMass));
+    const xiaomiWaterFirst = findFirstValid(monthGroups, (group) => num(group.xiaomi?.bodyWater));
+    const xiaomiWaterLast = findLastValid(monthGroups, (group) => num(group.xiaomi?.bodyWater));
 
-    const buildDelta = (
-      list: { date: string; common: Entry; xiaomi?: Entry; omron?: Entry }[],
-      pick: (group: { date: string; common: Entry; xiaomi?: Entry; omron?: Entry }) => Entry | undefined,
-      field: keyof Entry,
-    ) => {
-      if (list.length < 2) return null;
-      const first = pick(list[0]);
-      const last = pick(list[list.length - 1]);
-      if (!first || !last) return null;
-      const firstValue = num(first[field]);
-      const lastValue = num(last[field]);
-      if (!(firstValue > 0 && lastValue > 0)) return null;
-      return +(lastValue - firstValue).toFixed(1);
-    };
+    const xiaomiWeightDelta = xiaomiWeightFirst && xiaomiWeightLast
+      ? +(num(xiaomiWeightLast.xiaomi?.weight) - num(xiaomiWeightFirst.xiaomi?.weight)).toFixed(1)
+      : 0;
+    const omronWeightDelta = omronWeightFirst && omronWeightLast
+      ? +(num(omronWeightLast.omron?.weight) - num(omronWeightFirst.omron?.weight)).toFixed(1)
+      : 0;
+    const omronBodyFatDelta = omronBodyFatFirst && omronBodyFatLast
+      ? +(num(omronBodyFatLast.omron?.bodyFatPct) - num(omronBodyFatFirst.omron?.bodyFatPct)).toFixed(1)
+      : 0;
+    const omronFatMassDelta = omronFatMassFirst && omronFatMassLast
+      ? +(num(omronFatMassLast.omron?.fatMass) - num(omronFatMassFirst.omron?.fatMass)).toFixed(1)
+      : 0;
+    const xiaomiWaterDelta = xiaomiWaterFirst && xiaomiWaterLast
+      ? +(num(xiaomiWaterLast.xiaomi?.bodyWater) - num(xiaomiWaterFirst.xiaomi?.bodyWater)).toFixed(1)
+      : 0;
 
-    const xiaomiWeightDelta = buildDelta(xiaomiWeightEntries, (g) => g.xiaomi, "weight");
-    const xiaomiBodyFatPctDelta = buildDelta(xiaomiBodyFatEntries, (g) => g.xiaomi, "bodyFatPct");
-    const xiaomiFatMassDelta = buildDelta(xiaomiBodyFatEntries, (g) => g.xiaomi, "fatMass");
-    const xiaomiWaterDelta = buildDelta(xiaomiWaterEntries, (g) => g.xiaomi, "bodyWater");
+    const hasXiaomiWeight = !!(xiaomiWeightFirst && xiaomiWeightLast);
+    const hasOmronWeight = !!(omronWeightFirst && omronWeightLast);
+    const hasOmronBodyFat = !!(omronBodyFatFirst && omronBodyFatLast);
+    const hasOmronFatMass = !!(omronFatMassFirst && omronFatMassLast);
+    const hasXiaomiWater = !!(xiaomiWaterFirst && xiaomiWaterLast);
 
-    const omronWeightDelta = buildDelta(omronWeightEntries, (g) => g.omron, "weight");
-    const omronBodyFatPctDelta = buildDelta(omronBodyFatEntries, (g) => g.omron, "bodyFatPct");
-    const omronFatMassDelta = buildDelta(omronBodyFatEntries, (g) => g.omron, "fatMass");
+    const xiaomiWeightDown = hasXiaomiWeight && xiaomiWeightDelta <= -0.3;
+    const omronWeightDown = hasOmronWeight && omronWeightDelta <= -0.3;
+    const omronWeightUp = hasOmronWeight && omronWeightDelta >= 0.3;
+    const xiaomiWeightUp = hasXiaomiWeight && xiaomiWeightDelta >= 0.3;
+    const omronBodyFatDown = hasOmronBodyFat && omronBodyFatDelta <= -0.3;
+    const omronFatMassDown = hasOmronFatMass && omronFatMassDelta <= -0.3;
+    const xiaomiWaterDrop = hasXiaomiWater && xiaomiWaterDelta <= -0.8;
+    const xiaomiWaterStable = hasXiaomiWater && Math.abs(xiaomiWaterDelta) <= 0.5;
 
-    const xiaomiWeightTrend = xiaomiWeightDelta === null ? "no-data" : getTrendDirection(xiaomiWeightDelta, 0.3);
-    const xiaomiBodyFatPctTrend = xiaomiBodyFatPctDelta === null ? "no-data" : getTrendDirection(xiaomiBodyFatPctDelta, 0.3);
-    const xiaomiFatMassTrend = xiaomiFatMassDelta === null ? "no-data" : getTrendDirection(xiaomiFatMassDelta, 0.3);
-    const xiaomiWaterTrend = xiaomiWaterDelta === null ? "no-data" : getTrendDirection(xiaomiWaterDelta, 0.5);
-
-    const omronWeightTrend = omronWeightDelta === null ? "no-data" : getTrendDirection(omronWeightDelta, 0.3);
-    const omronBodyFatPctTrend = omronBodyFatPctDelta === null ? "no-data" : getTrendDirection(omronBodyFatPctDelta, 0.3);
-    const omronFatMassTrend = omronFatMassDelta === null ? "no-data" : getTrendDirection(omronFatMassDelta, 0.3);
-
-    const metrics: CrossValidationMetric[] = [
-      {
-        label: "小米體重",
-        direction: xiaomiWeightTrend,
-        deltaText: xiaomiWeightDelta === null ? "-" : `${xiaomiWeightDelta > 0 ? "+" : ""}${xiaomiWeightDelta} kg`,
-      },
-      {
-        label: "小米體脂率",
-        direction: xiaomiBodyFatPctTrend,
-        deltaText: xiaomiBodyFatPctDelta === null ? "-" : `${xiaomiBodyFatPctDelta > 0 ? "+" : ""}${xiaomiBodyFatPctDelta}%`,
-      },
-      {
-        label: "小米體脂重",
-        direction: xiaomiFatMassTrend,
-        deltaText: xiaomiFatMassDelta === null ? "-" : `${xiaomiFatMassDelta > 0 ? "+" : ""}${xiaomiFatMassDelta} kg`,
-      },
-      {
-        label: "小米水分",
-        direction: xiaomiWaterTrend,
-        deltaText: xiaomiWaterDelta === null ? "-" : `${xiaomiWaterDelta > 0 ? "+" : ""}${xiaomiWaterDelta}%`,
-      },
-      {
-        label: "歐姆龍體重",
-        direction: omronWeightTrend,
-        deltaText: omronWeightDelta === null ? "-" : `${omronWeightDelta > 0 ? "+" : ""}${omronWeightDelta} kg`,
-      },
-      {
-        label: "歐姆龍體脂率",
-        direction: omronBodyFatPctTrend,
-        deltaText: omronBodyFatPctDelta === null ? "-" : `${omronBodyFatPctDelta > 0 ? "+" : ""}${omronBodyFatPctDelta}%`,
-      },
-      {
-        label: "歐姆龍體脂重",
-        direction: omronFatMassTrend,
-        deltaText: omronFatMassDelta === null ? "-" : `${omronFatMassDelta > 0 ? "+" : ""}${omronFatMassDelta} kg`,
-      },
+    const details = [
+      hasXiaomiWeight
+        ? `小米體重：${xiaomiWeightDelta > 0 ? "+" : ""}${xiaomiWeightDelta} kg`
+        : "小米體重：資料不足",
+      hasOmronWeight
+        ? `歐姆龍體重：${omronWeightDelta > 0 ? "+" : ""}${omronWeightDelta} kg`
+        : "歐姆龍體重：資料不足",
+      hasOmronBodyFat
+        ? `歐姆龍體脂率：${omronBodyFatDelta > 0 ? "+" : ""}${omronBodyFatDelta}%`
+        : "歐姆龍體脂率：資料不足",
+      hasOmronFatMass
+        ? `歐姆龍體脂重：${omronFatMassDelta > 0 ? "+" : ""}${omronFatMassDelta} kg`
+        : "歐姆龍體脂重：資料不足",
+      hasXiaomiWater
+        ? `小米水分：${xiaomiWaterDelta > 0 ? "+" : ""}${xiaomiWaterDelta}%`
+        : "小米水分：資料不足",
     ];
 
-    const signals: string[] = [];
-    const cautions: string[] = [];
+    const reasons: string[] = [];
+    const caution: string[] = [];
 
-    if (label === "當日") {
-      const latestGroup = windowGroups[windowGroups.length - 1];
-      const xiaomiWeight = num(latestGroup?.xiaomi?.weight);
-      const omronWeight = num(latestGroup?.omron?.weight);
-      const xiaomiBodyFatPct = num(latestGroup?.xiaomi?.bodyFatPct);
-      const xiaomiWater = num(latestGroup?.xiaomi?.bodyWater);
-      const omronBodyFatPct = num(latestGroup?.omron?.bodyFatPct);
-      const weightGap = xiaomiWeight > 0 && omronWeight > 0 ? +(omronWeight - xiaomiWeight).toFixed(1) : null;
+    if (!hasXiaomiWeight && !hasOmronWeight) {
+      return emptyState;
+    }
 
-      const sameWeight = weightGap !== null && Math.abs(weightGap) <= 0.5;
-      const sameFatDirection =
-        xiaomiBodyFatPct > 0 &&
-        omronBodyFatPct > 0 &&
-        Math.abs(omronBodyFatPct - xiaomiBodyFatPct) <= 1.5;
-      const likelyWaterStable = !(xiaomiWater > 0 && xiaomiWater < 45);
-
-      let phase: CrossValidationBlock["phase"] = "過渡期";
-      let phaseScore = 0;
-      if (sameWeight) phaseScore += 1;
-      if (sameFatDirection) phaseScore += 1;
-      if (likelyWaterStable) phaseScore += 1;
-      if (phaseScore >= 3) phase = "已進入";
-      else if (phaseScore <= 1) phase = "未進入";
-
-      let title = "當日觀察基準";
-      let summary = "當日交互驗證以建立今天的量測基準為主，不直接代表是否已進入減脂期。";
-      let tone: CrossValidationCardTone = "default";
-      let confidencePct = 50;
-
-      if (weightGap !== null) {
-        signals.push(`同日雙設備體重差 ${weightGap > 0 ? "+" : ""}${weightGap} kg`);
-        if (Math.abs(weightGap) <= 0.3) {
-          title = "當日基準穩定";
-          summary = "今天兩台設備體重相當接近，可作為後續趨勢比對的穩定基準。";
-          tone = "success";
-          confidencePct = 80;
-        } else if (Math.abs(weightGap) <= 0.8) {
-          title = "當日可參考";
-          summary = "今天兩台設備體重有些微差距，但仍可作為趨勢觀察起點。";
-          tone = "warning";
-          confidencePct = 65;
-        } else {
-          title = "當日差距偏大";
-          summary = "今天兩台設備差距較大，這筆只適合作為參考，不宜過度解讀。";
-          tone = "danger";
-          confidencePct = 35;
-          cautions.push("請確認量測時間、地面、衣著與校正條件是否一致");
-        }
-      } else {
-        title = "當日資料不足";
-        summary = "今天至少需要小米與歐姆龍各一筆體重，才能完成同日交互觀察。";
-        confidencePct = 20;
-      }
-
-      if (xiaomiBodyFatPct > 0 && omronBodyFatPct > 0) {
-        signals.push(`小米體脂 ${xiaomiBodyFatPct}%｜歐姆龍體脂 ${omronBodyFatPct}%`);
-      } else {
-        cautions.push("今天缺少雙設備體脂率，無法檢查同日脂肪方向是否接近");
-      }
-
-      if (xiaomiWater > 0) {
-        signals.push(`小米水分 ${xiaomiWater}%`);
-        if (xiaomiWater < 45) cautions.push("今天小米水分偏低，單日體重可能混有水分因素");
-      } else {
-        cautions.push("今天缺少小米水分，無法輔助排除脫水因素");
-      }
-
-      const consistencyScore = [
-        weightGap !== null && Math.abs(weightGap) <= 0.5,
-        sameFatDirection,
-      ].filter(Boolean).length;
-      const consistencyMaxScore = 2;
-
+    if (xiaomiWeightDown && omronWeightDown && (omronBodyFatDown || omronFatMassDown) && xiaomiWaterStable) {
+      reasons.push("雙設備體重同步下降");
+      reasons.push("歐姆龍體脂指標同步下降");
+      reasons.push("小米水分大致穩定");
       return {
-        label,
-        title,
-        summary,
-        confidence: `${confidencePct}%`,
-        confidencePct,
-        tone,
-        phase,
-        phaseScore,
-        phaseMaxScore: 3,
-        consistencyScore,
-        consistencyMaxScore,
-        signals,
-        cautions,
-        metrics,
+        level: "高度可信",
+        title: "雙設備趨勢一致，較像真的在減脂",
+        summary: "這個月份內兩台設備的下降方向一致，且歐姆龍體脂有跟著改善，可信度最高。",
+        confidence: "高",
+        badgeTone: "emerald",
+        reasons,
+        details,
+        caution,
       };
     }
 
-    const consistencyChecks = [
-      xiaomiWeightTrend !== "no-data" && omronWeightTrend !== "no-data" && xiaomiWeightTrend === omronWeightTrend,
-      xiaomiBodyFatPctTrend !== "no-data" && omronBodyFatPctTrend !== "no-data" && xiaomiBodyFatPctTrend === omronBodyFatPctTrend,
-      xiaomiFatMassTrend !== "no-data" && omronFatMassTrend !== "no-data" && xiaomiFatMassTrend === omronFatMassTrend,
-      xiaomiWeightTrend === "down",
-      omronWeightTrend === "down",
-      xiaomiBodyFatPctTrend === "down" || xiaomiFatMassTrend === "down" || omronBodyFatPctTrend === "down" || omronFatMassTrend === "down",
-    ];
-    const consistencyScore = consistencyChecks.filter(Boolean).length;
-    const consistencyMaxScore = consistencyChecks.length;
-
-    const bodyWeightDownConsistent = xiaomiWeightTrend === "down" && omronWeightTrend === "down";
-    const bodyFatDownConsistent =
-      (xiaomiBodyFatPctTrend === "down" || xiaomiFatMassTrend === "down") &&
-      (omronBodyFatPctTrend === "down" || omronFatMassTrend === "down");
-    const waterInterference = xiaomiWaterTrend === "down";
-    const bodyFatMixed =
-      (xiaomiBodyFatPctTrend === "down" || xiaomiFatMassTrend === "down" || omronBodyFatPctTrend === "down" || omronFatMassTrend === "down") &&
-      !bodyFatDownConsistent;
-    const trendConflict =
-      (xiaomiWeightTrend !== "no-data" && omronWeightTrend !== "no-data" && xiaomiWeightTrend !== omronWeightTrend) ||
-      ((xiaomiBodyFatPctTrend === "up" || xiaomiFatMassTrend === "up") &&
-        (omronBodyFatPctTrend === "down" || omronFatMassTrend === "down")) ||
-      ((omronBodyFatPctTrend === "up" || omronFatMassTrend === "up") &&
-        (xiaomiBodyFatPctTrend === "down" || xiaomiFatMassTrend === "down"));
-
-    let phase: CrossValidationBlock["phase"] = "未進入";
-    let phaseScore = 0;
-    if (bodyWeightDownConsistent) phaseScore += 2;
-    if (bodyFatDownConsistent) phaseScore += 2;
-    else if (bodyFatMixed) phaseScore += 1;
-    if (!waterInterference) phaseScore += 1;
-
-    if (phaseScore >= 4) phase = "已進入";
-    else if (phaseScore >= 2) phase = "過渡期";
-
-    let confidencePct = Math.round((consistencyScore / consistencyMaxScore) * 100);
-    if (windowGroups.length >= 8) confidencePct += 5;
-    if (trendConflict) confidencePct -= 15;
-    if (waterInterference) confidencePct -= 8;
-    confidencePct = Math.max(20, Math.min(95, confidencePct));
-
-    let title = `${label}趨勢觀察中`;
-    let summary = `${label}內雙設備趨勢尚未形成很清楚的一致結論。`;
-    let tone: CrossValidationCardTone = "default";
-
-    if (bodyWeightDownConsistent && bodyFatDownConsistent && !waterInterference) {
-      title = `${label}趨勢高度一致`;
-      summary = "小米與歐姆龍的體重、體脂率、體脂重整體都朝下降方向走，且小米水分沒有明顯往下，較像已進入穩定減脂期。";
-      tone = "success";
-    } else if (bodyWeightDownConsistent && bodyFatDownConsistent && waterInterference) {
-      title = `${label}偏向減脂，但混有水分影響`;
-      summary = "雙設備的體重與脂肪指標整體向下，但小米水分也同步下降，代表這段下降不能完全視為脂肪變化。";
-      tone = "warning";
-    } else if (bodyWeightDownConsistent && bodyFatMixed) {
-      title = `${label}進入過渡期`;
-      summary = "雙設備都顯示變輕，但脂肪相關趨勢只有部分指標跟上，較像過渡期，還需要再觀察幾天。";
-      tone = "warning";
-    } else if (trendConflict) {
-      title = `${label}趨勢不一致`;
-      summary = "小米與歐姆龍在體重或脂肪方向上沒有講同一個故事，暫時不提高減脂判定可信度。";
-      tone = "danger";
-    } else {
-      title = `${label}仍在觀察期`;
-      summary = "目前沒有看到雙設備都一致往下的完整訊號，先繼續累積趨勢。";
-      tone = "default";
+    if (xiaomiWeightDown && omronWeightDown && !(omronBodyFatDown || omronFatMassDown)) {
+      reasons.push("雙設備體重同步下降");
+      reasons.push("但歐姆龍體脂改善還不夠明顯");
+      if (xiaomiWaterDrop) {
+        caution.push("小米水分也明顯下降，這波下降可能混有水分因素");
+        return {
+          level: "需保守解讀",
+          title: "體重有下降，但可能混有水分變化",
+          summary: "兩台體重都變輕，但歐姆龍體脂未同步明顯改善，加上小米水分下滑，先不要把這波全當成減脂。",
+          confidence: "中",
+          badgeTone: "amber",
+          reasons,
+          details,
+          caution,
+        };
+      }
+      return {
+        level: "部分一致",
+        title: "體重趨勢一致，但脂肪變化仍需觀察",
+        summary: "目前可確認體重在往下，但脂肪下降的證據還不夠完整，建議再觀察後續 2~4 週。",
+        confidence: "中",
+        badgeTone: "blue",
+        reasons,
+        details,
+        caution,
+      };
     }
 
-    signals.push(`小米體重趨勢：${getTrendLabel(xiaomiWeightTrend)}${xiaomiWeightDelta === null ? "" : `（${xiaomiWeightDelta > 0 ? "+" : ""}${xiaomiWeightDelta} kg）`}`);
-    signals.push(`歐姆龍體重趨勢：${getTrendLabel(omronWeightTrend)}${omronWeightDelta === null ? "" : `（${omronWeightDelta > 0 ? "+" : ""}${omronWeightDelta} kg）`}`);
-    signals.push(`小米體脂率 / 體脂重：${getTrendLabel(xiaomiBodyFatPctTrend)} / ${getTrendLabel(xiaomiFatMassTrend)}`);
-    signals.push(`歐姆龍體脂率 / 體脂重：${getTrendLabel(omronBodyFatPctTrend)} / ${getTrendLabel(omronFatMassTrend)}`);
-    if (xiaomiWaterTrend !== "no-data") {
-      signals.push(`小米水分趨勢：${getTrendLabel(xiaomiWaterTrend)}${xiaomiWaterDelta === null ? "" : `（${xiaomiWaterDelta > 0 ? "+" : ""}${xiaomiWaterDelta}%）`}`);
+    if ((xiaomiWeightDown && omronWeightUp) || (xiaomiWeightUp && omronWeightDown)) {
+      reasons.push("兩台設備的體重方向不一致");
+      caution.push("先確認量測時間、地點、衣著與是否空腹一致");
+      return {
+        level: "趨勢不一致",
+        title: "雙設備走勢互相打架，這個月份先不要下定論",
+        summary: "目前兩台設備給出的體重方向不同，較可能是量測條件不同或樣本太少，不適合直接解讀成成效變化。",
+        confidence: "低",
+        badgeTone: "rose",
+        reasons,
+        details,
+        caution,
+      };
     }
 
-    if (xiaomiWeightEntries.length < 2) cautions.push("小米體重不足 2 筆，體重趨勢可信度受限");
-    if (omronWeightEntries.length < 2) cautions.push("歐姆龍體重不足 2 筆，無法完整核對雙設備體重方向");
-    if (xiaomiBodyFatEntries.length < 2) cautions.push("小米體脂率 / 體脂重不足 2 筆");
-    if (omronBodyFatEntries.length < 2) cautions.push("歐姆龍體脂率 / 體脂重不足 2 筆");
-    if (xiaomiWaterEntries.length < 2) cautions.push("小米水分不足 2 筆，無法判斷脫水干擾程度");
-    if (waterInterference) cautions.push("小米水分有下降，近期下降可能混有水分因素");
-    if (trendConflict) cautions.push("雙設備趨勢不一致時，先不要急著把這段完全當成減脂成果");
+    if ((omronBodyFatDown || omronFatMassDown) && (hasXiaomiWeight || hasOmronWeight)) {
+      reasons.push("歐姆龍體脂指標有改善");
+      if (xiaomiWeightDown || omronWeightDown) reasons.push("至少有一台設備的體重也往下");
+      if (xiaomiWaterDrop) caution.push("小米水分下降偏明顯，仍要留意短期脫水干擾");
+      return {
+        level: "偏向改善",
+        title: "脂肪指標有變好，但雙設備證據仍不算完整",
+        summary: "歐姆龍體脂率或體脂重已有下降，方向偏正面；只是雙設備同時支持的程度還不夠強。",
+        confidence: "中",
+        badgeTone: "cyan",
+        reasons,
+        details,
+        caution,
+      };
+    }
 
+    reasons.push("目前可用資料尚未形成明確一致方向");
+    caution.push("建議至少讓該月份各設備都有 2 筆以上有效量測");
     return {
-      label,
-      title,
-      summary,
-      confidence: `${confidencePct}%`,
-      confidencePct,
-      tone,
-      phase,
-      phaseScore,
-      phaseMaxScore: 5,
-      consistencyScore,
-      consistencyMaxScore,
-      signals,
-      cautions,
-      metrics,
+      level: "觀察中",
+      title: "目前先繼續累積資料",
+      summary: "這個月份的雙設備證據還不夠集中，先讓體重與體脂資料再多一些，再看會更準。",
+      confidence: "低",
+      badgeTone: "slate",
+      reasons,
+      details,
+      caution,
     };
-  };
-
-  const crossValidationBlocks = useMemo(() => {
-    return [
-      buildCrossValidationWindow("當日", 0),
-      buildCrossValidationWindow("當週", 7),
-      buildCrossValidationWindow("半個月", 15),
-      buildCrossValidationWindow("一個月", 30),
-    ];
-  }, [groupedEntriesByDate, crossValidationAnchorDate]);
+  }, [groupedEntriesByDate, selectedSummaryYear, selectedSummaryMonth]);
 
   const anomalyAlerts = useMemo(() => {
     const alerts: Array<{ level: "高" | "中"; title: string; detail: string }> =
@@ -6852,123 +6786,59 @@ type CrossValidationBlock = {
               </CardContent>
             </Card>
 
-
-
             <Card>
               <CardHeader>
-                <CardTitle>雙設備交互驗證</CardTitle>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle>雙設備交互驗證</CardTitle>
+                  <Badge
+                    variant="secondary"
+                    className={
+                      monthCrossValidation.badgeTone === "emerald"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : monthCrossValidation.badgeTone === "amber"
+                          ? "bg-amber-100 text-amber-700"
+                          : monthCrossValidation.badgeTone === "blue"
+                            ? "bg-blue-100 text-blue-700"
+                            : monthCrossValidation.badgeTone === "cyan"
+                              ? "bg-cyan-100 text-cyan-700"
+                              : monthCrossValidation.badgeTone === "rose"
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-slate-100 text-slate-700"
+                    }
+                  >
+                    {monthCrossValidation.confidence}可信度
+                  </Badge>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-4 text-sm">
-                <div className="text-slate-500">
-                  這張卡只比較「獨立設備自己的變化趨勢」：小米看體重 / 體脂率 / 體脂重 / 水分，歐姆龍看體重 / 體脂率 / 體脂重，再用趨勢一致性去判斷是否偏向進入減脂期。
+              <CardContent className="space-y-3 text-sm">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-lg font-semibold">{monthCrossValidation.title}</div>
+                  <div className="mt-1 text-slate-500">{monthCrossValidation.summary}</div>
                 </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {crossValidationBlocks.map((block) => {
-                    const toneClass =
-                      block.tone === "success"
-                        ? "border-emerald-200 bg-emerald-50"
-                        : block.tone === "warning"
-                          ? "border-amber-200 bg-amber-50"
-                          : block.tone === "danger"
-                            ? "border-red-200 bg-red-50"
-                            : "border-slate-200 bg-slate-50";
 
-                    const badgeClass =
-                      block.tone === "success"
-                        ? "bg-emerald-600 text-white"
-                        : block.tone === "warning"
-                          ? "bg-amber-500 text-white"
-                          : block.tone === "danger"
-                            ? "bg-red-600 text-white"
-                            : "bg-slate-600 text-white";
-
-                    return (
-                      <div key={block.label} className={`rounded-2xl border p-4 space-y-3 ${toneClass}`}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-xs text-slate-500">{block.label}</div>
-                            <div className="text-base font-semibold">{block.title}</div>
-                          </div>
-                          <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${badgeClass}`}>
-                            {block.confidence}
-                          </span>
-                        </div>
-
-                        <div className="text-slate-600">{block.summary}</div>
-                        <div className="space-y-2">
-                          <div>
-                            <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
-                              <span>減脂期判定</span>
-                              <span>{block.phase} ({block.phaseScore}/{block.phaseMaxScore})</span>
-                            </div>
-                            <div className="h-2 w-full overflow-hidden rounded-full bg-white/80">
-                              <div
-                                className={`h-full rounded-full ${
-                                  block.phase === "已進入"
-                                    ? "bg-emerald-500"
-                                    : block.phase === "過渡期"
-                                      ? "bg-amber-500"
-                                      : "bg-slate-400"
-                                }`}
-                                style={{ width: `${(block.phaseScore / block.phaseMaxScore) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
-                              <span>趨勢一致性分數</span>
-                              <span>{block.consistencyScore}/{block.consistencyMaxScore}</span>
-                            </div>
-                            <div className="h-2 w-full overflow-hidden rounded-full bg-white/80">
-                              <div
-                                className={`h-full rounded-full ${
-                                  block.tone === "success"
-                                    ? "bg-emerald-500"
-                                    : block.tone === "warning"
-                                      ? "bg-amber-500"
-                                      : block.tone === "danger"
-                                        ? "bg-red-500"
-                                        : "bg-slate-400"
-                                }`}
-                                style={{ width: `${(block.consistencyScore / block.consistencyMaxScore) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-
-                        <div className="grid grid-cols-2 gap-2">
-                          {block.metrics.map((metric) => (
-                            <div key={`${block.label}-${metric.label}`} className="rounded-xl border bg-white p-2">
-                              <div className="text-[11px] text-slate-500">{metric.label}</div>
-                              <div className="mt-1 font-semibold">{getTrendArrow(metric.direction)} {getTrendLabel(metric.direction)}</div>
-                              <div className="mt-1 text-[11px] text-slate-500">{metric.deltaText}</div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {block.signals.length ? (
-                          <div className="space-y-1">
-                            <div className="text-xs font-medium text-slate-700">判斷依據</div>
-                            {block.signals.map((item) => (
-                              <div key={`${block.label}-signal-${item}`} className="text-xs text-slate-600">• {item}</div>
-                            ))}
-                          </div>
-                        ) : null}
-
-                        {block.cautions.length ? (
-                          <div className="space-y-1">
-                            <div className="text-xs font-medium text-slate-700">注意事項</div>
-                            {block.cautions.map((item) => (
-                              <div key={`${block.label}-caution-${item}`} className="text-xs text-slate-600">• {item}</div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {monthCrossValidation.details.map((item) => (
+                    <div key={item} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700">
+                      {item}
+                    </div>
+                  ))}
                 </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs font-medium text-slate-500">判斷依據</div>
+                  {monthCrossValidation.reasons.map((item) => (
+                    <div key={item}>• {item}</div>
+                  ))}
+                </div>
+
+                {monthCrossValidation.caution.length ? (
+                  <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                    <div className="text-xs font-medium text-amber-700">注意</div>
+                    {monthCrossValidation.caution.map((item) => (
+                      <div key={item} className="text-amber-800">• {item}</div>
+                    ))}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
