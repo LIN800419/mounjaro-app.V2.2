@@ -3242,6 +3242,13 @@ export default function SimpleTracker() {
       setPenInventory(finalPenInventory);
       setPhotoRecords(finalPhotos);
 
+      const loadedDefaultDevice: DeviceType = (
+        [...finalEntries]
+          .filter((entry) => entry.isDeviceSwitchDay)
+          .sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime())
+          .slice(-1)[0]?.deviceType || "xiaomi"
+      ) as DeviceType;
+
       setForm((prev) => ({
         ...prev,
         date: today,
@@ -3249,9 +3256,13 @@ export default function SimpleTracker() {
         fatMass: prev.fatMass || "",
         muscleRate: prev.muscleRate || "",
         muscleMass: prev.muscleMass || "",
+        skeletalMuscleRate: prev.skeletalMuscleRate || "",
+        skeletalMuscleMass: prev.skeletalMuscleMass || "",
         visceralFat: prev.visceralFat || "",
         bodyWater: prev.bodyWater || "",
         waist: (prev as any).waist || "",
+        deviceType: loadedDefaultDevice,
+        isDeviceSwitchDay: false,
       }));
       setPhotoDate(today);
       setCloudReady(true);
@@ -3617,8 +3628,8 @@ export default function SimpleTracker() {
         summary: "先累積身體組成資料後再分析",
         headline: "尚無足夠資料判讀體態",
         meaning:
-          "先記錄體脂率、肌肉量、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。",
-        caution: ["至少先記錄 2~3 筆體脂、肌肉量、水分與內臟脂肪"],
+          currentDevice === "omron" ? "先記錄體脂率、骨骼肌重、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。" : "先記錄體脂率、肌肉量、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。",
+        caution: [currentDevice === "omron" ? "至少先記錄 2~3 筆體脂、骨骼肌重、水分與內臟脂肪" : "至少先記錄 2~3 筆體脂、肌肉量、水分與內臟脂肪"],
         menuAdjustments: ["先維持現有熱量與蛋白質規劃"],
         bodyFatMass: 0,
         weightIdeal: `${weightLow}~${weightHigh}`,
@@ -3638,7 +3649,7 @@ export default function SimpleTracker() {
     let type = "C型";
     let headline = "體脂肪重高於骨骼肌重";
     let summary =
-      "目前偏向體脂較高、肌肉量相對不足的體態，重點是減脂同時保住肌肉。";
+      currentDevice === "omron" ? "目前偏向體脂較高、骨骼肌重相對不足的體態，重點是減脂同時保住骨骼肌。" : "目前偏向體脂較高、肌肉量相對不足的體態，重點是減脂同時保住肌肉。";
     let meaning =
       "這類體態通常代表體脂偏高、骨骼肌支撐不夠，不能只追求體重下降，還要顧蛋白質與阻力訓練。";
     const caution: string[] = [];
@@ -3662,14 +3673,14 @@ export default function SimpleTracker() {
       headline = "骨骼肌保留較佳，體脂控制相對理想";
       summary = "脂肪控制與肌肉保留相對較好，體態正往精瘦型前進。";
       meaning =
-        "這代表你目前的減脂方向比較漂亮，體脂沒有明顯壓過肌肉量，現在更該注意不要減太快。";
+        currentDevice === "omron" ? "這代表你目前的減脂方向比較漂亮，體脂沒有明顯壓過骨骼肌重，現在更該注意不要減太快。" : "這代表你目前的減脂方向比較漂亮，體脂沒有明顯壓過肌肉量，現在更該注意不要減太快。";
       caution.push("避免熱量切太低，免得肌肉量反而掉太快");
       caution.push("持續固定阻力訓練或至少維持步行與蛋白質");
       menuAdjustments.push("主食維持目前份量，不要再大砍");
       menuAdjustments.push("每餐優先蛋白質 1 掌心以上");
     } else if (isDenseHighFat) {
       type = "D型";
-      headline = "肌肉量不差，但脂肪與內臟脂肪負擔偏高";
+      headline = currentDevice === "omron" ? "骨骼肌重不差，但脂肪與內臟脂肪負擔偏高" : "肌肉量不差，但脂肪與內臟脂肪負擔偏高";
       summary =
         "目前偏向脂肪與內臟脂肪負擔較高型，先以穩定減脂與改善代謝為主。";
       meaning =
@@ -3679,7 +3690,7 @@ export default function SimpleTracker() {
       menuAdjustments.push("晚餐主食再少 1/4 份，蔬菜與蛋白質提高");
       menuAdjustments.push("每週至少 3 天安排 20~30 分鐘活動");
     } else {
-      caution.push("現在最重要的是讓體脂慢慢降、肌肉量不要明顯掉");
+      caution.push(currentDevice === "omron" ? "現在最重要的是讓體脂慢慢降、骨骼肌重不要明顯掉" : "現在最重要的是讓體脂慢慢降、肌肉量不要明顯掉");
       caution.push("別只看體重，體脂與腰腹脂肪趨勢更重要");
       menuAdjustments.push("早餐與加餐補足蛋白質，放鬆餐頻率先收斂");
       menuAdjustments.push("維持中等熱量赤字，不要忽高忽低");
@@ -3698,7 +3709,7 @@ export default function SimpleTracker() {
     }
 
     if (prevMuscle && muscleMass && muscleMass < prevMuscle - 0.3) {
-      caution.push("肌肉量有下降跡象，蛋白質與阻力訓練要補上");
+      caution.push(currentDevice === "omron" ? "骨骼肌重有下降跡象，蛋白質與阻力訓練要補上" : "肌肉量有下降跡象，蛋白質與阻力訓練要補上");
       menuAdjustments.push("每天蛋白質分散到 3 餐以上，不要全擠在一餐");
     }
 
@@ -3761,7 +3772,7 @@ export default function SimpleTracker() {
         tag: "觀察中",
         title: "資料不足",
         detail:
-          "至少先累積短期 3 筆、長期 4 筆以上身體組成紀錄，再判斷水分、體脂率、肌肉率的此消彼長。",
+          "至少先累積短期 3 筆、長期 4 筆以上身體組成紀錄，再判斷水分、體脂率與肌肉指標的此消彼長。",
         confidence: "低" as const,
         confidencePct: hasWaistSupport ? 85 : 70,
         fatLossStage: "資料不足",
@@ -3783,9 +3794,9 @@ export default function SimpleTracker() {
         shortSummary: "短期資料不足",
         longSummary: "長期資料不足",
         explanation:
-          "先固定在相近時間量測，之後系統才比較能分辨這波體重變化主要來自水分、體脂還是肌肉率。",
+          "先固定在相近時間量測，之後系統才比較能分辨這波體重變化主要來自水分、體脂還是肌肉指標。",
         advice: [
-          "先持續記錄體脂率、肌肉率、水分",
+          "先持續記錄體脂率、肌肉指標、水分",
           "補上腰圍紀錄後，減脂期判定會更準",
           waterTargetMl ? `今日先補水約 ${waterTargetMl} ml` : "先把飲水量穩住",
         ],
@@ -3803,7 +3814,7 @@ export default function SimpleTracker() {
         tag: "觀察中",
         title: "有效資料不足",
         detail:
-          "短期或長期區間內缺少完整的水分、體脂率、肌肉率紀錄，先補齊完整量測再判讀會更準。",
+          "短期或長期區間內缺少完整的水分、體脂率、肌肉指標紀錄，先補齊完整量測再判讀會更準。",
         confidence: "低" as const,
         confidencePct: hasWaistSupport ? 85 : 70,
         fatLossStage: "資料不足",
@@ -3826,7 +3837,7 @@ export default function SimpleTracker() {
         explanation:
           "長期判斷已改成只用完整有效紀錄；目前有效資料不夠，所以先不硬判。",
         advice: [
-          "固定在相近時間量測體脂率、肌肉率、水分",
+          "固定在相近時間量測體脂率、肌肉指標、水分",
           "至少讓短期有 2 筆、長期有 2 筆完整有效資料",
           waterTargetMl ? `今日先補水約 ${waterTargetMl} ml` : "先把飲水量穩住",
         ],
@@ -3880,7 +3891,7 @@ export default function SimpleTracker() {
     let tag = "觀察中";
     let title = "三項指標互相拉扯中";
     let detail = "短期與長期都有波動，先不要只靠單日體重下結論。";
-    let explanation = "目前較像水分、體脂率、肌肉率同時在小幅變動，需要再看幾天趨勢。";
+    let explanation = "目前較像水分、體脂率、肌肉指標同時在小幅變動，需要再看幾天趨勢。";
 
     const shortWaterDrop = shortTerm.bodyWaterDelta <= -0.8 || shortTerm.bodyWaterIndexDelta <= -1.5;
     const shortFatDrop = shortTerm.bodyFatPctDelta <= -0.3 || shortTerm.bodyFatPctIndexDelta <= -1;
@@ -3895,11 +3906,11 @@ export default function SimpleTracker() {
       tag = "脂肪下降中";
       title = "短期有水分波動，但長期仍偏向減脂";
       detail =
-        "短期體重變化有一部分來自水分下降，但長期體脂率指數持續往下，肌肉率大致守住。";
+        "短期體重變化有一部分來自水分下降，但長期體脂率指數持續往下，肌肉指標大致守住。";
       explanation =
-        `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，代表最近量測有水分影響；但長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，方向仍偏向有效減脂。`;
+        `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，代表最近量測有水分影響；但長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，方向仍偏向有效減脂。`;
       reasons.push("長期體脂率持續下降");
-      reasons.push("肌肉率大致守住");
+      reasons.push("肌肉指標大致守住");
       reasons.push("短期水分波動較大");
       advice.push("先不要因為這兩天掉很快就再大砍熱量");
       advice.push("維持蛋白質與阻力訓練，讓長期肌肉率穩住");
@@ -3920,9 +3931,9 @@ export default function SimpleTracker() {
       tag = "漂亮減脂";
       title = "體脂率下降，肌肉率同步守住甚至回升";
       detail =
-        "這是比較理想的組合：長期體脂率往下，肌肉率持平或微升，水分也相對穩定。";
+        "這是比較理想的組合：長期體脂率往下，肌肉指標持平或微升，水分也相對穩定。";
       explanation =
-        `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}、水分指數 ${longTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${longTerm.bodyWaterIndexDelta}，代表你掉下來的重量較偏向脂肪，不是單純脫水。`;
+        `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}、水分指數 ${longTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${longTerm.bodyWaterIndexDelta}，代表你掉下來的重量較偏向脂肪，不是單純脫水。`;
       reasons.push("長期體脂率下降");
       reasons.push("長期肌肉率持平或上升");
       reasons.push("長期水分相對穩定");
@@ -3933,9 +3944,9 @@ export default function SimpleTracker() {
       tag = "肌肉警訊";
       title = "肌肉率下降比體脂率改善更明顯";
       detail =
-        "目前比較要注意保肌，因為長期體脂率沒有明顯變好，但肌肉率已經往下掉。";
+        "目前比較要注意保肌，因為長期體脂率沒有明顯變好，但肌肉指標已經往下掉。";
       explanation =
-        `長期 ${longTerm.days} 天內肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，但體脂率指數只有 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}；這代表最近變輕的組成可能不夠漂亮。`;
+        `長期 ${longTerm.days} 天內肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，但體脂率指數只有 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}；這代表最近變輕的組成可能不夠漂亮。`;
       reasons.push("長期肌肉率下降");
       reasons.push("體脂率改善有限");
       advice.push("優先檢查蛋白質是否足夠，並把蛋白質分散到三餐");
@@ -4008,7 +4019,7 @@ export default function SimpleTracker() {
       fatLossStageReasons = [
         stableWeightLoss ? "近 14~28 天體重趨勢穩定下降" : "體重下降趨勢仍不夠穩定",
         bodyFatImproving ? "長期體脂率有下降" : "長期體脂率下降還不夠明顯",
-        musclePreserved ? "肌肉率暫時有守住" : "肌肉率有下滑跡象",
+        musclePreserved ? "肌肉指標暫時有守住" : "肌肉指標有下滑跡象",
         hasWaistSupport
           ? waistClearlyDown
             ? "近 14 天腰圍明顯下降" : "近 14 天腰圍下降未達 1 cm"
@@ -4030,7 +4041,7 @@ export default function SimpleTracker() {
       fatLossStageReasons = [
         stableWeightLoss ? "體重趨勢有持續下降" : "體重趨勢還在波動",
         bodyFatImproving ? "體脂率有改善" : "體脂率改善尚不夠明顯",
-        musclePreserved ? "肌肉率大致守住" : "肌肉率有下滑跡象",
+        musclePreserved ? "肌肉指標大致守住" : "肌肉指標有下滑跡象",
         hasWaistSupport
           ? waistClearlyDown
             ? "腰圍已有明顯下降" : "腰圍下降尚未達穩定減脂門檻"
@@ -4968,6 +4979,9 @@ export default function SimpleTracker() {
     periodLabel: string,
     windowEntries: Entry[],
   ) => {
+    const muscleRateLabel = currentDevice === "omron" ? "骨骼肌率" : "肌肉率";
+    const muscleMassLabel = currentDevice === "omron" ? "骨骼肌重" : "肌肉量";
+
     if (!windowEntries.length) {
       return {
         title: `${periodLabel}尚無資料`,
@@ -4986,8 +5000,8 @@ export default function SimpleTracker() {
     const weightLast = findLastValue("weight");
     const bodyFatFirst = findFirstValue("bodyFatPct");
     const bodyFatLast = findLastValue("bodyFatPct");
-    const muscleFirst = findFirstValue("muscleMass");
-    const muscleLast = findLastValue("muscleMass");
+    const muscleFirst = windowEntries.find((entry) => getMuscleMassFromEntry(entry) > 0) || windowEntries[0];
+    const muscleLast = [...windowEntries].reverse().find((entry) => getMuscleMassFromEntry(entry) > 0) || windowEntries[windowEntries.length - 1];
 
     const weightDelta = +(
       num(weightLast?.weight) - num(weightFirst?.weight)
@@ -4996,7 +5010,7 @@ export default function SimpleTracker() {
       num(bodyFatLast?.bodyFatPct) - num(bodyFatFirst?.bodyFatPct)
     ).toFixed(1);
     const muscleDelta = +(
-      num(muscleLast?.muscleMass) - num(muscleFirst?.muscleMass)
+      getMuscleMassFromEntry(muscleLast) - getMuscleMassFromEntry(muscleFirst)
     ).toFixed(1);
     const shotDone = windowEntries.some((entry) => entry.isShotDay);
     const stableDays = windowEntries.filter(
@@ -5008,10 +5022,10 @@ export default function SimpleTracker() {
 
     if (weightDelta <= -0.5 && muscleDelta >= -0.2) {
       title = `${periodLabel}減脂表現不錯`;
-      summary = `體重下降 ${Math.abs(weightDelta)} kg，肌肉量大致守住，方向不錯。`;
+      summary = `體重下降 ${Math.abs(weightDelta)} kg，${muscleMassLabel}大致守住，方向不錯。`;
     } else if (weightDelta <= -0.3 && muscleDelta < -0.3) {
       title = `${periodLabel}有下降，但要注意保肌`;
-      summary = `體重下降 ${Math.abs(weightDelta)} kg，但肌肉量也掉了 ${Math.abs(muscleDelta)} kg。`;
+      summary = `體重下降 ${Math.abs(weightDelta)} kg，但${muscleMassLabel}也掉了 ${Math.abs(muscleDelta)} kg。`;
     } else if (Math.abs(weightDelta) < 0.3) {
       title = `${periodLabel}接近持平`;
       summary = "體重變化不大，可再看外食、零食與步數。";
@@ -5025,14 +5039,14 @@ export default function SimpleTracker() {
         ? `${bodyFatDelta > 0 ? "+" : ""}${bodyFatDelta}%`
         : `${periodLabel}資料不足`;
     const muscleText =
-      num(muscleFirst?.muscleMass) > 0 && num(muscleLast?.muscleMass) > 0
+      getMuscleMassFromEntry(muscleFirst) > 0 && getMuscleMassFromEntry(muscleLast) > 0
         ? `${muscleDelta > 0 ? "+" : ""}${muscleDelta} kg`
         : `${periodLabel}資料不足`;
 
     const bullets = [
       `體重變化：${weightDelta > 0 ? "+" : ""}${weightDelta} kg`,
       `體脂率變化：${bodyFatText}`,
-      `肌肉量變化：${muscleText}`,
+      `${muscleMassLabel}變化：${muscleText}`,
       `${periodLabel}施打：${shotDone ? "有紀錄" : "未記錄"}`,
       `相對穩定日數：${stableDays}/${windowEntries.length} 天`,
     ];
@@ -5346,7 +5360,7 @@ export default function SimpleTracker() {
     });
   };
 
-  const resetForm = () => {
+  const resetForm = (nextDevice: DeviceType = currentDevice) => {
     setForm({
       date: today,
       weight: "",
@@ -5367,7 +5381,7 @@ export default function SimpleTracker() {
       sideEffects: [{ effect: "無", severity: "0" }],
       exerciseMin: "0",
       isShotDay: false,
-      deviceType: "xiaomi",
+      deviceType: nextDevice,
       isDeviceSwitchDay: false,
     });
     setEditingId(null);
@@ -5381,11 +5395,11 @@ export default function SimpleTracker() {
           item.id === editingId ? { ...form, id: editingId } : item,
         ),
       );
-      resetForm();
+      resetForm(form.isDeviceSwitchDay ? form.deviceType : currentDevice);
       return;
     }
     setEntries((prev) => [...prev, { ...form, id: crypto.randomUUID() }]);
-    resetForm();
+    resetForm(form.isDeviceSwitchDay ? form.deviceType : currentDevice);
   };
 
   const exportEntriesToExcel = () => {
