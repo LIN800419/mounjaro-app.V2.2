@@ -683,6 +683,7 @@ const STORAGE_KEY = "simple-mounjaro-tracker-v3";
 const SETTINGS_KEY = "simple-mounjaro-settings-v3";
 const PEN_INVENTORY_KEY = "simple-mounjaro-pen-inventory-v1";
 const PHOTO_RECORDS_KEY = "simple-mounjaro-photo-records-v1";
+const ANALYSIS_DEVICE_KEY = "simple-mounjaro-analysis-device-v1";
 
 const WORKOUT_LEVEL_LABEL: Record<WorkoutLevel, string> = {
   low: "低階",
@@ -2888,6 +2889,7 @@ export default function SimpleTracker() {
   const [photoNote, setPhotoNote] = useState("");
   const [photoCompareA, setPhotoCompareA] = useState("");
   const [photoCompareB, setPhotoCompareB] = useState("");
+  const [analysisDevice, setAnalysisDevice] = useState<DeviceType>("xiaomi");
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudUserId, setCloudUserId] = useState("");
   const [expandedChart, setExpandedChart] = useState<null | {
@@ -2944,6 +2946,10 @@ export default function SimpleTracker() {
         window.matchMedia("(prefers-color-scheme: dark)").matches
       ) {
         setThemeMode("dark");
+      }
+      const savedAnalysisDevice = window.localStorage.getItem(ANALYSIS_DEVICE_KEY);
+      if (savedAnalysisDevice === "xiaomi" || savedAnalysisDevice === "omron") {
+        setAnalysisDevice(savedAnalysisDevice as DeviceType);
       }
     }
 
@@ -3243,11 +3249,14 @@ export default function SimpleTracker() {
       setPhotoRecords(finalPhotos);
 
       const loadedDefaultDevice: DeviceType = (
-        [...finalEntries]
-          .filter((entry) => entry.isDeviceSwitchDay)
-          .sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime())
-          .slice(-1)[0]?.deviceType || "xiaomi"
+        (typeof window !== "undefined" &&
+        (window.localStorage.getItem(ANALYSIS_DEVICE_KEY) === "omron" ||
+          window.localStorage.getItem(ANALYSIS_DEVICE_KEY) === "xiaomi"))
+          ? (window.localStorage.getItem(ANALYSIS_DEVICE_KEY) as DeviceType)
+          : (finalEntries.length ? (finalEntries[finalEntries.length - 1].deviceType || "xiaomi") : "xiaomi")
       ) as DeviceType;
+
+      setAnalysisDevice(loadedDefaultDevice);
 
       setForm((prev) => ({
         ...prev,
@@ -3283,7 +3292,8 @@ export default function SimpleTracker() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     localStorage.setItem(PEN_INVENTORY_KEY, JSON.stringify(penInventory));
     localStorage.setItem(PHOTO_RECORDS_KEY, JSON.stringify(photoRecords));
-  }, [entries, settings, penInventory, photoRecords, mounted]);
+    localStorage.setItem(ANALYSIS_DEVICE_KEY, analysisDevice);
+  }, [entries, settings, penInventory, photoRecords, analysisDevice, mounted]);
 
   useEffect(() => {
     if (!mounted || !cloudReady || !cloudUserId) return;
@@ -3328,25 +3338,16 @@ export default function SimpleTracker() {
     );
   }, [entries]);
 
-  const latestDeviceSwitchEntry = useMemo<Entry | null>(() => {
-    const switched = sortedEntries.filter((entry) => entry.isDeviceSwitchDay);
-    return switched.length ? switched[switched.length - 1] : null;
-  }, [sortedEntries]);
-
-  const deviceSwitchDate = latestDeviceSwitchEntry?.date || "";
-  const currentDevice: DeviceType = (latestDeviceSwitchEntry?.deviceType || "xiaomi") as DeviceType;
+  const currentDevice: DeviceType = analysisDevice;
 
   const compositionEntries = useMemo(() => {
-    if (!deviceSwitchDate) return sortedEntries;
-    return sortedEntries.filter((entry) => entry.date >= deviceSwitchDate);
-  }, [sortedEntries, deviceSwitchDate]);
+    return sortedEntries.filter((entry) => entry.deviceType === currentDevice);
+  }, [sortedEntries, currentDevice]);
 
-  const latest = sortedEntries.length
-    ? sortedEntries[sortedEntries.length - 1]
-    : null;
-  const latestComposition = compositionEntries.length
+  const latest = compositionEntries.length
     ? compositionEntries[compositionEntries.length - 1]
-    : latest;
+    : null;
+  const latestComposition = latest;
 
   const latestWeight = latest ? num(latest.weight) : 0;
   const latestBodyFatPct = latestComposition ? num(latestComposition.bodyFatPct) : 0;
@@ -3394,9 +3395,9 @@ export default function SimpleTracker() {
   }, [compositionEntries]);
 
   const recent7Delta = useMemo(() => {
-    if (sortedEntries.length < 2) return 0;
-    const last = sortedEntries[sortedEntries.length - 1];
-    const recent = sortedEntries.filter((e) => {
+    if (compositionEntries.length < 2) return 0;
+    const last = compositionEntries[compositionEntries.length - 1];
+    const recent = compositionEntries.filter((e) => {
       const d = daysBetween(e.date, last.date);
       return d <= 7 && d >= 0;
     });
@@ -3404,11 +3405,11 @@ export default function SimpleTracker() {
     return +(
       num(recent[0].weight) - num(recent[recent.length - 1].weight)
     ).toFixed(1);
-  }, [sortedEntries]);
+  }, [compositionEntries]);
 
   const latestShotDate = useMemo(() => {
     return getLatestShotDate(sortedEntries);
-  }, [sortedEntries]);
+  }, [compositionEntries]);
 
   const shotEntries = useMemo(() => {
     return [...sortedEntries].filter((entry) => entry.isShotDay).reverse();
@@ -3542,7 +3543,7 @@ export default function SimpleTracker() {
 
   const progress = useMemo(() => {
     const goal = num(settings.goal);
-    const start = sortedEntries.length ? num(sortedEntries[0].weight) : 0;
+    const start = compositionEntries.length ? num(compositionEntries[0].weight) : 0;
 
     if (!goal || !start || !latestWeight) return 0;
 
@@ -3553,12 +3554,12 @@ export default function SimpleTracker() {
     const done = start - latestWeight;
 
     return Math.max(0, Math.min(100, Math.round((done / totalNeed) * 100)));
-  }, [settings.goal, latestWeight, sortedEntries]);
+  }, [settings.goal, latestWeight, compositionEntries]);
 
   const plateau = useMemo(() => {
-    if (sortedEntries.length < 3) return { isPlateau: false, text: "資料不足" };
-    const last = sortedEntries[sortedEntries.length - 1];
-    const recent = sortedEntries.filter((e) => {
+    if (compositionEntries.length < 3) return { isPlateau: false, text: "資料不足" };
+    const last = compositionEntries[compositionEntries.length - 1];
+    const recent = compositionEntries.filter((e) => {
       const d = daysBetween(e.date, last.date);
       return d <= 14 && d >= 0;
     });
@@ -4766,22 +4767,21 @@ export default function SimpleTracker() {
 
   const baseChartData = useMemo(
     () =>
-      sortedEntries.map((e, i) => {
-        const isCompositionActive = !deviceSwitchDate || e.date >= deviceSwitchDate;
+      compositionEntries.map((e, i) => {
         const weightValue = num(e.weight);
-        const bodyFatPctValue = isCompositionActive ? num(e.bodyFatPct) : 0;
-        const fatMassValue = isCompositionActive ? num(e.fatMass) : 0;
-        const muscleRateValue = isCompositionActive ? getMuscleRateFromEntry(e) : 0;
-        const muscleMassValue = isCompositionActive ? getMuscleMassFromEntry(e) : 0;
-        const visceralFatValue = isCompositionActive ? num(e.visceralFat) : 0;
-        const bodyWaterValue = isCompositionActive ? num(e.bodyWater) : 0;
+        const bodyFatPctValue = num(e.bodyFatPct);
+        const fatMassValue = num(e.fatMass);
+        const muscleRateValue = getMuscleRateFromEntry(e);
+        const muscleMassValue = getMuscleMassFromEntry(e);
+        const visceralFatValue = num(e.visceralFat);
+        const bodyWaterValue = num(e.bodyWater);
 
         return {
           i: i + 1,
           date: fmtDate(e.date),
           rawDate: e.date,
           weight: weightValue > 0 ? weightValue : null,
-          avg7: weightValue > 0 ? getSevenDayAverage(sortedEntries, i) : null,
+          avg7: weightValue > 0 ? getSevenDayAverage(compositionEntries, i) : null,
           goal: num(settings.goal) || null,
           bodyFatPct: bodyFatPctValue > 0 ? bodyFatPctValue : null,
           fatMass: fatMassValue > 0 ? fatMassValue : null,
@@ -4789,10 +4789,10 @@ export default function SimpleTracker() {
           muscleMass: muscleMassValue > 0 ? muscleMassValue : null,
           visceralFat: visceralFatValue > 0 ? visceralFatValue : null,
           bodyWater: bodyWaterValue > 0 ? bodyWaterValue : null,
-          waist: isCompositionActive && num(e.waist) > 0 ? num(e.waist) : null,
+          waist: num(e.waist) > 0 ? num(e.waist) : null,
         };
       }),
-    [sortedEntries, settings.goal, deviceSwitchDate],
+    [compositionEntries, settings.goal],
   );
 
   const chartData = useMemo(() => {
@@ -4860,7 +4860,7 @@ export default function SimpleTracker() {
     bullets.push(`近 7 日體重變化約 ${recent7Delta > 0 ? '-' : '+'}${Math.abs(recent7Delta)} kg（以最新區間估算）`);
     if (latestAvg7) bullets.push(`最新 7 日移動平均約 ${latestAvg7} kg`);
     if (latestBodyFatPct > 0) bullets.push(`最新體脂率 ${latestBodyFatPct}%`);
-    if (latestMuscleRate > 0) bullets.push(`最新肌肉率 ${latestMuscleRate}%`);
+    if (latestMuscleRate > 0) bullets.push(`最新${currentDevice === "omron" ? "骨骼肌率" : "肌肉率"} ${latestMuscleRate}%`);
     if (latestBodyWater > 0) bullets.push(`最新水分 ${latestBodyWater}%`);
     if (latestWaist > 0) bullets.push(`最新腰圍 ${latestWaist} cm`);
 
@@ -4874,7 +4874,7 @@ export default function SimpleTracker() {
       highlights.push(`體脂率累計 ${bodyFatDelta > 0 ? '+' : ''}${bodyFatDelta}%`);
     }
     if (muscleRateFirstRow && muscleRateLastRow) {
-      highlights.push(`肌肉率累計 ${muscleRateDelta > 0 ? '+' : ''}${muscleRateDelta}%`);
+      highlights.push(`${currentDevice === "omron" ? "骨骼肌率" : "肌肉率"}累計 ${muscleRateDelta > 0 ? '+' : ''}${muscleRateDelta}%`);
     }
 
     const headline = plateau.isPlateau
@@ -5107,12 +5107,12 @@ export default function SimpleTracker() {
   const anomalyAlerts = useMemo(() => {
     const alerts: Array<{ level: "高" | "中"; title: string; detail: string }> =
       [];
-    if (!sortedEntries.length || !latest) return alerts;
+    if (!compositionEntries.length || !latest) return alerts;
 
-    const latestWeightEntry = sortedEntries[sortedEntries.length - 1];
+    const latestWeightEntry = compositionEntries[compositionEntries.length - 1];
     const prevWeightEntry =
-      sortedEntries.length >= 2
-        ? sortedEntries[sortedEntries.length - 2]
+      compositionEntries.length >= 2
+        ? compositionEntries[compositionEntries.length - 2]
         : null;
     const latestCompEntry = compositionEntries.length
       ? compositionEntries[compositionEntries.length - 1]
@@ -5122,8 +5122,8 @@ export default function SimpleTracker() {
         ? compositionEntries[compositionEntries.length - 2]
         : null;
 
-    const todayHasLog = sortedEntries.some((entry) => entry.date === today);
-    const sevenDayWeightEntries = sortedEntries.filter((entry) => {
+    const todayHasLog = compositionEntries.some((entry) => entry.date === today);
+    const sevenDayWeightEntries = compositionEntries.filter((entry) => {
       const diff = daysBetween(entry.date, latestWeightEntry.date);
       return diff >= 0 && diff <= 7;
     });
@@ -5193,7 +5193,7 @@ export default function SimpleTracker() {
     }
 
     return alerts.slice(0, 4);
-  }, [sortedEntries, compositionEntries, latest, today, shotStatus.overdueDays, currentDevice]);
+  }, [compositionEntries, latest, today, shotStatus.overdueDays, currentDevice]);
 
   const dashboardSummary = useMemo(() => {
     return [
@@ -5521,7 +5521,7 @@ export default function SimpleTracker() {
 
   const handleDelete = (id: string) => {
     setEntries((prev) => prev.filter((item) => item.id !== id));
-    if (editingId === id) resetForm();
+    if (editingId === id) resetForm(currentDevice);
   };
 
   const catchUpShotToday = () => {
@@ -6360,6 +6360,21 @@ export default function SimpleTracker() {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-medium">分析設備</div>
+                  <div className="text-xs text-slate-500">切換後，摘要、判讀、趨勢圖與異常提醒都只看該設備資料；施打與食慾等共通紀錄則共用。</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant={currentDevice === "xiaomi" ? "default" : "outline"} onClick={() => setAnalysisDevice("xiaomi")}>小米</Button>
+                  <Button type="button" variant={currentDevice === "omron" ? "default" : "outline"} onClick={() => setAnalysisDevice("omron")}>歐姆龍</Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Tabs defaultValue="add" className="space-y-4">
             <div className="-mx-1 overflow-x-auto pb-1">
               <TabsList className="inline-flex h-auto w-max min-w-full gap-1 rounded-2xl bg-white p-1 shadow-sm">
@@ -6738,9 +6753,6 @@ export default function SimpleTracker() {
 
                   <div className="border-t pt-4 space-y-3">
                     <div className="text-sm font-medium">歷史紀錄</div>
-                    {deviceSwitchDate ? (
-                      <div className="text-xs text-slate-500">已於 {deviceSwitchDate} 更換為{currentDevice === "omron" ? "歐姆龍" : "小米"}；體重保留全歷史，其餘指標自該日重新計算。</div>
-                    ) : null}
                     {sortedEntries.length === 0 ? (
                       <div className="text-sm text-slate-500">
                         目前還沒有紀錄
@@ -6818,7 +6830,7 @@ export default function SimpleTracker() {
             <TabsContent value="chart">
               <div className="grid gap-4 grid-cols-1">
                 <MetricLineCard
-                  title="體重趨勢"
+                  title={`${currentDevice === "omron" ? "歐姆龍" : "小米"}體重趨勢`}
                   data={chartData}
                   dataKey="weight"
                   unit="kg"
