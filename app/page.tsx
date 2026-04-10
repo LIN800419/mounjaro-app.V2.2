@@ -6709,7 +6709,7 @@ export default function SimpleTracker() {
                       {editingId ? "更新紀錄" : "新增紀錄"}
                     </Button>
                     {editingId ? (
-                      <Button variant="outline" onClick={resetForm}>
+                      <Button variant="outline" onClick={() => resetForm()}>
                         取消
                       </Button>
                     ) : null}
