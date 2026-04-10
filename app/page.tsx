@@ -2106,6 +2106,8 @@ type CompositeMetricsCardProps = {
   fullscreen?: boolean;
   activeKeys?: string[];
   onToggleKey?: (key: string) => void;
+  muscleRateLabel?: string;
+  muscleMassLabel?: string;
 };
 
 function CompositeMetricsCard({
@@ -2116,13 +2118,15 @@ function CompositeMetricsCard({
   fullscreen = false,
   activeKeys,
   onToggleKey,
+  muscleRateLabel = "肌肉率",
+  muscleMassLabel = "肌肉量",
 }: CompositeMetricsCardProps) {
   const lines = [
     { key: "weightTrend", name: "體重", color: METRIC_COLORS.weight },
     { key: "bodyFatPctTrend", name: "體脂率", color: METRIC_COLORS.bodyFatPct },
     { key: "fatMassTrend", name: "脂肪重", color: METRIC_COLORS.fatMass },
-    { key: "muscleRateTrend", name: "肌肉率", color: METRIC_COLORS.muscleRate },
-    { key: "muscleMassTrend", name: "肌肉量", color: METRIC_COLORS.muscleMass },
+    { key: "muscleRateTrend", name: muscleRateLabel, color: METRIC_COLORS.muscleRate },
+    { key: "muscleMassTrend", name: muscleMassLabel, color: METRIC_COLORS.muscleMass },
     {
       key: "visceralFatTrend",
       name: "內臟脂肪",
@@ -4756,8 +4760,8 @@ export default function SimpleTracker() {
         const weightValue = num(e.weight);
         const bodyFatPctValue = isCompositionActive ? num(e.bodyFatPct) : 0;
         const fatMassValue = isCompositionActive ? num(e.fatMass) : 0;
-        const muscleRateValue = isCompositionActive ? getMuscleRateFromEntry(e) : 0;
-        const muscleMassValue = isCompositionActive ? getMuscleMassFromEntry(e) : 0;
+        const muscleRateValue = isCompositionActive ? getDisplayMuscleRateFromEntry(e, currentDevice) : 0;
+        const muscleMassValue = isCompositionActive ? getDisplayMuscleMassFromEntry(e, currentDevice) : 0;
         const visceralFatValue = isCompositionActive ? num(e.visceralFat) : 0;
         const bodyWaterValue = isCompositionActive ? num(e.bodyWater) : 0;
 
@@ -4837,7 +4841,7 @@ export default function SimpleTracker() {
       return {
         headline: "資料還不夠，先累積趨勢",
         detail: "趨勢頁至少要有幾筆連續紀錄，分析摘要才會開始有判讀價值。",
-        bullets: ["先固定量測體重、體脂、肌肉率、水分與腰圍"],
+        bullets: [`先固定量測體重、體脂、${currentDevice === "omron" ? "骨骼肌率" : "肌肉率"}、水分與腰圍`],
         highlights: ["目前資料不足"],
       };
     }
@@ -6170,6 +6174,8 @@ export default function SimpleTracker() {
             data={chartData}
             activeKeys={activeCompositeMetrics}
             onToggleKey={toggleCompositeMetric}
+            muscleRateLabel={currentDevice === "omron" ? "骨骼肌率" : "肌肉率"}
+            muscleMassLabel={currentDevice === "omron" ? "骨骼肌重" : "肌肉量"}
             onExpand={() =>
               setExpandedChart({
                 type: "composite",
@@ -6844,13 +6850,13 @@ export default function SimpleTracker() {
                   },
                   {
                     key: "muscleRate",
-                    title: "肌肉率趨勢",
+                    title: currentDevice === "omron" ? "骨骼肌率趨勢" : "肌肉率趨勢",
                     unit: "%",
                     color: METRIC_COLORS.muscleRate,
                   },
                   {
                     key: "muscleMass",
-                    title: "肌肉量趨勢",
+                    title: currentDevice === "omron" ? "骨骼肌重趨勢" : "肌肉量趨勢",
                     unit: "kg",
                     color: METRIC_COLORS.muscleMass,
                   },
