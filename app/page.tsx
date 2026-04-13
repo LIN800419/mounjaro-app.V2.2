@@ -3627,6 +3627,76 @@ export default function SimpleTracker() {
     ).toFixed(1);
   }, [commonWeightEntries]);
 
+
+  const weeklyWeightAnalysisByDevice = useMemo(() => {
+    const buildDeviceWeeklyAnalysis = (device: DeviceType) => {
+      const deviceEntries = sortedEntries
+        .filter((entry) => entry.deviceType === device && num(entry.weight) > 0)
+        .sort(
+          (a, b) =>
+            parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
+        );
+
+      if (!deviceEntries.length) {
+        return {
+          device,
+          hasData: false,
+          weekStart: "",
+          firstDate: "",
+          latestDate: "",
+          firstWeight: 0,
+          latestWeight: 0,
+          delta: 0,
+          weeklyLoss: 0,
+        };
+      }
+
+      const latest = deviceEntries[deviceEntries.length - 1];
+      const weekStart = getWeekStart(latest.date);
+      const weeklyEntries = deviceEntries.filter(
+        (entry) => entry.date >= weekStart && entry.date <= latest.date,
+      );
+
+      if (!weeklyEntries.length) {
+        return {
+          device,
+          hasData: false,
+          weekStart,
+          firstDate: "",
+          latestDate: latest.date,
+          firstWeight: 0,
+          latestWeight: num(latest.weight),
+          delta: 0,
+          weeklyLoss: 0,
+        };
+      }
+
+      const first = weeklyEntries[0];
+      const days = Math.max(1, daysBetween(first.date, latest.date));
+      const delta = +(num(latest.weight) - num(first.weight)).toFixed(1);
+      const weeklyLoss = +(
+        ((num(first.weight) - num(latest.weight)) / days) * 7
+      ).toFixed(2);
+
+      return {
+        device,
+        hasData: true,
+        weekStart,
+        firstDate: first.date,
+        latestDate: latest.date,
+        firstWeight: num(first.weight),
+        latestWeight: num(latest.weight),
+        delta,
+        weeklyLoss,
+      };
+    };
+
+    return {
+      xiaomi: buildDeviceWeeklyAnalysis("xiaomi"),
+      omron: buildDeviceWeeklyAnalysis("omron"),
+    };
+  }, [sortedEntries]);
+
   const latestShotDate = useMemo(() => {
     return getLatestShotDate(sortedEntries);
   }, [sortedEntries]);
@@ -6567,16 +6637,54 @@ export default function SimpleTracker() {
             </Card>
 
             <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
                   <TrendingDown className="w-4 h-4" />
                   每週減重分析
                 </div>
-                <div className="text-xl font-semibold">
-                  約 {weeklyLoss || 0} kg/週
-                </div>
-                <div className="text-sm text-slate-500 mt-1">
-                  近 7 天變化 {recent7Delta} kg
+
+                <div className="grid gap-3">
+                  <div className={`rounded-xl border p-3 space-y-1 ${isDark ? "bg-slate-900/60 border-slate-700" : "bg-white border-slate-200"}`}>
+                    <div className="text-sm font-medium">小米</div>
+                    {weeklyWeightAnalysisByDevice.xiaomi.hasData ? (
+                      <>
+                        <div className="text-lg font-semibold">
+                          約 {weeklyWeightAnalysisByDevice.xiaomi.weeklyLoss} kg/週
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          {weeklyWeightAnalysisByDevice.xiaomi.firstDate} {weeklyWeightAnalysisByDevice.xiaomi.firstWeight} kg
+                          → {weeklyWeightAnalysisByDevice.xiaomi.latestDate} {weeklyWeightAnalysisByDevice.xiaomi.latestWeight} kg
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          變化 {weeklyWeightAnalysisByDevice.xiaomi.delta > 0 ? "+" : ""}
+                          {weeklyWeightAnalysisByDevice.xiaomi.delta} kg
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-sm text-slate-500">本週尚無足夠小米體重資料</div>
+                    )}
+                  </div>
+
+                  <div className={`rounded-xl border p-3 space-y-1 ${isDark ? "bg-slate-900/60 border-slate-700" : "bg-white border-slate-200"}`}>
+                    <div className="text-sm font-medium">歐姆龍</div>
+                    {weeklyWeightAnalysisByDevice.omron.hasData ? (
+                      <>
+                        <div className="text-lg font-semibold">
+                          約 {weeklyWeightAnalysisByDevice.omron.weeklyLoss} kg/週
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          {weeklyWeightAnalysisByDevice.omron.firstDate} {weeklyWeightAnalysisByDevice.omron.firstWeight} kg
+                          → {weeklyWeightAnalysisByDevice.omron.latestDate} {weeklyWeightAnalysisByDevice.omron.latestWeight} kg
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          變化 {weeklyWeightAnalysisByDevice.omron.delta > 0 ? "+" : ""}
+                          {weeklyWeightAnalysisByDevice.omron.delta} kg
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-sm text-slate-500">本週尚無足夠歐姆龍體重資料</div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
