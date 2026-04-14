@@ -1094,14 +1094,13 @@ function getNextShotDate(
 }
 
 function getLatestShotDate(entries: Entry[]) {
-  const shotEntries = entries.filter((entry) => entry.isShotDay);
-  if (!shotEntries.length) return "";
-  return (
-    [...shotEntries].sort(
-      (a, b) =>
-        parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime(),
-    )[shotEntries.length - 1]?.date || ""
-  );
+  const latestShotDate = [...entries]
+    .filter((entry) => entry.isShotDay)
+    .map((entry) => entry.date)
+    .sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime())
+    .slice(-1)[0];
+
+  return latestShotDate || "";
 }
 
 function fmtDate(dateStr: string) {
@@ -3697,13 +3696,21 @@ export default function SimpleTracker() {
     };
   }, [sortedEntries]);
 
-  const latestShotDate = useMemo(() => {
-    return getLatestShotDate(sortedEntries);
-  }, [sortedEntries]);
+  const groupedShotEntries = useMemo(() => {
+    return groupedEntriesByDate
+      .filter((group) => group.common.isShotDay)
+      .map((group) => ({
+        ...group.common,
+        deviceType: currentDevice,
+      }))
+      .reverse();
+  }, [groupedEntriesByDate, currentDevice]);
 
-  const shotEntries = useMemo(() => {
-    return [...sortedEntries].filter((entry) => entry.isShotDay).reverse();
-  }, [sortedEntries]);
+  const latestShotDate = useMemo(() => {
+    return getLatestShotDate(groupedShotEntries);
+  }, [groupedShotEntries]);
+
+  const shotEntries = groupedShotEntries;
 
   const nextShot = useMemo(() => {
     const recordBaseDate = latestShotDate;
@@ -3788,9 +3795,9 @@ export default function SimpleTracker() {
     }
 
     const interval = Math.max(1, num(settings.shotInterval || 7));
-    const recentShotEntries = sortedEntries.filter(
-      (entry) => entry.isShotDay && daysBetween(entry.date, today) >= 0,
-    );
+    const recentShotEntries = groupedEntriesByDate
+      .map((group) => group.common)
+      .filter((entry) => entry.isShotDay && daysBetween(entry.date, today) >= 0);
     const latestRecordedShot = recentShotEntries.length
       ? recentShotEntries[recentShotEntries.length - 1]
       : null;
@@ -4999,11 +5006,13 @@ export default function SimpleTracker() {
     const penStartDate = penInventory.penStartDate || today;
     const manualAdjustGrids = Math.max(0, num(penInventory.manualAdjustGrids));
 
-    const shotEntriesSinceStart = sortedEntries.filter(
-      (entry) =>
-        entry.isShotDay &&
-        (!penStartDate || daysBetween(penStartDate, entry.date) >= 0),
-    );
+    const shotEntriesSinceStart = groupedEntriesByDate
+      .map((group) => group.common)
+      .filter(
+        (entry) =>
+          entry.isShotDay &&
+          (!penStartDate || daysBetween(penStartDate, entry.date) >= 0),
+      );
 
     const autoUsedGrids = shotEntriesSinceStart.reduce((sum, entry) => {
       const dose = Math.max(0, num(entry.dose));
@@ -5053,7 +5062,7 @@ export default function SimpleTracker() {
       latestDosePlan,
       targetDosePlan,
     };
-  }, [penInventory, latest?.dose, targetDose, sortedEntries, today]);
+  }, [penInventory, latest?.dose, targetDose, groupedEntriesByDate, today]);
 
   const baseChartData = useMemo(
     () =>
@@ -5936,7 +5945,10 @@ export default function SimpleTracker() {
 
     if (!hasAnyMeaningfulInput) return;
 
-    const applyCommonFields = (item: Entry): Entry => ({
+    const applyCommonFields = (
+      item: Entry,
+      options?: { preserveExistingShotDay?: boolean },
+    ): Entry => ({
       ...item,
       waist: form.waist || item.waist,
       dose: form.dose,
@@ -5946,7 +5958,9 @@ export default function SimpleTracker() {
       sideEffectSeverity: form.sideEffectSeverity,
       sideEffects: form.sideEffects,
       exerciseMin: form.exerciseMin,
-      isShotDay: form.isShotDay,
+      isShotDay: options?.preserveExistingShotDay
+        ? item.isShotDay || form.isShotDay
+        : form.isShotDay,
       isDeviceSwitchDay:
         item.deviceType === form.deviceType ? form.isDeviceSwitchDay : item.isDeviceSwitchDay,
     });
@@ -5967,18 +5981,25 @@ export default function SimpleTracker() {
 
     setEntries((prev) => {
       let foundSameDevice = false;
+      const sameDateEntries = prev.filter((item) => item.date === form.date);
+      const sameDateHasShotDay = sameDateEntries.some((item) => item.isShotDay);
+
       const next = prev.map((item) => {
         if (item.date === form.date && item.deviceType === form.deviceType) {
           foundSameDevice = true;
           return { ...item, ...form, id: item.id };
         }
         if (item.date === form.date) {
-          return applyCommonFields(item);
+          return applyCommonFields(item, { preserveExistingShotDay: true });
         }
         return item;
       });
       if (!foundSameDevice) {
-        next.push({ ...form, id: crypto.randomUUID() });
+        next.push({
+          ...form,
+          id: crypto.randomUUID(),
+          isShotDay: sameDateHasShotDay || form.isShotDay,
+        });
       }
       return next;
     });
@@ -7252,9 +7273,9 @@ export default function SimpleTracker() {
 
                   <div className="flex items-center justify-between border rounded-xl p-3">
                     <div>
-                      <div className="font-medium">本次為施打日</div>
+                      <div className="font-medium">本次為施打日（共通資料）</div>
                       <div className="text-xs text-slate-500">
-                        勾選後，這筆紀錄才會被拿來計算下次施打日
+                        同一天小米 / 歐姆龍共用一次施打日，不會重複計算兩針
                       </div>
                     </div>
                     <input
