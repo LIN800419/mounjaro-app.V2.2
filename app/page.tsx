@@ -5938,7 +5938,6 @@ export default function SimpleTracker() {
 
     const applyCommonFields = (item: Entry): Entry => ({
       ...item,
-      weight: form.weight || item.weight,
       waist: form.waist || item.waist,
       dose: form.dose,
       appetite: form.appetite,
@@ -5954,14 +5953,9 @@ export default function SimpleTracker() {
 
     if (editingId) {
       setEntries((prev) => {
-        const sameDateSharedWeight =
-          form.weight ||
-          prev.find((item) => item.date === form.date && item.id !== editingId)?.weight ||
-          "";
-
         return prev.map((item) =>
           item.id === editingId
-            ? { ...form, weight: form.weight || sameDateSharedWeight, id: editingId }
+            ? { ...form, id: editingId }
             : item.date === form.date
               ? applyCommonFields(item)
               : item,
@@ -5972,15 +5966,11 @@ export default function SimpleTracker() {
     }
 
     setEntries((prev) => {
-      const sameDateEntries = prev.filter((item) => item.date === form.date);
-      const sharedWeight =
-        form.weight || sameDateEntries.find((item) => item.weight)?.weight || "";
-
       let foundSameDevice = false;
       const next = prev.map((item) => {
         if (item.date === form.date && item.deviceType === form.deviceType) {
           foundSameDevice = true;
-          return { ...item, ...form, weight: form.weight || item.weight || sharedWeight, id: item.id };
+          return { ...item, ...form, id: item.id };
         }
         if (item.date === form.date) {
           return applyCommonFields(item);
@@ -5988,7 +5978,7 @@ export default function SimpleTracker() {
         return item;
       });
       if (!foundSameDevice) {
-        next.push({ ...form, weight: sharedWeight, id: crypto.randomUUID() });
+        next.push({ ...form, id: crypto.randomUUID() });
       }
       return next;
     });
