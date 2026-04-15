@@ -2149,7 +2149,7 @@ function MetricLineCard({
                   strokeWidth={2}
                   dot={false}
                   isAnimationActive={false}
-                  connectNulls={false}
+                  connectNulls
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -2309,7 +2309,7 @@ function CompositeMetricsCard({
                       strokeWidth={2}
                       dot={false}
                       isAnimationActive={false}
-                      connectNulls={false}
+                      connectNulls
                     />
                   ))}
                 </LineChart>
@@ -3460,9 +3460,33 @@ export default function SimpleTracker() {
           currentDevice === "omron" ? group.omron : group.xiaomi;
         if (!measurement) return null;
 
+        const xiaomiWater = group.xiaomi?.bodyWater || "";
+        const omronSkeletalMuscleRate = group.omron?.skeletalMuscleRate || "";
+        const omronSkeletalMuscleMass = group.omron?.skeletalMuscleMass || "";
+
         return {
           ...measurement,
           weight: group.common.weight || measurement.weight,
+          bodyWater:
+            currentDevice === "omron"
+              ? xiaomiWater || measurement.bodyWater
+              : measurement.bodyWater,
+          muscleRate:
+            currentDevice === "omron"
+              ? omronSkeletalMuscleRate || measurement.muscleRate
+              : measurement.muscleRate,
+          muscleMass:
+            currentDevice === "omron"
+              ? omronSkeletalMuscleMass || measurement.muscleMass
+              : measurement.muscleMass,
+          skeletalMuscleRate:
+            currentDevice === "omron"
+              ? omronSkeletalMuscleRate || measurement.skeletalMuscleRate
+              : measurement.skeletalMuscleRate,
+          skeletalMuscleMass:
+            currentDevice === "omron"
+              ? omronSkeletalMuscleMass || measurement.skeletalMuscleMass
+              : measurement.skeletalMuscleMass,
           waist: group.common.waist || measurement.waist,
           dose: group.common.dose || measurement.dose,
           appetite: group.common.appetite || measurement.appetite,
@@ -3516,12 +3540,20 @@ export default function SimpleTracker() {
         if (!hasTrendMetric) return null;
 
         const measurement = group.omron || group.xiaomi || group.common;
+        const xiaomiWater = group.xiaomi?.bodyWater || "";
+        const omronSkeletalMuscleRate = group.omron?.skeletalMuscleRate || "";
+        const omronSkeletalMuscleMass = group.omron?.skeletalMuscleMass || "";
 
         return {
           ...measurement,
           weight,
           bodyFatPct,
           fatMass,
+          bodyWater: xiaomiWater || measurement.bodyWater,
+          muscleRate: omronSkeletalMuscleRate || measurement.muscleRate,
+          muscleMass: omronSkeletalMuscleMass || measurement.muscleMass,
+          skeletalMuscleRate: omronSkeletalMuscleRate || measurement.skeletalMuscleRate,
+          skeletalMuscleMass: omronSkeletalMuscleMass || measurement.skeletalMuscleMass,
           waist: group.common.waist || measurement.waist,
           dose: group.common.dose || measurement.dose,
           appetite: group.common.appetite || measurement.appetite,
@@ -5078,10 +5110,24 @@ export default function SimpleTracker() {
         const fatMassValue = currentDevice === "omron"
           ? num(omronBackfilledFatMassMap.get(group.date))
           : num(deviceEntry?.fatMass);
-        const muscleRateValue = getMuscleRateFromEntry(deviceEntry);
-        const muscleMassValue = getMuscleMassFromEntry(deviceEntry);
+        const muscleSource =
+          currentDevice === "omron"
+            ? {
+                ...deviceEntry,
+                skeletalMuscleRate:
+                  group.omron?.skeletalMuscleRate || deviceEntry?.skeletalMuscleRate,
+                skeletalMuscleMass:
+                  group.omron?.skeletalMuscleMass || deviceEntry?.skeletalMuscleMass,
+                muscleRate: group.omron?.skeletalMuscleRate || deviceEntry?.muscleRate,
+                muscleMass: group.omron?.skeletalMuscleMass || deviceEntry?.muscleMass,
+              }
+            : deviceEntry;
+        const muscleRateValue = getMuscleRateFromEntry(muscleSource);
+        const muscleMassValue = getMuscleMassFromEntry(muscleSource);
         const visceralFatValue = num(deviceEntry?.visceralFat);
-        const bodyWaterValue = num(deviceEntry?.bodyWater);
+        const bodyWaterValue = currentDevice === "omron"
+          ? num(group.xiaomi?.bodyWater)
+          : num(deviceEntry?.bodyWater);
 
         return {
           i: i + 1,
