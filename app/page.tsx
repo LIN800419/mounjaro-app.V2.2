@@ -5585,7 +5585,7 @@ export default function SimpleTracker() {
   const summaryYearOptions = useMemo(() => {
     const years = Array.from(
       new Set(
-        trendWeightEntries
+        [...trendWeightEntries, ...trendCompositionEntries]
           .map((entry) => entry.date.split("-")[0])
           .filter(Boolean),
       ),
@@ -5593,7 +5593,7 @@ export default function SimpleTracker() {
 
     if (!years.length && selectedSummaryYear) return [selectedSummaryYear];
     return years;
-  }, [trendWeightEntries, selectedSummaryYear]);
+  }, [trendWeightEntries, trendCompositionEntries, selectedSummaryYear]);
 
   const monthSummary = useMemo(() => {
     if (!selectedSummaryYear || !selectedSummaryMonth) {
@@ -7269,27 +7269,27 @@ export default function SimpleTracker() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label>開始日期</Label>
+                      {!selectedRangeStart && (
+                        <div className="text-xs text-slate-400">年 / 月 / 日</div>
+                      )}
                       <Input
-                        type={selectedRangeStartFocused || !!selectedRangeStart ? "date" : "text"}
-                        placeholder="年 / 月 / 日"
+                        type="date"
                         value={selectedRangeStart}
                         min={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-01` : undefined}
                         max={selectedRangeEnd || undefined}
-                        onFocus={() => setSelectedRangeStartFocused(true)}
-                        onBlur={() => setSelectedRangeStartFocused(false)}
                         onChange={(e) => setSelectedRangeStart(e.target.value)}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>結束日期</Label>
+                      {!selectedRangeEnd && (
+                        <div className="text-xs text-slate-400">年 / 月 / 日</div>
+                      )}
                       <Input
-                        type={selectedRangeEndFocused || !!selectedRangeEnd ? "date" : "text"}
-                        placeholder="年 / 月 / 日"
+                        type="date"
                         value={selectedRangeEnd}
                         min={selectedRangeStart || undefined}
                         max={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-${String(new Date(Number(selectedSummaryYear), Number(selectedSummaryMonth), 0).getDate()).padStart(2, "0")}` : undefined}
-                        onFocus={() => setSelectedRangeEndFocused(true)}
-                        onBlur={() => setSelectedRangeEndFocused(false)}
                         onChange={(e) => setSelectedRangeEnd(e.target.value)}
                       />
                     </div>
