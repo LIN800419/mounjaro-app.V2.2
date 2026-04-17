@@ -5422,6 +5422,20 @@ export default function SimpleTracker() {
     return estimateETA(latestWeight, num(settings.goal), weeklyLoss);
   }, [latestWeight, settings.goal, weeklyLoss]);
 
+  const getSummaryMuscleRateValue = (entry?: Entry | null) => {
+    if (!entry) return 0;
+    return currentDevice === "omron"
+      ? num((entry as any).skeletalMuscleRate)
+      : num((entry as any).muscleRate);
+  };
+
+  const getSummaryMuscleMassValue = (entry?: Entry | null) => {
+    if (!entry) return 0;
+    return currentDevice === "omron"
+      ? num((entry as any).skeletalMuscleMass)
+      : num((entry as any).muscleMass);
+  };
+
   const buildPeriodSummary = (
     periodLabel: string,
     compositionWindowEntries: Entry[],
@@ -5455,11 +5469,17 @@ export default function SimpleTracker() {
     const weightLast = findLastValue(effectiveWeightEntries, "weight");
     const bodyFatFirst = findFirstValue(effectiveCompositionEntries, "bodyFatPct");
     const bodyFatLast = findLastValue(effectiveCompositionEntries, "bodyFatPct");
-    const muscleFirst =
-      effectiveCompositionEntries.find((entry) => getMuscleMassFromEntry(entry) > 0) ||
+    const muscleRateFirst =
+      effectiveCompositionEntries.find((entry) => getSummaryMuscleRateValue(entry) > 0) ||
       effectiveCompositionEntries[0];
-    const muscleLast =
-      [...effectiveCompositionEntries].reverse().find((entry) => getMuscleMassFromEntry(entry) > 0) ||
+    const muscleRateLast =
+      [...effectiveCompositionEntries].reverse().find((entry) => getSummaryMuscleRateValue(entry) > 0) ||
+      effectiveCompositionEntries[effectiveCompositionEntries.length - 1];
+    const muscleMassFirst =
+      effectiveCompositionEntries.find((entry) => getSummaryMuscleMassValue(entry) > 0) ||
+      effectiveCompositionEntries[0];
+    const muscleMassLast =
+      [...effectiveCompositionEntries].reverse().find((entry) => getSummaryMuscleMassValue(entry) > 0) ||
       effectiveCompositionEntries[effectiveCompositionEntries.length - 1];
 
     const weightDelta = +(
@@ -5468,8 +5488,11 @@ export default function SimpleTracker() {
     const bodyFatDelta = +(
       num(bodyFatLast?.bodyFatPct) - num(bodyFatFirst?.bodyFatPct)
     ).toFixed(1);
+    const muscleRateDelta = +(
+      getSummaryMuscleRateValue(muscleRateLast) - getSummaryMuscleRateValue(muscleRateFirst)
+    ).toFixed(1);
     const muscleDelta = +(
-      getMuscleMassFromEntry(muscleLast) - getMuscleMassFromEntry(muscleFirst)
+      getSummaryMuscleMassValue(muscleMassLast) - getSummaryMuscleMassValue(muscleMassFirst)
     ).toFixed(1);
     const shotDone = effectiveWeightEntries.some((entry) => entry.isShotDay);
     const stableDays = effectiveWeightEntries.filter(
@@ -5481,10 +5504,10 @@ export default function SimpleTracker() {
 
     if (weightDelta <= -0.5 && muscleDelta >= -0.2) {
       title = `${periodLabel}減脂表現不錯`;
-      summary = `體重下降 ${Math.abs(weightDelta)} kg，${muscleMassLabel}大致守住，方向不錯。`;
+      summary = `體重下降 ${Math.abs(weightDelta)} kg，${muscleMassLabel}大致守住，${muscleRateLabel}${muscleRateDelta > 0 ? "也有上升" : "沒有明顯下滑"}，方向不錯。`;
     } else if (weightDelta <= -0.3 && muscleDelta < -0.3) {
       title = `${periodLabel}有下降，但要注意保肌`;
-      summary = `體重下降 ${Math.abs(weightDelta)} kg，但${muscleMassLabel}也掉了 ${Math.abs(muscleDelta)} kg。`;
+      summary = `體重下降 ${Math.abs(weightDelta)} kg，但${muscleMassLabel}也掉了 ${Math.abs(muscleDelta)} kg，建議注意蛋白質與阻力訓練。`;
     } else if (Math.abs(weightDelta) < 0.3) {
       title = `${periodLabel}接近持平`;
       summary = "體重變化不大，可再看外食、零食與步數。";
@@ -5506,8 +5529,12 @@ export default function SimpleTracker() {
       num(subcutaneousFatFirst?.subcutaneousFat) > 0 && num(subcutaneousFatLast?.subcutaneousFat) > 0
         ? `${subcutaneousFatDelta > 0 ? "+" : ""}${subcutaneousFatDelta}%`
         : `${periodLabel}資料不足`;
+    const muscleRateText =
+      getSummaryMuscleRateValue(muscleRateFirst) > 0 && getSummaryMuscleRateValue(muscleRateLast) > 0
+        ? `${muscleRateDelta > 0 ? "+" : ""}${muscleRateDelta}%`
+        : `${periodLabel}資料不足`;
     const muscleText =
-      getMuscleMassFromEntry(muscleFirst) > 0 && getMuscleMassFromEntry(muscleLast) > 0
+      getSummaryMuscleMassValue(muscleMassFirst) > 0 && getSummaryMuscleMassValue(muscleMassLast) > 0
         ? `${muscleDelta > 0 ? "+" : ""}${muscleDelta} kg`
         : `${periodLabel}資料不足`;
 
@@ -5515,6 +5542,7 @@ export default function SimpleTracker() {
       `體重變化：${weightDelta > 0 ? "+" : ""}${weightDelta} kg`,
       `體脂率變化：${bodyFatText}`,
       `皮下脂肪率變化：${subcutaneousFatText}`,
+      `${muscleRateLabel}變化：${muscleRateText}`,
       `${muscleMassLabel}變化：${muscleText}`,
       `${periodLabel}施打：${shotDone ? "有紀錄" : "未記錄"}`,
       `相對穩定日數：${stableDays}/${effectiveWeightEntries.length} 天`,
@@ -5545,7 +5573,7 @@ export default function SimpleTracker() {
     );
 
     return buildPeriodSummary("本週", compositionWindowEntries, weightWindowEntries);
-  }, [trendCompositionEntries, trendWeightEntries]);
+  }, [currentDevice, trendCompositionEntries, trendWeightEntries]);
 
   const summaryYearOptions = useMemo(() => {
     const years = Array.from(
@@ -5579,7 +5607,7 @@ export default function SimpleTracker() {
       compositionWindowEntries,
       weightWindowEntries,
     );
-  }, [trendCompositionEntries, trendWeightEntries, selectedSummaryYear, selectedSummaryMonth]);
+  }, [currentDevice, trendCompositionEntries, trendWeightEntries, selectedSummaryYear, selectedSummaryMonth]);
 
   const buildRangeMetricComparison = (
     label: string,
@@ -5630,7 +5658,7 @@ export default function SimpleTracker() {
       return {
         title: "指定區間比較",
         summary: "請先選擇開始與結束日期。",
-        bullets: ["可比較指定區間的體重、體脂、皮下脂肪、肌肉、水分與內臟脂肪變化。"],
+        bullets: ["可比較指定區間的體重、體脂、皮下脂肪、肌肉率、肌肉量、水分與內臟脂肪變化。"],
       };
     }
 
@@ -5657,12 +5685,14 @@ export default function SimpleTracker() {
       };
     }
 
+    const muscleRateLabel = currentDevice === "omron" ? "骨骼肌率" : "肌肉率";
     const muscleMassLabel = currentDevice === "omron" ? "骨骼肌重" : "肌肉量";
     const rangeMetrics = [
       buildRangeMetricComparison("體重", weightWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.weight), " kg"),
       buildRangeMetricComparison("體脂率", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.bodyFatPct), "%"),
       buildRangeMetricComparison("皮下脂肪率", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num((entry as any).subcutaneousFat), "%"),
-      buildRangeMetricComparison(muscleMassLabel, compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => getMuscleMassFromEntry(entry), " kg"),
+      buildRangeMetricComparison(muscleRateLabel, compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => getSummaryMuscleRateValue(entry), "%"),
+      buildRangeMetricComparison(muscleMassLabel, compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => getSummaryMuscleMassValue(entry), " kg"),
       buildRangeMetricComparison("水分", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.bodyWater), "%"),
       buildRangeMetricComparison("內臟脂肪", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.visceralFat), "", 0),
     ];
@@ -5705,7 +5735,7 @@ export default function SimpleTracker() {
 
   const overallSummary = useMemo(() => {
     return buildPeriodSummary("整體", trendCompositionEntries, trendWeightEntries);
-  }, [trendCompositionEntries, trendWeightEntries]);
+  }, [currentDevice, trendCompositionEntries, trendWeightEntries]);
 
   const crossValidationSummary = useMemo(() => {
     const buildEmptyState = (title: string, summary: string) => ({
