@@ -5694,7 +5694,7 @@ export default function SimpleTracker() {
       buildRangeMetricComparison(muscleRateLabel, compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => getSummaryMuscleRateValue(entry), "%"),
       buildRangeMetricComparison(muscleMassLabel, compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => getSummaryMuscleMassValue(entry), " kg"),
       buildRangeMetricComparison("水分", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.bodyWater), "%"),
-      buildRangeMetricComparison("內臟脂肪", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.visceralFat), "", 0),
+      buildRangeMetricComparison("內臟脂肪", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.visceralFat), "", 1),
     ];
 
     const validMetrics = rangeMetrics.filter((metric) => metric.valid);
