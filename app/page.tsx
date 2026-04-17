@@ -3366,18 +3366,8 @@ export default function SimpleTracker() {
   }, [today]);
 
   useEffect(() => {
-    if (!selectedSummaryYear || !selectedSummaryMonth) return;
-    const monthStart = `${selectedSummaryYear}-${selectedSummaryMonth}-01`;
-    const monthLastDay = String(new Date(Number(selectedSummaryYear), Number(selectedSummaryMonth), 0).getDate()).padStart(2, "0");
-    const monthEnd = `${selectedSummaryYear}-${selectedSummaryMonth}-${monthLastDay}`;
-    setSelectedRangeStart((prev) => {
-      if (!prev || !prev.startsWith(`${selectedSummaryYear}-${selectedSummaryMonth}`)) return monthStart;
-      return prev;
-    });
-    setSelectedRangeEnd((prev) => {
-      if (!prev || !prev.startsWith(`${selectedSummaryYear}-${selectedSummaryMonth}`)) return monthEnd;
-      return prev;
-    });
+    setSelectedRangeStart("");
+    setSelectedRangeEnd("");
   }, [selectedSummaryYear, selectedSummaryMonth]);
 
   useEffect(() => {
@@ -7254,11 +7244,17 @@ export default function SimpleTracker() {
                     </div>
                   </div>
 
-                  <div className="text-base font-semibold">{rangeSummary.title}</div>
-                  <div className="text-slate-500">{rangeSummary.summary}</div>
-                  {rangeSummary.bullets.map((item) => (
-                    <div key={item}>• {item}</div>
-                  ))}
+                  {selectedRangeStart && selectedRangeEnd ? (
+                    <>
+                      <div className="text-base font-semibold">{rangeSummary.title}</div>
+                      <div className="text-slate-500">{rangeSummary.summary}</div>
+                      {rangeSummary.bullets.map((item) => (
+                        <div key={item}>• {item}</div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="text-slate-500 text-sm">請先選擇開始日期與結束日期，完成後才會顯示指定區間比較結果。</div>
+                  )}
                 </div>
               </CardContent>
             </Card>
