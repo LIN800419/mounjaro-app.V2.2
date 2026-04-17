@@ -2991,6 +2991,8 @@ export default function SimpleTracker() {
   const [selectedSummaryYear, setSelectedSummaryYear] = useState("");
   const [selectedSummaryMonth, setSelectedSummaryMonth] = useState("");
   const [selectedRangeStart, setSelectedRangeStart] = useState("");
+  const [isRangeStartPickerOpen, setIsRangeStartPickerOpen] = useState(false);
+  const [isRangeEndPickerOpen, setIsRangeEndPickerOpen] = useState(false);
   const [selectedRangeEnd, setSelectedRangeEnd] = useState("");
   const [workoutEquipments, setWorkoutEquipments] = useState<WorkoutEquipment[]>([
     "bike",
@@ -7268,22 +7270,30 @@ export default function SimpleTracker() {
                     <div className="space-y-2 min-w-0">
                       <Label className="block">開始日期</Label>
                       <Input
-                        type="date"
+                        type={isRangeStartPickerOpen || !!selectedRangeStart ? "date" : "text"}
+                        inputMode="none"
+                        placeholder="年 / 月 / 日"
                         className="block w-full min-w-0 max-w-full text-sm"
                         value={selectedRangeStart}
                         min={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-01` : undefined}
                         max={selectedRangeEnd || undefined}
+                        onFocus={() => setIsRangeStartPickerOpen(true)}
+                        onBlur={() => setIsRangeStartPickerOpen(false)}
                         onChange={(e) => setSelectedRangeStart(e.target.value)}
                       />
                     </div>
                     <div className="space-y-2 min-w-0">
                       <Label className="block">結束日期</Label>
                       <Input
-                        type="date"
+                        type={isRangeEndPickerOpen || !!selectedRangeEnd ? "date" : "text"}
+                        inputMode="none"
+                        placeholder="年 / 月 / 日"
                         className="block w-full min-w-0 max-w-full text-sm"
                         value={selectedRangeEnd}
                         min={selectedRangeStart || undefined}
                         max={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-${String(new Date(Number(selectedSummaryYear), Number(selectedSummaryMonth), 0).getDate()).padStart(2, "0")}` : undefined}
+                        onFocus={() => setIsRangeEndPickerOpen(true)}
+                        onBlur={() => setIsRangeEndPickerOpen(false)}
                         onChange={(e) => setSelectedRangeEnd(e.target.value)}
                       />
                     </div>
