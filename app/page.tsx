@@ -2989,6 +2989,8 @@ export default function SimpleTracker() {
 
   const [selectedSummaryYear, setSelectedSummaryYear] = useState("");
   const [selectedSummaryMonth, setSelectedSummaryMonth] = useState("");
+  const [selectedRangeStart, setSelectedRangeStart] = useState("");
+  const [selectedRangeEnd, setSelectedRangeEnd] = useState("");
   const [workoutEquipments, setWorkoutEquipments] = useState<WorkoutEquipment[]>([
     "bike",
     "kettlebell",
@@ -3362,6 +3364,21 @@ export default function SimpleTracker() {
 
     loadData();
   }, [today]);
+
+  useEffect(() => {
+    if (!selectedSummaryYear || !selectedSummaryMonth) return;
+    const monthStart = `${selectedSummaryYear}-${selectedSummaryMonth}-01`;
+    const monthLastDay = String(new Date(Number(selectedSummaryYear), Number(selectedSummaryMonth), 0).getDate()).padStart(2, "0");
+    const monthEnd = `${selectedSummaryYear}-${selectedSummaryMonth}-${monthLastDay}`;
+    setSelectedRangeStart((prev) => {
+      if (!prev || !prev.startsWith(`${selectedSummaryYear}-${selectedSummaryMonth}`)) return monthStart;
+      return prev;
+    });
+    setSelectedRangeEnd((prev) => {
+      if (!prev || !prev.startsWith(`${selectedSummaryYear}-${selectedSummaryMonth}`)) return monthEnd;
+      return prev;
+    });
+  }, [selectedSummaryYear, selectedSummaryMonth]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -5478,9 +5495,18 @@ export default function SimpleTracker() {
       summary = `體重上升 ${weightDelta} kg，先檢查聚餐、放鬆餐與水分波動。`;
     }
 
+    const subcutaneousFatFirst = findFirstValue(effectiveCompositionEntries, "subcutaneousFat");
+    const subcutaneousFatLast = findLastValue(effectiveCompositionEntries, "subcutaneousFat");
+    const subcutaneousFatDelta = +(
+      num(subcutaneousFatLast?.subcutaneousFat) - num(subcutaneousFatFirst?.subcutaneousFat)
+    ).toFixed(1);
     const bodyFatText =
       num(bodyFatFirst?.bodyFatPct) > 0 && num(bodyFatLast?.bodyFatPct) > 0
         ? `${bodyFatDelta > 0 ? "+" : ""}${bodyFatDelta}%`
+        : `${periodLabel}資料不足`;
+    const subcutaneousFatText =
+      num(subcutaneousFatFirst?.subcutaneousFat) > 0 && num(subcutaneousFatLast?.subcutaneousFat) > 0
+        ? `${subcutaneousFatDelta > 0 ? "+" : ""}${subcutaneousFatDelta}%`
         : `${periodLabel}資料不足`;
     const muscleText =
       getMuscleMassFromEntry(muscleFirst) > 0 && getMuscleMassFromEntry(muscleLast) > 0
@@ -5490,6 +5516,7 @@ export default function SimpleTracker() {
     const bullets = [
       `體重變化：${weightDelta > 0 ? "+" : ""}${weightDelta} kg`,
       `體脂率變化：${bodyFatText}`,
+      `皮下脂肪率變化：${subcutaneousFatText}`,
       `${muscleMassLabel}變化：${muscleText}`,
       `${periodLabel}施打：${shotDone ? "有紀錄" : "未記錄"}`,
       `相對穩定日數：${stableDays}/${effectiveWeightEntries.length} 天`,
@@ -5555,6 +5582,128 @@ export default function SimpleTracker() {
       weightWindowEntries,
     );
   }, [trendCompositionEntries, trendWeightEntries, selectedSummaryYear, selectedSummaryMonth]);
+
+  const buildRangeMetricComparison = (
+    label: string,
+    rows: Entry[],
+    exactStart: string,
+    exactEnd: string,
+    getValue: (entry: Entry) => number,
+    unit: string,
+    digits = 1,
+  ) => {
+    const exactStartEntry = rows.find((entry) => entry.date === exactStart && getValue(entry) > 0);
+    const exactEndEntry = [...rows].reverse().find((entry) => entry.date === exactEnd && getValue(entry) > 0);
+    const fallbackStartEntry = rows.find((entry) => getValue(entry) > 0);
+    const fallbackEndEntry = [...rows].reverse().find((entry) => getValue(entry) > 0);
+    const startEntry = exactStartEntry || fallbackStartEntry;
+    const endEntry = exactEndEntry || fallbackEndEntry;
+
+    if (!startEntry || !endEntry || getValue(startEntry) <= 0 || getValue(endEntry) <= 0) {
+      return {
+        label,
+        text: `${label}：資料不足`,
+        valid: false,
+        usedFallback: true,
+      };
+    }
+
+    const startValue = getValue(startEntry);
+    const endValue = getValue(endEntry);
+    const delta = +(endValue - startValue).toFixed(digits);
+    const usedFallback = startEntry.date !== exactStart || endEntry.date !== exactEnd;
+    const fallbackNote = usedFallback ? `（改抓 ${startEntry.date} → ${endEntry.date}）` : "";
+
+    return {
+      label,
+      text: `${label}：${startValue.toFixed(digits)}${unit} → ${endValue.toFixed(digits)}${unit}（${delta > 0 ? "+" : ""}${delta}${unit}）${fallbackNote}`,
+      valid: true,
+      delta,
+      usedFallback,
+      startDate: startEntry.date,
+      endDate: endEntry.date,
+      startValue,
+      endValue,
+    };
+  };
+
+  const rangeSummary = useMemo(() => {
+    if (!selectedRangeStart || !selectedRangeEnd) {
+      return {
+        title: "指定區間比較",
+        summary: "請先選擇開始與結束日期。",
+        bullets: ["可比較指定區間的體重、體脂、皮下脂肪、肌肉、水分與內臟脂肪變化。"],
+      };
+    }
+
+    if (selectedRangeStart > selectedRangeEnd) {
+      return {
+        title: "指定區間無效",
+        summary: "開始日期不能晚於結束日期。",
+        bullets: ["請重新選擇日期範圍。"],
+      };
+    }
+
+    const compositionWindowEntries = trendCompositionEntries.filter(
+      (entry) => entry.date >= selectedRangeStart && entry.date <= selectedRangeEnd,
+    );
+    const weightWindowEntries = trendWeightEntries.filter(
+      (entry) => entry.date >= selectedRangeStart && entry.date <= selectedRangeEnd,
+    );
+
+    if (!compositionWindowEntries.length && !weightWindowEntries.length) {
+      return {
+        title: "指定區間無資料",
+        summary: `${selectedRangeStart} ～ ${selectedRangeEnd} 之間沒有可比較的紀錄。`,
+        bullets: ["請改選有紀錄的日期區間。"],
+      };
+    }
+
+    const muscleMassLabel = currentDevice === "omron" ? "骨骼肌重" : "肌肉量";
+    const rangeMetrics = [
+      buildRangeMetricComparison("體重", weightWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.weight), " kg"),
+      buildRangeMetricComparison("體脂率", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.bodyFatPct), "%"),
+      buildRangeMetricComparison("皮下脂肪率", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num((entry as any).subcutaneousFat), "%"),
+      buildRangeMetricComparison(muscleMassLabel, compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => getMuscleMassFromEntry(entry), " kg"),
+      buildRangeMetricComparison("水分", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.bodyWater), "%"),
+      buildRangeMetricComparison("內臟脂肪", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.visceralFat), "", 0),
+    ];
+
+    const validMetrics = rangeMetrics.filter((metric) => metric.valid);
+    const fallbackMetrics = validMetrics.filter((metric) => metric.usedFallback);
+    const weightMetric = rangeMetrics[0] as any;
+    const bodyFatMetric = rangeMetrics[1] as any;
+    const subcutaneousMetric = rangeMetrics[2] as any;
+
+    let title = `指定區間比較（${selectedRangeStart} ～ ${selectedRangeEnd}）`;
+    let summary = "已整理這段區間的主要身體組成變化。";
+
+    if (weightMetric.valid && weightMetric.delta <= -0.5 && ((bodyFatMetric.valid && bodyFatMetric.delta <= -0.3) || (subcutaneousMetric.valid && subcutaneousMetric.delta <= -0.3))) {
+      title = `指定區間減脂方向不錯（${selectedRangeStart} ～ ${selectedRangeEnd}）`;
+      summary = `體重有下降，且體脂或皮下脂肪也同步改善。`;
+    } else if (weightMetric.valid && weightMetric.delta > 0.3) {
+      title = `指定區間有回升（${selectedRangeStart} ～ ${selectedRangeEnd}）`;
+      summary = `這段時間體重偏回升，建議一起看體脂、皮下脂肪與水分變化。`;
+    } else if (validMetrics.length) {
+      summary = `已依優先抓起訖當天、缺值再抓區間首尾有效值的規則完成比較。`;
+    }
+
+    const bullets = validMetrics.length
+      ? validMetrics.map((metric) => metric.text).concat(
+          fallbackMetrics.length
+            ? [`缺值自動補抓：${fallbackMetrics.map((metric) => metric.label).join("、")}`]
+            : ["本次比較皆直接抓到起始日與結束日的數值。"],
+        )
+      : ["此區間缺少足夠的有效數值，暫時無法比較。"];
+
+    return { title, summary, bullets };
+  }, [
+    currentDevice,
+    selectedRangeEnd,
+    selectedRangeStart,
+    trendCompositionEntries,
+    trendWeightEntries,
+  ]);
 
   const overallSummary = useMemo(() => {
     return buildPeriodSummary("整體", trendCompositionEntries, trendWeightEntries);
@@ -7079,6 +7228,38 @@ export default function SimpleTracker() {
                 {monthSummary.bullets.map((item) => (
                   <div key={item}>• {item}</div>
                 ))}
+
+                <div className="mt-2 rounded-2xl border border-slate-200 p-3 space-y-3">
+                  <div className="text-sm font-medium">指定區間比較</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>開始日期</Label>
+                      <Input
+                        type="date"
+                        value={selectedRangeStart}
+                        min={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-01` : undefined}
+                        max={selectedRangeEnd || undefined}
+                        onChange={(e) => setSelectedRangeStart(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>結束日期</Label>
+                      <Input
+                        type="date"
+                        value={selectedRangeEnd}
+                        min={selectedRangeStart || undefined}
+                        max={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-${String(new Date(Number(selectedSummaryYear), Number(selectedSummaryMonth), 0).getDate()).padStart(2, "0")}` : undefined}
+                        onChange={(e) => setSelectedRangeEnd(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-base font-semibold">{rangeSummary.title}</div>
+                  <div className="text-slate-500">{rangeSummary.summary}</div>
+                  {rangeSummary.bullets.map((item) => (
+                    <div key={item}>• {item}</div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
