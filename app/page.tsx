@@ -1956,7 +1956,8 @@ function isCompleteDualValidationGroup(group?: GroupedEntry | null) {
     num(group.xiaomi?.bodyWater) > 0 &&
     num(group.omron?.weight) > 0 &&
     num(group.omron?.bodyFatPct) > 0 &&
-    num(group.omron?.fatMass) > 0
+    num(group.omron?.fatMass) > 0 &&
+    num(group.omron?.subcutaneousFat) > 0
   );
 }
 
@@ -3486,12 +3487,15 @@ export default function SimpleTracker() {
         if (!measurement) return null;
 
         const xiaomiWater = group.xiaomi?.bodyWater || "";
+        const sharedSubcutaneousFat =
+          group.omron?.subcutaneousFat || (measurement as any)?.subcutaneousFat || "";
         const omronSkeletalMuscleRate = group.omron?.skeletalMuscleRate || "";
         const omronSkeletalMuscleMass = group.omron?.skeletalMuscleMass || "";
 
         return {
           ...measurement,
           weight: group.common.weight || measurement.weight,
+          subcutaneousFat: sharedSubcutaneousFat,
           bodyWater:
             currentDevice === "omron"
               ? xiaomiWater || measurement.bodyWater
@@ -3566,6 +3570,8 @@ export default function SimpleTracker() {
 
         const measurement = group.omron || group.xiaomi || group.common;
         const xiaomiWater = group.xiaomi?.bodyWater || "";
+        const sharedSubcutaneousFat =
+          group.omron?.subcutaneousFat || (measurement as any)?.subcutaneousFat || "";
         const omronSkeletalMuscleRate = group.omron?.skeletalMuscleRate || "";
         const omronSkeletalMuscleMass = group.omron?.skeletalMuscleMass || "";
 
@@ -3574,6 +3580,7 @@ export default function SimpleTracker() {
           weight,
           bodyFatPct,
           fatMass,
+          subcutaneousFat: sharedSubcutaneousFat,
           bodyWater: xiaomiWater || measurement.bodyWater,
           muscleRate: omronSkeletalMuscleRate || measurement.muscleRate,
           muscleMass: omronSkeletalMuscleMass || measurement.muscleMass,
@@ -5207,6 +5214,7 @@ export default function SimpleTracker() {
         const muscleRateValue = getMuscleRateFromEntry(muscleSource);
         const muscleMassValue = getMuscleMassFromEntry(muscleSource);
         const visceralFatValue = num(deviceEntry?.visceralFat);
+        const sharedSubcutaneousFatValue = num(group.omron?.subcutaneousFat) || num((deviceEntry as any)?.subcutaneousFat);
         const bodyWaterValue = currentDevice === "omron"
           ? num(group.xiaomi?.bodyWater)
           : num(deviceEntry?.bodyWater);
@@ -5223,7 +5231,7 @@ export default function SimpleTracker() {
           muscleRate: muscleRateValue > 0 ? muscleRateValue : null,
           muscleMass: muscleMassValue > 0 ? muscleMassValue : null,
           visceralFat: visceralFatValue > 0 ? visceralFatValue : null,
-          subcutaneousFat: currentDevice === "omron" ? (num(deviceEntry?.subcutaneousFat) > 0 ? num(deviceEntry?.subcutaneousFat) : null) : null,
+          subcutaneousFat: sharedSubcutaneousFatValue > 0 ? sharedSubcutaneousFatValue : null,
           bodyWater: bodyWaterValue > 0 ? bodyWaterValue : null,
           waist: num(group.common.waist) > 0 ? num(group.common.waist) : null,
         };
