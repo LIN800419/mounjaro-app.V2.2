@@ -81,6 +81,7 @@ type Entry = {
   skeletalMuscleRate: string;
   skeletalMuscleMass: string;
   visceralFat: string;
+  subcutaneousFat: string;
   bodyWater: string;
   waist: string;
   dose: string;
@@ -1918,6 +1919,7 @@ function buildOmronBackfilledMetricMap(
 type CompositionSnapshot = {
   weight: number;
   bodyFatPct: number;
+  subcutaneousFat: number;
   muscleRate: number;
   bodyWater: number;
 };
@@ -1926,6 +1928,7 @@ function getCompositionSnapshot(entry?: Partial<Entry> | null): CompositionSnaps
   return {
     weight: num(entry?.weight),
     bodyFatPct: num(entry?.bodyFatPct),
+    subcutaneousFat: num((entry as any)?.subcutaneousFat),
     muscleRate: getMuscleRateFromEntry(entry),
     bodyWater: num(entry?.bodyWater),
   };
@@ -1933,7 +1936,14 @@ function getCompositionSnapshot(entry?: Partial<Entry> | null): CompositionSnaps
 
 function isCompleteCompositionEntry(entry?: Partial<Entry> | null) {
   const snap = getCompositionSnapshot(entry);
-  return snap.weight > 0 && snap.bodyFatPct > 0 && snap.muscleRate > 0 && snap.bodyWater > 0;
+  const requiresSubcutaneousFat = entry?.deviceType === "omron";
+  return (
+    snap.weight > 0 &&
+    snap.bodyFatPct > 0 &&
+    snap.muscleRate > 0 &&
+    snap.bodyWater > 0 &&
+    (!requiresSubcutaneousFat || snap.subcutaneousFat > 0)
+  );
 }
 
 function isCompleteDualValidationGroup(group?: GroupedEntry | null) {
@@ -2056,6 +2066,7 @@ const COMPOSITE_METRICS = [
   { key: "muscleRate", title: "肌肉率", unit: "%" },
   { key: "muscleMass", title: "肌肉量", unit: "kg" },
   { key: "visceralFat", title: "內臟脂肪", unit: "" },
+  { key: "subcutaneousFat", title: "皮下脂肪率", unit: "%" },
   { key: "bodyWater", title: "水分", unit: "%" },
 ] as const;
 
@@ -2066,6 +2077,7 @@ const METRIC_COLORS: Record<string, string> = {
   muscleRate: "#059669",
   muscleMass: "#ea580c",
   visceralFat: "#ff00cc",
+  subcutaneousFat: "#f97316",
   bodyWater: "#0284c7",
   waist: "#0f766e",
 };
@@ -2194,6 +2206,7 @@ function CompositeMetricsCard({
       name: "內臟脂肪",
       color: METRIC_COLORS.visceralFat,
     },
+    { key: "subcutaneousFatTrend", name: "皮下脂肪率", color: METRIC_COLORS.subcutaneousFat },
     { key: "bodyWaterTrend", name: "水分", color: METRIC_COLORS.bodyWater },
   ];
 
@@ -2922,6 +2935,7 @@ export default function SimpleTracker() {
     skeletalMuscleRate: "",
     skeletalMuscleMass: "",
     visceralFat: "",
+    subcutaneousFat: "",
     bodyWater: "",
     waist: "",
     dose: "2.5",
@@ -2969,6 +2983,7 @@ export default function SimpleTracker() {
     "muscleRateTrend",
     "muscleMassTrend",
     "visceralFatTrend",
+    "subcutaneousFatTrend",
     "bodyWaterTrend",
   ]);
 
@@ -3101,6 +3116,7 @@ export default function SimpleTracker() {
                   skeletalMuscleRate: String(item?.skeletalMuscleRate || ""),
                   skeletalMuscleMass: String(item?.skeletalMuscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
+                  subcutaneousFat: String((item as any)?.subcutaneousFat || (item as any)?.subcutaneousFatPct || (item as any)?.subcutaneousFatRate || ""),
                   bodyWater: String(item?.bodyWater || item?.water || ""),
                   waist: String(item?.waist || ""),
                   dose: item?.dose || "2.5",
@@ -3231,6 +3247,7 @@ export default function SimpleTracker() {
                   skeletalMuscleRate: String(item?.skeletalMuscleRate || ""),
                   skeletalMuscleMass: String(item?.skeletalMuscleMass || ""),
                   visceralFat: String(item?.visceralFat || ""),
+                  subcutaneousFat: String((item as any)?.subcutaneousFat || (item as any)?.subcutaneousFatPct || (item as any)?.subcutaneousFatRate || ""),
                   bodyWater: String(item?.bodyWater || ""),
                   waist: String(item?.waist || ""),
                   dose: String(item?.dose || "2.5"),
@@ -3332,6 +3349,7 @@ export default function SimpleTracker() {
         skeletalMuscleRate: prev.skeletalMuscleRate || "",
         skeletalMuscleMass: prev.skeletalMuscleMass || "",
         visceralFat: prev.visceralFat || "",
+        subcutaneousFat: prev.subcutaneousFat || "",
         bodyWater: prev.bodyWater || "",
         waist: (prev as any).waist || "",
         dose: loadedLatestDose,
@@ -3601,6 +3619,7 @@ export default function SimpleTracker() {
   const latestMuscleRate = latestComposition ? getMuscleRateFromEntry(latestComposition) : 0;
   const latestMuscleMass = latestComposition ? getMuscleMassFromEntry(latestComposition) : 0;
   const latestVisceralFat = latestComposition ? num(latestComposition.visceralFat) : 0;
+  const latestSubcutaneousFat = latestComposition ? num((latestComposition as any).subcutaneousFat) : 0;
   const latestBodyWater = latestComposition ? num(latestComposition.bodyWater) : 0;
   const latestWaist = latestComposition ? num(latestComposition.waist) : 0;
   const latestRecordedDose = useMemo(() => {
@@ -3958,8 +3977,8 @@ export default function SimpleTracker() {
         summary: "先累積身體組成資料後再分析",
         headline: "尚無足夠資料判讀體態",
         meaning:
-          currentDevice === "omron" ? "先記錄體脂率、骨骼肌重、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。" : "先記錄體脂率、肌肉量、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。",
-        caution: [currentDevice === "omron" ? "至少先記錄 2~3 筆體脂、骨骼肌重、水分與內臟脂肪" : "至少先記錄 2~3 筆體脂、肌肉量、水分與內臟脂肪"],
+          currentDevice === "omron" ? "先記錄體脂率、皮下脂肪率、骨骼肌重、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。" : "先記錄體脂率、肌肉量、水分與內臟脂肪，之後才會生成 I / C / D 體態圖。",
+        caution: [currentDevice === "omron" ? "至少先記錄 2~3 筆體脂、皮下脂肪率、骨骼肌重、水分與內臟脂肪" : "至少先記錄 2~3 筆體脂、肌肉量、水分與內臟脂肪"],
         menuAdjustments: ["先維持現有熱量與蛋白質規劃"],
         bodyFatMass: 0,
         weightIdeal: `${weightLow}~${weightHigh}`,
@@ -4187,16 +4206,21 @@ export default function SimpleTracker() {
     const longFirst = getCompositionSnapshot(longBaseEntry);
     const longLast = getCompositionSnapshot(longLastEntry);
 
+    const isOmronComposition = currentDevice === "omron";
+
     const shortTerm = {
       days: Math.max(1, daysBetween(shortBaseEntry.date, shortLastEntry.date)),
       weightDelta: +(shortLast.weight - shortFirst.weight).toFixed(1),
       bodyFatPctDelta: +(shortLast.bodyFatPct - shortFirst.bodyFatPct).toFixed(1),
+      subcutaneousFatDelta: +(shortLast.subcutaneousFat - shortFirst.subcutaneousFat).toFixed(1),
       muscleRateDelta: +(shortLast.muscleRate - shortFirst.muscleRate).toFixed(1),
       bodyWaterDelta: +(shortLast.bodyWater - shortFirst.bodyWater).toFixed(1),
       bodyFatPctIndex: getIndexValue(shortLast.bodyFatPct, shortFirst.bodyFatPct),
+      subcutaneousFatIndex: getIndexValue(shortLast.subcutaneousFat, shortFirst.subcutaneousFat),
       muscleRateIndex: getIndexValue(shortLast.muscleRate, shortFirst.muscleRate),
       bodyWaterIndex: getIndexValue(shortLast.bodyWater, shortFirst.bodyWater),
       bodyFatPctIndexDelta: getIndexDelta(shortLast.bodyFatPct, shortFirst.bodyFatPct),
+      subcutaneousFatIndexDelta: getIndexDelta(shortLast.subcutaneousFat, shortFirst.subcutaneousFat),
       muscleRateIndexDelta: getIndexDelta(shortLast.muscleRate, shortFirst.muscleRate),
       bodyWaterIndexDelta: getIndexDelta(shortLast.bodyWater, shortFirst.bodyWater),
     };
@@ -4205,103 +4229,128 @@ export default function SimpleTracker() {
       days: Math.max(1, daysBetween(longBaseEntry.date, longLastEntry.date)),
       weightDelta: +(longLast.weight - longFirst.weight).toFixed(1),
       bodyFatPctDelta: +(longLast.bodyFatPct - longFirst.bodyFatPct).toFixed(1),
+      subcutaneousFatDelta: +(longLast.subcutaneousFat - longFirst.subcutaneousFat).toFixed(1),
       muscleRateDelta: +(longLast.muscleRate - longFirst.muscleRate).toFixed(1),
       bodyWaterDelta: +(longLast.bodyWater - longFirst.bodyWater).toFixed(1),
       bodyFatPctIndex: getIndexValue(longLast.bodyFatPct, longFirst.bodyFatPct),
+      subcutaneousFatIndex: getIndexValue(longLast.subcutaneousFat, longFirst.subcutaneousFat),
       muscleRateIndex: getIndexValue(longLast.muscleRate, longFirst.muscleRate),
       bodyWaterIndex: getIndexValue(longLast.bodyWater, longFirst.bodyWater),
       bodyFatPctIndexDelta: getIndexDelta(longLast.bodyFatPct, longFirst.bodyFatPct),
+      subcutaneousFatIndexDelta: getIndexDelta(longLast.subcutaneousFat, longFirst.subcutaneousFat),
       muscleRateIndexDelta: getIndexDelta(longLast.muscleRate, longFirst.muscleRate),
       bodyWaterIndexDelta: getIndexDelta(longLast.bodyWater, longFirst.bodyWater),
     };
 
     const reasons: string[] = [];
     const advice: string[] = [];
-    let confidenceScore = 2;
+    let confidenceScore = isOmronComposition ? 3 : 2;
     let tag = "觀察中";
-    let title = "三項指標互相拉扯中";
-    let detail = "短期與長期都有波動，先不要只靠單日體重下結論。";
-    let explanation = "目前較像水分、體脂率、肌肉指標同時在小幅變動，需要再看幾天趨勢。";
+    let title = isOmronComposition ? "體脂率與皮下脂肪率正在重新整理方向" : "三項指標互相拉扯中";
+    let detail = isOmronComposition
+      ? "短期與長期都有波動，先不要只靠單日體重下結論，改以體脂率與皮下脂肪率雙主軸一起看。"
+      : "短期與長期都有波動，先不要只靠單日體重下結論。";
+    let explanation = isOmronComposition
+      ? "目前較像水分、體脂率、皮下脂肪率、肌肉指標都在小幅變動，需要再看幾天趨勢。"
+      : "目前較像水分、體脂率、肌肉指標同時在小幅變動，需要再看幾天趨勢。";
 
     const shortWaterDrop = shortTerm.bodyWaterDelta <= -0.8 || shortTerm.bodyWaterIndexDelta <= -1.5;
     const shortFatDrop = shortTerm.bodyFatPctDelta <= -0.3 || shortTerm.bodyFatPctIndexDelta <= -1;
+    const shortSubcutaneousFatDrop = !isOmronComposition || shortTerm.subcutaneousFatDelta <= -0.3 || shortTerm.subcutaneousFatIndexDelta <= -1;
+    const shortFatCoreDrop = shortFatDrop && shortSubcutaneousFatDrop;
     const shortMuscleDrop = shortTerm.muscleRateDelta <= -0.3 || shortTerm.muscleRateIndexDelta <= -1;
     const longFatDrop = longTerm.bodyFatPctDelta <= -0.5 || longTerm.bodyFatPctIndexDelta <= -1.5;
+    const longSubcutaneousFatDrop = !isOmronComposition || longTerm.subcutaneousFatDelta <= -0.5 || longTerm.subcutaneousFatIndexDelta <= -1.5;
+    const longFatCoreDrop = longFatDrop && longSubcutaneousFatDrop;
     const longFatUp = longTerm.bodyFatPctDelta >= 0.4 || longTerm.bodyFatPctIndexDelta >= 1;
+    const longSubcutaneousFatUp = isOmronComposition && (longTerm.subcutaneousFatDelta >= 0.4 || longTerm.subcutaneousFatIndexDelta >= 1);
+    const longFatCoreUp = longFatUp || longSubcutaneousFatUp;
     const longMuscleUp = longTerm.muscleRateDelta >= 0.2 || longTerm.muscleRateIndexDelta >= 0.5;
     const longMuscleDrop = longTerm.muscleRateDelta <= -0.3 || longTerm.muscleRateIndexDelta <= -1;
     const longWaterStable = Math.abs(longTerm.bodyWaterDelta) <= 1;
 
-    if (shortWaterDrop && longFatDrop && !longMuscleDrop) {
+    if (shortWaterDrop && longFatCoreDrop && !longMuscleDrop) {
       tag = "脂肪下降中";
-      title = "短期有水分波動，但長期仍偏向減脂";
-      detail =
-        "短期體重變化有一部分來自水分下降，但長期體脂率指數持續往下，肌肉指標大致守住。";
-      explanation =
-        `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，代表最近量測有水分影響；但長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，方向仍偏向有效減脂。`;
-      reasons.push("長期體脂率持續下降");
+      title = isOmronComposition ? "短期有水分波動，但體脂率與皮下脂肪率長期仍偏向減脂" : "短期有水分波動，但長期仍偏向減脂";
+      detail = isOmronComposition
+        ? "短期體重變化有一部分來自水分下降，但長期體脂率與皮下脂肪率都持續往下，肌肉指標大致守住。"
+        : "短期體重變化有一部分來自水分下降，但長期體脂率指數持續往下，肌肉指標大致守住。";
+      explanation = isOmronComposition
+        ? `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，代表最近量測有水分影響；但長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、皮下脂肪率指數 ${longTerm.subcutaneousFatIndexDelta > 0 ? "+" : ""}${longTerm.subcutaneousFatIndexDelta}、肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，方向仍偏向有效減脂。`
+        : `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，代表最近量測有水分影響；但長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，方向仍偏向有效減脂。`;
+      reasons.push(isOmronComposition ? "長期體脂率與皮下脂肪率持續下降" : "長期體脂率持續下降");
       reasons.push("肌肉指標大致守住");
       reasons.push("短期水分波動較大");
       advice.push("先不要因為這兩天掉很快就再大砍熱量");
-      advice.push("維持蛋白質與阻力訓練，讓長期肌肉率穩住");
-      confidenceScore += 4;
-    } else if (shortWaterDrop && !longFatDrop && !longFatUp) {
+      advice.push(isOmronComposition ? "維持蛋白質與阻力訓練，讓肌肉率穩住，同時觀察皮下脂肪率是否續降" : "維持蛋白質與阻力訓練，讓長期肌肉率穩住");
+      confidenceScore += isOmronComposition ? 5 : 4;
+    } else if (shortWaterDrop && !longFatCoreDrop && !longFatCoreUp) {
       tag = "水分波動";
-      title = "目前較像水分先動，不是脂肪明顯改變";
-      detail =
-        "短期水分下降比體脂率變化更明顯，長期體脂率與肌肉率還沒有形成清楚方向。";
-      explanation =
-        `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，但體脂率指數只有 ${shortTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctIndexDelta}；長期體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}，目前比較像測量條件或補水狀態在影響數字。`;
+      title = isOmronComposition ? "目前較像水分先動，不是體脂率與皮下脂肪率同步變好" : "目前較像水分先動，不是脂肪明顯改變";
+      detail = isOmronComposition
+        ? "短期水分下降比體脂率與皮下脂肪率變化更明顯，長期脂肪雙指標與肌肉率還沒有形成清楚方向。"
+        : "短期水分下降比體脂率變化更明顯，長期體脂率與肌肉率還沒有形成清楚方向。";
+      explanation = isOmronComposition
+        ? `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，但體脂率指數 ${shortTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctIndexDelta}、皮下脂肪率指數 ${shortTerm.subcutaneousFatIndexDelta > 0 ? "+" : ""}${shortTerm.subcutaneousFatIndexDelta} 都不大；長期體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、皮下脂肪率指數 ${longTerm.subcutaneousFatIndexDelta > 0 ? "+" : ""}${longTerm.subcutaneousFatIndexDelta}，目前比較像測量條件或補水狀態在影響數字。`
+        : `短期 ${shortTerm.days} 天內水分指數 ${shortTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${shortTerm.bodyWaterIndexDelta}，但體脂率指數只有 ${shortTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctIndexDelta}；長期體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}，目前比較像測量條件或補水狀態在影響數字。`;
       reasons.push("短期水分下降明顯");
-      reasons.push("長期體脂率未明顯下降");
+      reasons.push(isOmronComposition ? "長期體脂率與皮下脂肪率未同步明顯下降" : "長期體脂率未明顯下降");
       advice.push("先把量測時間、鹽分與喝水量固定");
       advice.push("至少再觀察 3~7 天，不要把這次下降全當成減脂成果");
       confidenceScore += 3;
-    } else if (longFatDrop && longMuscleUp && longWaterStable) {
+    } else if (longFatCoreDrop && longMuscleUp && longWaterStable) {
       tag = "漂亮減脂";
-      title = "體脂率下降，肌肉率同步守住甚至回升";
-      detail =
-        "這是比較理想的組合：長期體脂率往下，肌肉指標持平或微升，水分也相對穩定。";
-      explanation =
-        `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}、水分指數 ${longTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${longTerm.bodyWaterIndexDelta}，代表你掉下來的重量較偏向脂肪，不是單純脫水。`;
-      reasons.push("長期體脂率下降");
+      title = isOmronComposition ? "體脂率與皮下脂肪率下降，肌肉率同步守住甚至回升" : "體脂率下降，肌肉率同步守住甚至回升";
+      detail = isOmronComposition
+        ? "這是比較理想的組合：長期體脂率與皮下脂肪率一起往下，肌肉指標持平或微升，水分也相對穩定。"
+        : "這是比較理想的組合：長期體脂率往下，肌肉指標持平或微升，水分也相對穩定。";
+      explanation = isOmronComposition
+        ? `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、皮下脂肪率指數 ${longTerm.subcutaneousFatIndexDelta > 0 ? "+" : ""}${longTerm.subcutaneousFatIndexDelta}、肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}、水分指數 ${longTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${longTerm.bodyWaterIndexDelta}，代表你掉下來的重量較偏向脂肪，不是單純脫水，而且外層脂肪也在一起改善。`
+        : `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}、水分指數 ${longTerm.bodyWaterIndexDelta > 0 ? "+" : ""}${longTerm.bodyWaterIndexDelta}，代表你掉下來的重量較偏向脂肪，不是單純脫水。`;
+      reasons.push(isOmronComposition ? "長期體脂率與皮下脂肪率同步下降" : "長期體脂率下降");
       reasons.push("長期肌肉率持平或上升");
       reasons.push("長期水分相對穩定");
       advice.push("維持目前飲食節奏，不需要為了求快再極端節食");
       advice.push("繼續保留阻力訓練與足夠蛋白質");
-      confidenceScore += 5;
-    } else if (longMuscleDrop && !longFatDrop) {
+      confidenceScore += isOmronComposition ? 6 : 5;
+    } else if (longMuscleDrop && !longFatCoreDrop) {
       tag = "肌肉警訊";
-      title = "肌肉率下降比體脂率改善更明顯";
-      detail =
-        "目前比較要注意保肌，因為長期體脂率沒有明顯變好，但肌肉指標已經往下掉。";
-      explanation =
-        `長期 ${longTerm.days} 天內肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，但體脂率指數只有 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}；這代表最近變輕的組成可能不夠漂亮。`;
+      title = isOmronComposition ? "肌肉率下降比體脂率與皮下脂肪率改善更明顯" : "肌肉率下降比體脂率改善更明顯";
+      detail = isOmronComposition
+        ? "目前比較要注意保肌，因為長期體脂率與皮下脂肪率沒有同步明顯變好，但肌肉指標已經往下掉。"
+        : "目前比較要注意保肌，因為長期體脂率沒有明顯變好，但肌肉指標已經往下掉。";
+      explanation = isOmronComposition
+        ? `長期 ${longTerm.days} 天內肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，但體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、皮下脂肪率指數 ${longTerm.subcutaneousFatIndexDelta > 0 ? "+" : ""}${longTerm.subcutaneousFatIndexDelta} 改善有限；這代表最近變輕的組成可能不夠漂亮。`
+        : `長期 ${longTerm.days} 天內肌肉指標指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta}，但體脂率指數只有 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}；這代表最近變輕的組成可能不夠漂亮。`;
       reasons.push("長期肌肉率下降");
-      reasons.push("體脂率改善有限");
+      reasons.push(isOmronComposition ? "體脂率與皮下脂肪率改善有限" : "體脂率改善有限");
       advice.push("優先檢查蛋白質是否足夠，並把蛋白質分散到三餐");
       advice.push("每週至少安排 2~3 次阻力訓練或肌力刺激");
       confidenceScore += 4;
-    } else if (longFatUp && !longMuscleUp) {
+    } else if (longFatCoreUp && !longMuscleUp) {
       tag = "脂肪回升";
-      title = "長期體脂率有回升跡象";
-      detail =
-        "不只是短期水分問題，長期體脂率也有往上走，最近可能真的吃回來了一些。";
-      explanation =
-        `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}，而肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta} 沒有同步變好，代表近期回升較偏脂肪。`;
-      reasons.push("長期體脂率回升");
+      title = isOmronComposition ? "長期體脂率或皮下脂肪率有回升跡象" : "長期體脂率有回升跡象";
+      detail = isOmronComposition
+        ? "不只是短期水分問題，長期體脂率或皮下脂肪率也有往上走，最近可能真的吃回來了一些，而且外層脂肪也在反映。"
+        : "不只是短期水分問題，長期體脂率也有往上走，最近可能真的吃回來了一些。";
+      explanation = isOmronComposition
+        ? `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}、皮下脂肪率指數 ${longTerm.subcutaneousFatIndexDelta > 0 ? "+" : ""}${longTerm.subcutaneousFatIndexDelta}，而肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta} 沒有同步變好，代表近期回升較偏脂肪。`
+        : `長期 ${longTerm.days} 天內體脂率指數 ${longTerm.bodyFatPctIndexDelta > 0 ? "+" : ""}${longTerm.bodyFatPctIndexDelta}，而肌肉率指數 ${longTerm.muscleRateIndexDelta > 0 ? "+" : ""}${longTerm.muscleRateIndexDelta} 沒有同步變好，代表近期回升較偏脂肪。`;
+      reasons.push(isOmronComposition ? "長期體脂率或皮下脂肪率回升" : "長期體脂率回升");
       reasons.push("肌肉率沒有同步改善");
       advice.push("先收斂外食份量、宵夜與飲料，再觀察一週");
       advice.push("把主食與放鬆餐頻率拉回穩定區間");
       confidenceScore += 4;
     } else {
       if (shortFatDrop) reasons.push("短期體脂率有下降");
+      if (isOmronComposition && shortSubcutaneousFatDrop) reasons.push("短期皮下脂肪率有下降");
       if (shortWaterDrop) reasons.push("短期水分下降偏明顯");
       if (shortMuscleDrop) reasons.push("短期肌肉率有下滑");
       if (longFatDrop) reasons.push("長期體脂率仍偏下降");
-      if (!reasons.length) reasons.push("近期三項指標沒有形成一致方向");
+      if (isOmronComposition && longSubcutaneousFatDrop) reasons.push("長期皮下脂肪率仍偏下降");
+      if (!reasons.length) reasons.push(isOmronComposition ? "近期體脂率、皮下脂肪率、水分與肌肉指標沒有形成一致方向" : "近期三項指標沒有形成一致方向");
       advice.push("先把量測條件固定：起床後、上完廁所、空腹再量");
-      advice.push("再持續觀察短期 3~4 筆與長期 2~4 週趨勢");
+      advice.push(isOmronComposition ? "再持續觀察短期 3~4 筆與長期 2~4 週的體脂率與皮下脂肪率是否同步" : "再持續觀察短期 3~4 筆與長期 2~4 週趨勢");
     }
 
     if (latestBodyWater > 0 && latestBodyWater < 45) {
@@ -4321,11 +4370,15 @@ export default function SimpleTracker() {
           ? ("中" as const)
           : ("低" as const);
 
-    const shortSummary = `短期 ${shortTerm.days} 天：水分 ${shortTerm.bodyWaterDelta > 0 ? "+" : ""}${shortTerm.bodyWaterDelta}%，體脂率 ${shortTerm.bodyFatPctDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctDelta}%，肌肉率 ${shortTerm.muscleRateDelta > 0 ? "+" : ""}${shortTerm.muscleRateDelta}%。`;
-    const longSummary = `長期 ${longTerm.days} 天：水分 ${longTerm.bodyWaterDelta > 0 ? "+" : ""}${longTerm.bodyWaterDelta}%，體脂率 ${longTerm.bodyFatPctDelta > 0 ? "+" : ""}${longTerm.bodyFatPctDelta}%，肌肉率 ${longTerm.muscleRateDelta > 0 ? "+" : ""}${longTerm.muscleRateDelta}%。`;
+    const shortSummary = isOmronComposition
+      ? `短期 ${shortTerm.days} 天：水分 ${shortTerm.bodyWaterDelta > 0 ? "+" : ""}${shortTerm.bodyWaterDelta}%，體脂率 ${shortTerm.bodyFatPctDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctDelta}%，皮下脂肪率 ${shortTerm.subcutaneousFatDelta > 0 ? "+" : ""}${shortTerm.subcutaneousFatDelta}%，肌肉率 ${shortTerm.muscleRateDelta > 0 ? "+" : ""}${shortTerm.muscleRateDelta}%。`
+      : `短期 ${shortTerm.days} 天：水分 ${shortTerm.bodyWaterDelta > 0 ? "+" : ""}${shortTerm.bodyWaterDelta}%，體脂率 ${shortTerm.bodyFatPctDelta > 0 ? "+" : ""}${shortTerm.bodyFatPctDelta}%，肌肉率 ${shortTerm.muscleRateDelta > 0 ? "+" : ""}${shortTerm.muscleRateDelta}%。`;
+    const longSummary = isOmronComposition
+      ? `長期 ${longTerm.days} 天：水分 ${longTerm.bodyWaterDelta > 0 ? "+" : ""}${longTerm.bodyWaterDelta}%，體脂率 ${longTerm.bodyFatPctDelta > 0 ? "+" : ""}${longTerm.bodyFatPctDelta}%，皮下脂肪率 ${longTerm.subcutaneousFatDelta > 0 ? "+" : ""}${longTerm.subcutaneousFatDelta}%，肌肉率 ${longTerm.muscleRateDelta > 0 ? "+" : ""}${longTerm.muscleRateDelta}%。`
+      : `長期 ${longTerm.days} 天：水分 ${longTerm.bodyWaterDelta > 0 ? "+" : ""}${longTerm.bodyWaterDelta}%，體脂率 ${longTerm.bodyFatPctDelta > 0 ? "+" : ""}${longTerm.bodyFatPctDelta}%，肌肉率 ${longTerm.muscleRateDelta > 0 ? "+" : ""}${longTerm.muscleRateDelta}%。`;
 
     const stableWeightLoss = hasAtLeast14Days && longTerm.weightDelta <= -0.8;
-    const bodyFatImproving = longFatDrop;
+    const bodyFatImproving = longFatCoreDrop;
     const musclePreserved = !longMuscleDrop;
     const waistClearlyDown = hasWaistSupport && waist14.delta <= -1;
     const stageScore = [stableWeightLoss, bodyFatImproving, musclePreserved, waistClearlyDown].filter(Boolean).length;
@@ -4344,11 +4397,21 @@ export default function SimpleTracker() {
     } else if (stageScore >= 3) {
       fatLossStage = "已進入穩定減脂期";
       fatLossStageDetail = hasWaistSupport
-        ? "目前下降較偏向脂肪變化，且腰圍同步縮小。"
-        : "已依體重、體脂、水分、肌肉資料完成初步判定；若腰圍有 2 筆以上紀錄，可提升判定可信度。";
+        ? isOmronComposition
+          ? "目前下降較偏向脂肪變化，且體脂率、皮下脂肪率與腰圍同步往好方向走。"
+          : "目前下降較偏向脂肪變化，且腰圍同步縮小。"
+        : isOmronComposition
+          ? "已依體重、體脂率、皮下脂肪率、水分、肌肉資料完成初步判定；若腰圍有 2 筆以上紀錄，可提升判定可信度。"
+          : "已依體重、體脂、水分、肌肉資料完成初步判定；若腰圍有 2 筆以上紀錄，可提升判定可信度。";
       fatLossStageReasons = [
         stableWeightLoss ? "近 14~28 天體重趨勢穩定下降" : "體重下降趨勢仍不夠穩定",
-        bodyFatImproving ? "長期體脂率有下降" : "長期體脂率下降還不夠明顯",
+        bodyFatImproving
+          ? isOmronComposition
+            ? "長期體脂率與皮下脂肪率有同步下降"
+            : "長期體脂率有下降"
+          : isOmronComposition
+            ? "長期體脂率與皮下脂肪率下降還不夠明顯"
+            : "長期體脂率下降還不夠明顯",
         musclePreserved ? "肌肉指標暫時有守住" : "肌肉指標有下滑跡象",
         hasWaistSupport
           ? waistClearlyDown
@@ -4360,7 +4423,13 @@ export default function SimpleTracker() {
       fatLossStageDetail = "目前下降可能混有水分，先觀察腰圍與體脂是否持續改善。";
       fatLossStageReasons = [
         "短期水分下降較明顯",
-        bodyFatImproving ? "雖然體脂有改善，但還需要再觀察" : "體脂下降還不夠明顯",
+        bodyFatImproving
+          ? isOmronComposition
+            ? "雖然體脂率與皮下脂肪率有改善，但還需要再觀察"
+            : "雖然體脂有改善，但還需要再觀察"
+          : isOmronComposition
+            ? "體脂率與皮下脂肪率下降還不夠明顯"
+            : "體脂下降還不夠明顯",
         musclePreserved ? "肌肉率暫時沒有明顯惡化" : "肌肉率已有下滑跡象",
         hasWaistSupport
           ? waistClearlyDown
@@ -4370,7 +4439,13 @@ export default function SimpleTracker() {
     } else {
       fatLossStageReasons = [
         stableWeightLoss ? "體重趨勢有持續下降" : "體重趨勢還在波動",
-        bodyFatImproving ? "體脂率有改善" : "體脂率改善尚不夠明顯",
+        bodyFatImproving
+          ? isOmronComposition
+            ? "體脂率與皮下脂肪率有改善"
+            : "體脂率有改善"
+          : isOmronComposition
+            ? "體脂率與皮下脂肪率改善尚不夠明顯"
+            : "體脂率改善尚不夠明顯",
         musclePreserved ? "肌肉指標大致守住" : "肌肉指標有下滑跡象",
         hasWaistSupport
           ? waistClearlyDown
@@ -4407,7 +4482,7 @@ export default function SimpleTracker() {
       shortTerm,
       longTerm,
     };
-  }, [compositionEntries, latestComposition, latestWeight, latestBodyWater, latestComposition?.exerciseMin, latestComposition?.sideEffect, latestBodyFatPct]);
+  }, [compositionEntries, latestComposition, latestWeight, latestBodyWater, latestComposition?.exerciseMin, latestComposition?.sideEffect, latestBodyFatPct, currentDevice]);
 
   const elcdStatus = useMemo(() => {
     if (!settings.elcdMode) {
@@ -5141,6 +5216,7 @@ export default function SimpleTracker() {
           muscleRate: muscleRateValue > 0 ? muscleRateValue : null,
           muscleMass: muscleMassValue > 0 ? muscleMassValue : null,
           visceralFat: visceralFatValue > 0 ? visceralFatValue : null,
+          subcutaneousFat: currentDevice === "omron" ? (num(deviceEntry?.subcutaneousFat) > 0 ? num(deviceEntry?.subcutaneousFat) : null) : null,
           bodyWater: bodyWaterValue > 0 ? bodyWaterValue : null,
           waist: num(group.common.waist) > 0 ? num(group.common.waist) : null,
         };
@@ -5157,6 +5233,7 @@ export default function SimpleTracker() {
       muscleRateTrend: normalizeTrendSeries(rows, "muscleRate"),
       muscleMassTrend: normalizeTrendSeries(rows, "muscleMass"),
       visceralFatTrend: normalizeTrendSeries(rows, "visceralFat"),
+      subcutaneousFatTrend: normalizeTrendSeries(rows, "subcutaneousFat"),
       bodyWaterTrend: normalizeTrendSeries(rows, "bodyWater"),
     };
 
@@ -5168,6 +5245,7 @@ export default function SimpleTracker() {
       muscleRateTrend: trendSeries.muscleRateTrend[index],
       muscleMassTrend: trendSeries.muscleMassTrend[index],
       visceralFatTrend: trendSeries.visceralFatTrend[index],
+      subcutaneousFatTrend: trendSeries.subcutaneousFatTrend[index],
       bodyWaterTrend: trendSeries.bodyWaterTrend[index],
     }));
   }, [baseChartData]);
@@ -5213,6 +5291,7 @@ export default function SimpleTracker() {
     bullets.push(`近 7 日體重變化約 ${recent7Delta > 0 ? '-' : '+'}${Math.abs(recent7Delta)} kg（以最新區間估算）`);
     if (latestAvg7) bullets.push(`最新 7 日移動平均約 ${latestAvg7} kg`);
     if (latestBodyFatPct > 0) bullets.push(`最新體脂率 ${latestBodyFatPct}%`);
+    if (currentDevice === "omron" && latestSubcutaneousFat > 0) bullets.push(`最新皮下脂肪率 ${latestSubcutaneousFat}%`);
     if (latestMuscleRate > 0) bullets.push(`最新${currentDevice === "omron" ? "骨骼肌率" : "肌肉率"} ${latestMuscleRate}%`);
     if (latestBodyWater > 0) bullets.push(`最新水分 ${latestBodyWater}%`);
     if (latestWaist > 0) bullets.push(`最新腰圍 ${latestWaist} cm`);
@@ -5531,6 +5610,8 @@ export default function SimpleTracker() {
         { label: "小米體脂重", read: (g: GroupedEntry) => num(g.xiaomi?.fatMass), threshold: 0.3 },
         { label: "歐姆龍體重", read: (g: GroupedEntry) => num(g.omron?.weight), threshold: 0.3 },
         { label: "歐姆龍體脂率", read: (g: GroupedEntry) => num(g.omron?.bodyFatPct), threshold: 0.3 },
+        { label: "歐姆龍皮下脂肪率", read: (g: GroupedEntry) => num((g.omron as any)?.subcutaneousFat), threshold: 0.3 },
+        { label: "歐姆龍內臟脂肪", read: (g: GroupedEntry) => num(g.omron?.visceralFat), threshold: 0.5 },
         { label: "歐姆龍體脂重", read: (g: GroupedEntry) => num(g.omron?.fatMass), threshold: 0.3 },
       ];
 
@@ -5556,23 +5637,30 @@ export default function SimpleTracker() {
       const waterTrend = waterAvailable ? getTrend(waterDelta, 0.5) : "資料不足";
 
       const availableMetricCount = metrics.filter((item) => item.available).length;
-      if (availableMetricCount < 6) {
+      if (availableMetricCount < 7) {
         return buildEmptyState(
           mode === "short" ? "短期資料不足" : "中期資料不足",
           `最近 ${days} 天的共同起點資料還不夠完整，暫時不做雙設備趨勢交互驗證。`,
         );
       }
 
+      const getMetricTrend = (label: string) => metrics.find((m) => m.label === label)?.trend;
+      const getMetricDelta = (label: string) => metrics.find((m) => m.label === label)?.delta ?? 0;
       const weightBothDown =
-        metrics.find((m) => m.label === "小米體重")?.trend === "下降" &&
-        metrics.find((m) => m.label === "歐姆龍體重")?.trend === "下降";
+        getMetricTrend("小米體重") === "下降" &&
+        getMetricTrend("歐姆龍體重") === "下降";
       const xiaomiFatImproving =
-        metrics.find((m) => m.label === "小米體脂率")?.trend === "下降" ||
-        metrics.find((m) => m.label === "小米體脂重")?.trend === "下降";
-      const omronFatImproving =
-        metrics.find((m) => m.label === "歐姆龍體脂率")?.trend === "下降" ||
-        metrics.find((m) => m.label === "歐姆龍體脂重")?.trend === "下降";
+        getMetricTrend("小米體脂率") === "下降" ||
+        getMetricTrend("小米體脂重") === "下降";
+      const omronBodyFatImproving = getMetricTrend("歐姆龍體脂率") === "下降";
+      const omronSubcutaneousImproving = getMetricTrend("歐姆龍皮下脂肪率") === "下降";
+      const omronVisceralImproving = getMetricTrend("歐姆龍內臟脂肪") === "下降";
+      const omronFatMassImproving = getMetricTrend("歐姆龍體脂重") === "下降";
+      const omronCoreFatImproveCount = [omronBodyFatImproving, omronSubcutaneousImproving, omronVisceralImproving].filter(Boolean).length;
+      const omronFatImproving = omronCoreFatImproveCount >= 2 || ((omronBodyFatImproving || omronSubcutaneousImproving || omronVisceralImproving) && omronFatMassImproving);
       const fatBothImproving = xiaomiFatImproving && omronFatImproving;
+      const omronTripleFatImproving = omronBodyFatImproving && omronSubcutaneousImproving && omronVisceralImproving;
+      const omronTripleFatWorsening = getMetricTrend("歐姆龍體脂率") === "上升" && getMetricTrend("歐姆龍皮下脂肪率") === "上升" && getMetricTrend("歐姆龍內臟脂肪") === "上升";
       const weightConflict =
         (metrics.find((m) => m.label === "小米體重")?.trend === "下降" &&
           metrics.find((m) => m.label === "歐姆龍體重")?.trend === "上升") ||
@@ -5582,8 +5670,8 @@ export default function SimpleTracker() {
 
       let title = mode === "short" ? "短期觀察中" : "中期觀察中";
       let summary = mode === "short"
-        ? `最近 ${days} 天先看是否混有水分波動。`
-        : `最近 ${days} 天先看是否已形成穩定減脂趨勢。`;
+        ? `最近 ${days} 天先看是否混有水分波動，並同步檢查體脂率、皮下脂肪率、內臟脂肪三個核心脂肪指標。`
+        : `最近 ${days} 天先看是否已形成穩定減脂趨勢，並觀察體脂率、皮下脂肪率、內臟脂肪是否一起往下。`;
       let badgeTone = "slate";
       const reasons: string[] = [];
       const caution: string[] = [];
@@ -5592,20 +5680,20 @@ export default function SimpleTracker() {
       if (mode === "short") {
         if (weightBothDown && !fatBothImproving && waterDrop) {
           title = "短期較像水分波動";
-          summary = `最近 ${days} 天體重有下降，但脂肪指標沒有同步明顯改善，而且小米水分也往下。`;
+          summary = `最近 ${days} 天體重有下降，但歐姆龍三個核心脂肪指標沒有形成足夠同步改善，而且小米水分也往下。`;
           badgeTone = "amber";
           confidence += 20;
           reasons.push("雙設備體重都有下降");
-          reasons.push("脂肪指標同步性還不夠強");
+          reasons.push("歐姆龍體脂率／皮下脂肪率／內臟脂肪同步性還不夠強");
           reasons.push("小米水分下降偏明顯");
           caution.push("短期不要把這波全當成減脂成果");
         } else if (weightBothDown && fatBothImproving) {
           title = "短期方向偏正面";
-          summary = `最近 ${days} 天體重與脂肪指標方向大致一致，短期看起來偏向真的在往下。`;
+          summary = `最近 ${days} 天體重與脂肪核心指標方向大致一致，短期看起來偏向真的在往下。`;
           badgeTone = "blue";
           confidence += 25;
           reasons.push("雙設備體重都有下降");
-          reasons.push("小米與歐姆龍脂肪指標都有改善");
+          reasons.push(omronTripleFatImproving ? "歐姆龍體脂率／皮下脂肪率／內臟脂肪三指標同步改善" : "小米與歐姆龍脂肪核心指標都有改善");
           if (waterAvailable && !waterDrop) reasons.push("小米水分沒有明顯連續下滑");
         } else if (weightConflict) {
           title = "短期趨勢不一致";
@@ -5621,19 +5709,19 @@ export default function SimpleTracker() {
       } else {
         if (weightBothDown && fatBothImproving && !waterDrop) {
           title = "中期已偏向穩定減脂";
-          summary = `最近 ${days} 天雙設備體重與脂肪指標趨勢大致一致，已偏向進入穩定減脂期。`;
+          summary = `最近 ${days} 天雙設備體重與脂肪核心指標趨勢大致一致，已偏向進入穩定減脂期。`;
           badgeTone = "emerald";
           confidence += 30;
           reasons.push("雙設備體重趨勢一致往下");
-          reasons.push("小米與歐姆龍脂肪指標同步改善");
+          reasons.push(omronTripleFatImproving ? "歐姆龍三個核心脂肪指標同步改善" : "小米與歐姆龍脂肪核心指標同步改善");
           if (waterAvailable) reasons.push("小米水分沒有持續明顯下滑");
         } else if (weightBothDown && (xiaomiFatImproving || omronFatImproving)) {
           title = "中期偏向改善中";
-          summary = `最近 ${days} 天至少已有部分脂肪指標往好方向走，但還沒到最完整的一致。`;
+          summary = `最近 ${days} 天至少已有部分脂肪核心指標往好方向走，但還沒到最完整的一致。`;
           badgeTone = "cyan";
           confidence += 18;
           reasons.push("雙設備體重趨勢一致往下");
-          reasons.push("至少一邊脂肪指標已有改善");
+          reasons.push(`至少已有 ${omronCoreFatImproveCount} 個歐姆龍核心脂肪指標往下`);
           if (waterDrop) caution.push("小米水分仍有下滑，代表中期雖偏正面，短期仍可能混有水分因素");
         } else if (weightConflict) {
           title = "中期趨勢不一致";
@@ -5648,9 +5736,12 @@ export default function SimpleTracker() {
         }
       }
 
+      if (omronTripleFatWorsening) {
+        caution.push("歐姆龍體脂率、皮下脂肪率、內臟脂肪都往上，近期脂肪回升訊號偏強");
+      }
       if (!reasons.length) reasons.push("目前可用資料尚未形成明確一致方向");
 
-      const score = `${[weightBothDown, xiaomiFatImproving, omronFatImproving, !weightConflict, !waterDrop, waterAvailable].filter(Boolean).length}/6`;
+      const score = `${[weightBothDown, xiaomiFatImproving, omronBodyFatImproving, omronSubcutaneousImproving, omronVisceralImproving, !weightConflict, !waterDrop, waterAvailable].filter(Boolean).length}/8`;
       const metricCards = [
         ...metrics.map((item) => ({
           label: item.label,
@@ -5952,6 +6043,7 @@ export default function SimpleTracker() {
       skeletalMuscleRate: "",
       skeletalMuscleMass: "",
       visceralFat: "",
+      subcutaneousFat: "",
       bodyWater: "",
       waist: "",
       dose: nextDose || "2.5",
@@ -5979,6 +6071,7 @@ export default function SimpleTracker() {
         form.skeletalMuscleRate ||
         form.skeletalMuscleMass ||
         form.visceralFat ||
+        form.subcutaneousFat ||
         form.bodyWater ||
         form.waist ||
         num(form.exerciseMin) > 0 ||
@@ -6065,6 +6158,7 @@ export default function SimpleTracker() {
       骨骼肌率_pct: item.skeletalMuscleRate || "",
       骨骼肌量_kg: item.skeletalMuscleMass || "",
       內臟脂肪: item.visceralFat || "",
+      皮下脂肪率_pct: item.subcutaneousFat || "",
       水分_pct: item.bodyWater || "",
       腰圍_cm: item.waist || "",
       劑量_mg: item.dose || "",
@@ -6145,6 +6239,7 @@ export default function SimpleTracker() {
       skeletalMuscleRate: item.skeletalMuscleRate || "",
       skeletalMuscleMass: item.skeletalMuscleMass || "",
       visceralFat: item.visceralFat || "",
+      subcutaneousFat: item.subcutaneousFat || "",
       bodyWater: item.bodyWater || "",
       waist: item.waist || "",
       dose: item.dose,
@@ -6192,6 +6287,7 @@ export default function SimpleTracker() {
         skeletalMuscleRate: latest?.skeletalMuscleRate || form.skeletalMuscleRate || "",
         skeletalMuscleMass: latest?.skeletalMuscleMass || form.skeletalMuscleMass || "",
         visceralFat: latest?.visceralFat || form.visceralFat || "",
+        subcutaneousFat: latest?.subcutaneousFat || form.subcutaneousFat || "",
         bodyWater: latest?.bodyWater || form.bodyWater || "",
         waist: latest?.waist || form.waist || "",
         dose: latest?.dose || form.dose || "2.5",
@@ -6765,7 +6861,7 @@ export default function SimpleTracker() {
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <Droplets className="w-4 h-4" />
-                  水分/體脂/肌肉判讀
+                  水分/體脂/皮下脂肪/肌肉判讀
                 </div>
                 <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "bg-slate-900/60 border-slate-700" : "bg-white border-slate-200"}`}>
                   <div className="flex flex-wrap items-center gap-2 justify-between">
@@ -7234,6 +7330,18 @@ export default function SimpleTracker() {
                         }
                       />
                     </div>
+                    {form.deviceType === "omron" ? (
+                      <div className="space-y-2">
+                        <Label>皮下脂肪率 (%)</Label>
+                        <Input
+                          placeholder="例如 24.8"
+                          value={form.subcutaneousFat}
+                          onChange={(e) =>
+                            setForm({ ...form, subcutaneousFat: e.target.value })
+                          }
+                        />
+                      </div>
+                    ) : null}
                     <div className="space-y-2">
                       <Label>{form.deviceType === "omron" ? "骨骼肌率 (%)" : "肌肉率 (%)"}</Label>
                       <Input
@@ -7566,7 +7674,8 @@ export default function SimpleTracker() {
                                   {group.omron.skeletalMuscleMass || "-"} kg
                                 </div>
                                 <div>
-                                  內臟脂肪：{group.omron.visceralFat || "-"}｜水分：
+                                  內臟脂肪：{group.omron.visceralFat || "-"}｜皮下脂肪率：
+                                  {group.omron.subcutaneousFat || "-"}%｜水分：
                                   {group.omron.bodyWater || "-"}%
                                 </div>
                                 <div className="flex gap-2 pt-1">
@@ -7652,6 +7761,16 @@ export default function SimpleTracker() {
                     unit: "",
                     color: METRIC_COLORS.visceralFat,
                   },
+                  ...(currentDevice === "omron"
+                    ? [
+                        {
+                          key: "subcutaneousFat",
+                          title: "皮下脂肪率趨勢",
+                          unit: "%",
+                          color: METRIC_COLORS.subcutaneousFat,
+                        },
+                      ]
+                    : []),
                   {
                     key: "bodyWater",
                     title: "水分趨勢",
@@ -7727,7 +7846,7 @@ export default function SimpleTracker() {
                       {settings.sex === "female" ? "女性建議" : "男性建議"}
                     </div>
                     <div>
-                      水分/體脂/肌肉判讀：{waterVsFat.title}（信心{" "}
+                      水分/體脂/皮下脂肪/肌肉判讀：{waterVsFat.title}（信心{" "}
                       {waterVsFat.confidence}）
                     </div>
                   </CardContent>
