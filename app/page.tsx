@@ -3496,6 +3496,10 @@ export default function SimpleTracker() {
           ...measurement,
           weight: group.common.weight || measurement.weight,
           subcutaneousFat: sharedSubcutaneousFat,
+          visceralFat:
+            currentDevice === "omron"
+              ? group.omron?.visceralFat || ""
+              : group.xiaomi?.visceralFat || measurement.visceralFat,
           bodyWater:
             currentDevice === "omron"
               ? xiaomiWater || measurement.bodyWater
@@ -3581,6 +3585,7 @@ export default function SimpleTracker() {
           bodyFatPct,
           fatMass,
           subcutaneousFat: sharedSubcutaneousFat,
+          visceralFat: group.omron?.visceralFat || "",
           bodyWater: xiaomiWater || measurement.bodyWater,
           muscleRate: omronSkeletalMuscleRate || measurement.muscleRate,
           muscleMass: omronSkeletalMuscleMass || measurement.muscleMass,
