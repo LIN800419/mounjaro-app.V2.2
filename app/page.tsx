@@ -7299,7 +7299,6 @@ export default function SimpleTracker() {
                       <Input
                         type="date"
                         value={selectedRangeStart}
-                        min={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-01` : undefined}
                         max={selectedRangeEnd || undefined}
                         onChange={(e) => setSelectedRangeStart(e.target.value)}
                       />
@@ -7313,7 +7312,6 @@ export default function SimpleTracker() {
                         type="date"
                         value={selectedRangeEnd}
                         min={selectedRangeStart || undefined}
-                        max={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-${String(new Date(Number(selectedSummaryYear), Number(selectedSummaryMonth), 0).getDate()).padStart(2, "0")}` : undefined}
                         onChange={(e) => setSelectedRangeEnd(e.target.value)}
                       />
                     </div>
