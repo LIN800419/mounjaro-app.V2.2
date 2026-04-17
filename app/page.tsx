@@ -5694,6 +5694,19 @@ export default function SimpleTracker() {
     const weightWindowEntries = trendWeightEntries.filter(
       (entry) => entry.date >= selectedRangeStart && entry.date <= selectedRangeEnd,
     );
+    const omronBodyFatRangeEntries =
+      currentDevice === "omron"
+        ? groupedEntriesByDate
+            .filter((group) => group.date >= selectedRangeStart && group.date <= selectedRangeEnd)
+            .map((group) => {
+              if (!group.omron || num(group.omron?.bodyFatPct) <= 0) return null;
+              return {
+                ...group.omron,
+                date: group.date,
+              } as Entry;
+            })
+            .filter(Boolean) as Entry[]
+        : compositionWindowEntries;
 
     if (!compositionWindowEntries.length && !weightWindowEntries.length) {
       return {
@@ -5707,7 +5720,7 @@ export default function SimpleTracker() {
     const muscleMassLabel = currentDevice === "omron" ? "骨骼肌重" : "肌肉量";
     const rangeMetrics = [
       buildRangeMetricComparison("體重", weightWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.weight), " kg"),
-      buildRangeMetricComparison("體脂率", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.bodyFatPct), "%"),
+      buildRangeMetricComparison("體脂率", omronBodyFatRangeEntries, selectedRangeStart, selectedRangeEnd, (entry) => num(entry.bodyFatPct), "%"),
       buildRangeMetricComparison("皮下脂肪率", compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => num((entry as any).subcutaneousFat), "%"),
       buildRangeMetricComparison(muscleRateLabel, compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => getSummaryMuscleRateValue(entry), "%"),
       buildRangeMetricComparison(muscleMassLabel, compositionWindowEntries, selectedRangeStart, selectedRangeEnd, (entry) => getSummaryMuscleMassValue(entry), " kg"),
