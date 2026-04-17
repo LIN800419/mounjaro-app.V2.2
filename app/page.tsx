@@ -7262,25 +7262,25 @@ export default function SimpleTracker() {
                   <div key={item}>• {item}</div>
                 ))}
 
-                <div className="mt-2 min-w-0 overflow-hidden rounded-2xl border border-slate-200 p-3 space-y-3">
+                <div className="mt-2 rounded-2xl border border-slate-200 p-3 space-y-3 min-w-0 overflow-hidden">
                   <div className="text-sm font-medium">指定區間比較</div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <div className="min-w-0 space-y-2">
-                      <Label>開始日期</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
+                    <div className="space-y-2 min-w-0">
+                      <Label className="block">開始日期</Label>
                       <Input
                         type="date"
-                        className="w-full min-w-0"
+                        className="block w-full min-w-0 max-w-full text-sm"
                         value={selectedRangeStart}
                         min={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-01` : undefined}
                         max={selectedRangeEnd || undefined}
                         onChange={(e) => setSelectedRangeStart(e.target.value)}
                       />
                     </div>
-                    <div className="min-w-0 space-y-2">
-                      <Label>結束日期</Label>
+                    <div className="space-y-2 min-w-0">
+                      <Label className="block">結束日期</Label>
                       <Input
                         type="date"
-                        className="w-full min-w-0"
+                        className="block w-full min-w-0 max-w-full text-sm"
                         value={selectedRangeEnd}
                         min={selectedRangeStart || undefined}
                         max={selectedSummaryYear && selectedSummaryMonth ? `${selectedSummaryYear}-${selectedSummaryMonth}-${String(new Date(Number(selectedSummaryYear), Number(selectedSummaryMonth), 0).getDate()).padStart(2, "0")}` : undefined}
