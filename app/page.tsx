@@ -2990,8 +2990,19 @@ export default function SimpleTracker() {
 
   const [selectedSummaryYear, setSelectedSummaryYear] = useState("");
   const [selectedSummaryMonth, setSelectedSummaryMonth] = useState("");
-  const [selectedRangeStart, setSelectedRangeStart] = useState("");
-  const [selectedRangeEnd, setSelectedRangeEnd] = useState("");
+  const [selectedRangeStart, setSelectedRangeStart] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}-01`;
+  });
+  const [selectedRangeEnd, setSelectedRangeEnd] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
   const [selectedRangeStartFocused, setSelectedRangeStartFocused] = useState(false);
   const [selectedRangeEndFocused, setSelectedRangeEndFocused] = useState(false);
   const [workoutEquipments, setWorkoutEquipments] = useState<WorkoutEquipment[]>([
